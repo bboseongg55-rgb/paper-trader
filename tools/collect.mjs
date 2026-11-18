@@ -157,13 +157,14 @@ log.rows = Object.keys(rows).length;
   let doc = readJSON(file, null);
   if (!doc || !Array.isArray(doc.syms)) doc = { date: today, syms: [], snaps: [] };
   const index = new Map(doc.syms.map((s, j) => [s, j]));
-  const p = new Array(doc.syms.length).fill(null);
+  const p = new Array(doc.syms.length).fill(null), h = new Array(doc.syms.length).fill(null);
   for (const [s, v] of freshQ) {
-    if (!index.has(s)) { index.set(s, doc.syms.length); doc.syms.push(s); p.push(null); }
+    if (!index.has(s)) { index.set(s, doc.syms.length); doc.syms.push(s); p.push(null); h.push(null); }
     p[index.get(s)] = r2(v.px);
+    if (v.hi > 0) h[index.get(s)] = r2(v.hi);          // the day's high so far, from the source
   }
   doc.snaps = doc.snaps.filter((x) => x.t !== now.hm);
-  doc.snaps.push({ t: now.hm, spx: idxOk ? r2(idx.px) : null, p });
+  doc.snaps.push(h.some((x) => x != null) ? { t: now.hm, spx: idxOk ? r2(idx.px) : null, p, h } : { t: now.hm, spx: idxOk ? r2(idx.px) : null, p });
   fs.mkdirSync('data/intraday', { recursive: true });
   writeJSON(file, doc);
   log.snap = { t: now.hm, n: freshQ.size, held: held.filter((s) => freshQ.has(s)).length };

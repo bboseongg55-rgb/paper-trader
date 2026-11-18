@@ -157,12 +157,17 @@
         } else if (Array.isArray(doc.snaps)) {
           const syms = doc.syms || [];
           const map = syms.map((k) => symIdx.get(k));
-          list = doc.snaps.filter((s) => s && s.t && Array.isArray(s.p)).map((s) => { const a = blank(); s.p.forEach((v, j) => { const i = map[j]; if (i != null && isNum(v) && v > 0) a[i] = v; }); return { t: s.t, spx: isNum(s.spx) ? s.spx : NaN, px: a }; });
+          list = doc.snaps.filter((s) => s && s.t && Array.isArray(s.p)).map((s) => {
+            const a = blank(); s.p.forEach((v, j) => { const i = map[j]; if (i != null && isNum(v) && v > 0) a[i] = v; });
+            let hi = null;
+            if (Array.isArray(s.h)) { hi = blank(); s.h.forEach((v, j) => { const i = map[j]; if (i != null && isNum(v) && v > 0) hi[i] = v; }); }
+            return { t: s.t, spx: isNum(s.spx) ? s.spx : NaN, px: a, hi };
+          });
         }
         list.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0));
         if (list.length) snap[t] = list;
       }
-      for (const a of splitAdj) { const i = symIdx.get(a.sym); for (let j = 0; j < a.t; j++) if (snap[j]) for (const sm of snap[j]) if (isNum(sm.px[i])) sm.px[i] *= a.factor; }
+      for (const a of splitAdj) { const i = symIdx.get(a.sym); for (let j = 0; j < a.t; j++) if (snap[j]) for (const sm of snap[j]) { if (isNum(sm.px[i])) sm.px[i] *= a.factor; if (sm.hi && isNum(sm.hi[i])) sm.hi[i] *= a.factor; } }
     }
     const D = { dates, spx, S, notes, liveDays: days.length, snap, times, prov };
     indicators(D);
@@ -328,7 +333,6 @@
         streak = tr.R < 0 ? streak + 1 : 0;
         if (!adaptive) return;
         const si = D.S.findIndex((x) => x.s === tr.sym);
-        const hmMin = (hm) => (/^\d\d:\d\d$/.test(hm || '') ? +hm.slice(0, 2) * 60 + +hm.slice(3) : NaN);
         const dtQuick = tr.pb === 'dt' && tr.R < 0 && tr.reason.indexOf('손절') >= 0 && hmMin(tr.xt) - hmMin(tr.et) <= 30;
         const dtFade = tr.pb === 'dt' && tr.R < 0 && tr.reason.indexOf('장 마감') >= 0;
         const isFake = tr.pb === 'bo' && tr.R < 0 && tr.reason.startsWith('손절') && tr.days <= 7 && tr.mfeR < 0.5;
@@ -447,7 +451,10 @@
             }
           }
           // b) day-trade entries: a strong stock making a new high of the day while the market holds up
-          if (dtOn && k >= 2 && tm >= FIXED.dtFrom && tm <= FIXED.dtUntil && dtOpened < FIXED.dtNewPerDay) {
+          // a new high of the day: at the source's day high when the snapshot has it; otherwise above every earlier
+          // sample, and only once the samples cover at least 20 minutes of the session
+          const cover = hmMin(tm) - hmMin(snaps[0].t);
+          if (dtOn && (sm.hi || cover >= 20) && tm >= FIXED.dtFrom && tm <= FIXED.dtUntil && dtOpened < FIXED.dtNewPerDay) {
             let spDay = isNum(sm.spx) ? sm.spx / spPrev - 1 : NaN;
             if (!isNum(spDay)) {          // no index level in this snapshot: median move of the list
               const mv = [];
@@ -460,7 +467,8 @@
               const cands = [];
               for (let i = 0; i < nS; i++) {
                 const x = D.S[i], v = px[i], pc = x.c[t - 1];
-                if (!isNum(v) || !isFinite(runHi[i]) || !(v > runHi[i]) || !isNum(pc) || pc <= 0) continue;
+                const newHigh = sm.hi ? isNum(sm.hi[i]) && v >= sm.hi[i] * 0.999 : isFinite(runHi[i]) && v > runHi[i];
+                if (!isNum(v) || !newHigh || !isNum(pc) || pc <= 0) continue;
                 if (!x.e[t - 1] || held.has(i) || dtDone.has(i) || (cool.get(i) || 0) > t) continue;
                 const up = v / pc - 1;
                 if (up < P.dtMinUp / 100 || up > FIXED.dtMaxUp || up - spDay < FIXED.dtRel) continue;
@@ -691,6 +699,7 @@
     return { from, to: lastT, capital, equity, trades, open, changes, params: P, scores, mults: M, weights: normW(M), dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState, signals, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
   }
 
+  function hmMin(hm) { return /^\d\d:\d\d$/.test(hm || '') ? +hm.slice(0, 2) * 60 + +hm.slice(3) : NaN; }
   function normW(w) {
     const sum = (w.bo || 0) + (w.pb || 0) + (w.dt || 0) || 1;
     return { bo: round((w.bo || 0) / sum, 3), pb: round((w.pb || 0) / sum, 3), dt: round((w.dt || 0) / sum, 3) };

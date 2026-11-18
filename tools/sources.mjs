@@ -106,7 +106,7 @@ export async function cnbc(syms) {
     let q = j.FormattedQuoteResult && j.FormattedQuoteResult.FormattedQuote;
     if (q && !Array.isArray(q)) q = [q];
     const back = new Map(batch.map((s) => [cSym(s), s]));
-    for (const it of q || []) out.set(back.get(it.symbol) || it.symbol, { px: num(it.last), prev: num(it.previous_day_closing), time: it.last_time || null });
+    for (const it of q || []) out.set(back.get(it.symbol) || it.symbol, { px: num(it.last), prev: num(it.previous_day_closing), hi: num(it.high), lo: num(it.low), time: it.last_time || null });
   });
   return out;
 }
