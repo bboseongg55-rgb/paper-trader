@@ -1,25 +1,25 @@
 {
- "built": "2026-11-18T18:35:23.945Z",
+ "built": "2026-11-18T18:40:25.943Z",
  "asOf": {
   "date": "2026-11-18",
-  "time": "13:35",
+  "time": "13:40",
   "prov": true
  },
- "regime": "하락 추세 (200일선 아래)",
+ "regime": "200일선 위 · 50일선 아래",
  "account": {
   "equity": {
    "date": "2026-11-18",
-   "eq": 100358.48,
+   "eq": 100372.72,
    "cash": 79292.14,
    "hedge": 0,
    "n": 3,
    "dd": 0,
-   "bench": 100042.64,
-   "time": "13:35",
+   "bench": 100102.58,
+   "time": "13:40",
    "prov": true
   },
-  "ret": 0.0035848000000000546,
-  "bench": 0.00042640000000004896,
+  "ret": 0.0037271999999999306,
+  "bench": 0.0010258000000000767,
   "trades": 1,
   "fees": 0.23,
   "open": [
@@ -27,25 +27,25 @@
     "sym": "RMD",
     "qty": 23,
     "entry": 241.25,
-    "price": 245.53,
+    "price": 245.86,
     "stop": 241.25,
-    "pnl": 98.42
+    "pnl": 106.01
    },
    {
     "sym": "A",
     "qty": 47,
     "entry": 174.69,
-    "price": 176.51,
+    "price": 176.48,
     "stop": 172.72,
-    "pnl": 85.33
+    "pnl": 83.92
    },
    {
     "sym": "SN",
     "qty": 31,
     "entry": 230.5,
-    "price": 229.78,
+    "price": 230.04,
     "stop": 227.55,
-    "pnl": -22.33
+    "pnl": -14.27
    }
   ],
   "lastTrades": [
@@ -70,5 +70,66 @@
    }
   ]
  },
- "signals": []
+ "signals": [
+  {
+   "sym": "VEEV",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "TEAM",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "MPC",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "NTAP",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "TGT",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "NTRA",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "WDAY",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "IBN",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "HPE",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "LLY",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  }
+ ]
 }
