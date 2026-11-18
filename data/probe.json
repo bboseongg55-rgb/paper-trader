@@ -1,0 +1,168 @@
+{
+ "at": "2026-11-18T04:49:41.853Z",
+ "results": {
+  "screener": {
+   "ok": true,
+   "ms": 473,
+   "sample": {
+    "rows": 7277,
+    "asof": null,
+    "AAPL": {
+     "px": 352.78,
+     "prev": 356.27,
+     "pct": -0.98,
+     "cap": 5126663165960,
+     "name": "Apple Inc. Common Stock",
+     "sec": "Technology",
+     "src": "screener"
+    },
+    "MSFT": {
+     "px": 517.99,
+     "prev": 523.88,
+     "pct": -1.124,
+     "cap": 3846694515990,
+     "name": "Microsoft Corporation Common Stock",
+     "sec": "Technology",
+     "src": "screener"
+    }
+   }
+  },
+  "yahoo-chart": {
+   "ok": false,
+   "ms": 1666,
+   "err": "HTTP 429: Too Many Requests "
+  },
+  "yahoo-spark": {
+   "ok": true,
+   "ms": 1601,
+   "sample": {}
+  },
+  "cnbc": {
+   "ok": true,
+   "ms": 218,
+   "sample": {
+    "AAPL": {
+     "px": 351.91,
+     "prev": 351.91,
+     "time": "2026-11-17T16:00:00.000-0500"
+    },
+    "MSFT": {
+     "px": 506.24,
+     "prev": 506.24,
+     "time": "2026-11-17T16:00:00.000-0500"
+    },
+    "JPM": {
+     "px": 329.96,
+     "prev": 329.96,
+     "time": "2026-11-17T16:10:00.000-0500"
+    },
+    "XOM": {
+     "px": 167.21,
+     "prev": 167.21,
+     "time": "2026-11-17T16:10:00.000-0500"
+    },
+    "BRK/B": {
+     "px": 586.76,
+     "prev": 586.76,
+     "time": "2026-11-17T16:10:00.000-0500"
+    }
+   }
+  },
+  "nasdaq-quote": {
+   "ok": true,
+   "ms": 109,
+   "sample": {
+    "AAPL": {
+     "px": 352.78,
+     "prev": 356.27,
+     "time": "Nov 16, 2026",
+     "rt": false
+    },
+    "BRK/B": {
+     "px": 593.17,
+     "prev": 592.9399999999999,
+     "time": "Nov 16, 2026",
+     "rt": false
+    }
+   }
+  },
+  "stooq": {
+   "ok": false,
+   "ms": 2138,
+   "err": "HTTP 404: <meta charset=utf-8><title>Stooq</title><center style=font-family:arial;margin-top:50px><p><a href=/><img src=//static.stooq.com/stooq.svg height=68></a><p styl"
+  },
+  "index:yahoo-chart": {
+   "ok": false,
+   "ms": 1584,
+   "err": "HTTP 429: Too Many Requests "
+  },
+  "index:cnbc": {
+   "ok": true,
+   "ms": 143,
+   "sample": {
+    "px": 7340.53,
+    "prev": 7416.59,
+    "time": "2026-11-17T16:42:12.000-0500"
+   }
+  },
+  "index:nasdaq-index": {
+   "ok": false,
+   "ms": 75,
+   "err": "no data {\"rCode\":400,\"bCodeMessage\":[{\"code\":1001,\"errorMessage\":\"Symbol not exists.\"}],\"developerMessage\":null}"
+  },
+  "index:stooq": {
+   "ok": false,
+   "ms": 1755,
+   "err": "HTTP 404: <meta charset=utf-8><title>Stooq</title><center style=font-family:arial;margin-top:50px><p><a href=/><img src=//static.stooq.com/stooq.svg height=68></a><p styl"
+  },
+  "bulk200:yahoo-spark": {
+   "ok": true,
+   "ms": 6310,
+   "sample": {
+    "asked": 200,
+    "got": 0,
+    "first": {}
+   }
+  },
+  "bulk200:cnbc": {
+   "ok": true,
+   "ms": 234,
+   "sample": {
+    "asked": 200,
+    "got": 200,
+    "first": {
+     "IMO": {
+      "px": 126.44,
+      "prev": 126.44,
+      "time": "2026-11-17T16:10:00.000-0500"
+     },
+     "AAPL": {
+      "px": 351.91,
+      "prev": 351.91,
+      "time": "2026-11-17T16:00:00.000-0500"
+     },
+     "ABNB": {
+      "px": 180.94,
+      "prev": 180.94,
+      "time": "2026-11-17T16:00:00.000-0500"
+     },
+     "ACGL": {
+      "px": 109.22,
+      "prev": 109.22,
+      "time": "2026-11-17T16:00:00.000-0500"
+     },
+     "ADBE": {
+      "px": 235.55,
+      "prev": 235.55,
+      "time": "2026-11-17T16:00:00.000-0500"
+     },
+     "ADI": {
+      "px": 383.67,
+      "prev": 383.67,
+      "time": "2026-11-17T16:00:00.000-0500"
+     }
+    }
+   }
+  }
+ }
+}
