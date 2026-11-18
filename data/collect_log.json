@@ -1,1 +1,1 @@
-[{"at":"2026-11-18T04:51:08.810Z","et":"2026-11-17 23:51","screener":702,"bulk":{"src":"cnbc","asked":702,"got":702},"fresh":701,"stale":1,"final":true,"rows":701,"ms":1164}]
+[{"at":"2026-11-18T04:51:08.810Z","et":"2026-11-17 23:51","screener":702,"bulk":{"src":"cnbc","asked":702,"got":702},"fresh":701,"stale":1,"final":true,"rows":701,"ms":1164},{"at":"2026-11-18T15:23:08.115Z","et":"2026-11-18 10:23","screener":692,"bulk":{"src":"cnbc","asked":692,"got":692},"fresh":691,"stale":1,"rows":691,"snap":{"t":"10:23","n":691,"held":0},"ms":1502}]
