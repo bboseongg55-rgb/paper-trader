@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'session | collect-now | nightly | rebuild | probe | probe-assets | bonds-hist'
+        description: 'session | collect-now | nightly | rebuild | probe | probe-assets | probe-more | bonds-hist'
         required: true
         default: session
 permissions:
@@ -43,6 +43,9 @@ jobs:
       - name: Probe sources for bonds, currencies, futures, options and crypto
         if: steps.mode.outputs.mode == 'probe-assets'
         run: node tools/probe_assets.mjs
+      - name: Probe sources for tokenized stocks, futures rolls, volatility and rate history
+        if: steps.mode.outputs.mode == 'probe-more'
+        run: node tools/probe_more.mjs
       - name: Collect once now
         if: steps.mode.outputs.mode == 'collect-now'
         run: node tools/collect.mjs --force
@@ -59,10 +62,10 @@ jobs:
         if: steps.mode.outputs.mode == 'nightly' || steps.mode.outputs.mode == 'bonds-hist'
         run: node tools/bonds_hist.mjs || echo "bond history not refreshed"
       - name: Run the engine and save
-        if: steps.mode.outputs.mode != 'session' && steps.mode.outputs.mode != 'probe' && steps.mode.outputs.mode != 'probe-assets'
+        if: steps.mode.outputs.mode != 'session' && steps.mode.outputs.mode != 'probe' && steps.mode.outputs.mode != 'probe-assets' && steps.mode.outputs.mode != 'probe-more'
         run: |
           node tools/run.mjs
           bash tools/save.sh "${{ steps.mode.outputs.mode }}"
       - name: Save probe
-        if: steps.mode.outputs.mode == 'probe' || steps.mode.outputs.mode == 'probe-assets'
+        if: steps.mode.outputs.mode == 'probe' || steps.mode.outputs.mode == 'probe-assets' || steps.mode.outputs.mode == 'probe-more'
         run: bash tools/save.sh probe
