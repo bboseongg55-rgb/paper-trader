@@ -1,25 +1,25 @@
 {
- "built": "2026-11-18T18:40:25.943Z",
+ "built": "2026-11-18T18:45:22.474Z",
  "asOf": {
   "date": "2026-11-18",
-  "time": "13:40",
+  "time": "13:45",
   "prov": true
  },
  "regime": "200일선 위 · 50일선 아래",
  "account": {
   "equity": {
    "date": "2026-11-18",
-   "eq": 100372.72,
+   "eq": 100378.19,
    "cash": 79292.14,
    "hedge": 0,
    "n": 3,
    "dd": 0,
-   "bench": 100102.58,
-   "time": "13:40",
+   "bench": 100192.77,
+   "time": "13:45",
    "prov": true
   },
-  "ret": 0.0037271999999999306,
-  "bench": 0.0010258000000000767,
+  "ret": 0.0037819000000001157,
+  "bench": 0.0019276999999999767,
   "trades": 1,
   "fees": 0.23,
   "open": [
@@ -35,17 +35,17 @@
     "sym": "A",
     "qty": 47,
     "entry": 174.69,
-    "price": 176.48,
+    "price": 176.57,
     "stop": 172.72,
-    "pnl": 83.92
+    "pnl": 88.15
    },
    {
     "sym": "SN",
     "qty": 31,
     "entry": 230.5,
-    "price": 230.04,
+    "price": 230.08,
     "stop": 227.55,
-    "pnl": -14.27
+    "pnl": -13.03
    }
   ],
   "lastTrades": [
@@ -96,6 +96,12 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
+   "sym": "WDAY",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "TGT",
    "pb": "bo",
    "taken": false,
@@ -108,25 +114,19 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "WDAY",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "IBN",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "HPE",
+   "sym": "LLY",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "LLY",
+   "sym": "PSX",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
