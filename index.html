@@ -104,6 +104,11 @@ section.view.on { display: block; }
 .key { flex: none; display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
 .legend { list-style: none; margin: 8px 20px 0; padding: 0; display: grid; gap: 4px; }
 .legend[hidden] { display: none; }
+.range { display: flex; align-items: flex-end; gap: 8px; padding: 10px 20px 0; }
+.range[hidden] { display: none; }
+.range label { flex: 1; min-width: 0; display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+.range input { min-height: 44px; width: 100%; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; font-size: 17px; }
+.range .dash { padding-bottom: 10px; color: var(--muted); }
 .legend li { display: flex; align-items: center; gap: 10px; font-size: 16px; min-height: 26px; }
 .legend li span { flex: 1; min-width: 0; color: var(--sub); }
 .legend li b { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -247,7 +252,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const TITLES = { account: '계좌', fills: '체결내역', profit: '수익', team: 'AI팀' };
   const HOLIDAYS = ['2026-11-26', '2026-12-25', '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24'];
   const EARLY_CLOSE = ['2026-11-27', '2026-12-24', '2027-11-26'];
-  let S = null, period = 'day', filter = 'all';
+  let S = null, period = 'day', filter = 'all', range = null;
 
   function nyNow() {
     const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((x) => [x.type, x.value]));
@@ -277,6 +282,23 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   window.addEventListener('hashchange', () => { showView(); window.scrollTo(0, 0); });
 
   // ── account value over the chosen period
+  const md = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일`;
+  const rowLabel = (e) => (e.prov ? `${dLabel(e.date)} ${e.time} 기준` : dLabel(e.date));
+  const periodName = () => (period === 'custom' && range ? (range.from === range.to ? md(range.from) : `${md(range.from)}~${md(range.to)}`) : { day: '최근 거래일', week: '1주', month: '1개월', all: '시작 후' }[period]);
+  // the account's closes in the chosen period, and the close just before it (none when the period starts on day one)
+  function dailyWindow() {
+    const eqs = S.account.equity;
+    let i0 = 0, i1 = eqs.length - 1;
+    if (period === 'day') i0 = Math.max(0, eqs.length - 1);
+    else if (period === 'week' || period === 'month') i0 = Math.max(0, eqs.length - (period === 'week' ? 5 : 21));
+    else if (period === 'custom' && range) {
+      i0 = eqs.findIndex((e) => e.date >= range.from);
+      i1 = -1;
+      for (let i = eqs.length - 1; i >= 0; i--) if (eqs[i].date <= range.to) { i1 = i; break; }
+    }
+    if (i0 < 0 || i1 < i0) return null;
+    return { rows: eqs.slice(i0, i1 + 1), before: i0 > 0 ? eqs[i0 - 1] : null };
+  }
   function series() {
     const a = S.account, eqs = a.equity;
     const prevClose = eqs.length > 1 ? eqs[eqs.length - 2].eq : S.capital;
@@ -284,12 +306,10 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       const pts = (a.intraday || []).map((x) => ({ label: `${dLabel(S.asOf.date)} ${x.t}`, v: x.eq }));
       if (pts.length >= 2) return { pts, base: prevClose, name: S.asOf.prov ? '오늘' : '최근 거래일' };
     }
-    const n = period === 'week' ? 5 : period === 'month' ? 21 : 100000;
-    const tail = eqs.slice(-Math.min(eqs.length, n));
-    const pts = [{ label: '시작', v: S.capital }].concat(tail.map((e) => ({ label: e.prov ? `${dLabel(e.date)} ${e.time} 기준` : dLabel(e.date), v: e.eq })));
-    if (period !== 'all' && eqs.length > n) pts.shift();
-    const base = period === 'all' || eqs.length <= n ? S.capital : pts[0].v;
-    return { pts, base, name: { day: '최근 거래일', week: '1주', month: '1개월', all: '시작 후' }[period] };
+    const w = dailyWindow();
+    if (!w) return { pts: [], base: 0, name: periodName(), none: true };
+    const pts = [w.before ? { label: `${dLabel(w.before.date)} 종가`, v: w.before.eq } : { label: '시작', v: S.capital }].concat(w.rows.map((e) => ({ label: rowLabel(e), v: e.eq })));
+    return { pts, base: pts[0].v, name: periodName() };
   }
   function heroChange(v, base, when) {
     const d = v - base;
@@ -311,27 +331,34 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         const base = { acct: eqs.length > 1 ? eqs[eqs.length - 2].eq : S.capital };
         keys.forEach((k) => { base[k] = pick(C.prev, k) || pick(prevRow, k); });
         const pts = rows.map((r) => { const o = { label: `${dLabel(S.asOf.date)} ${r.t}`, acct: r.eq }; keys.forEach((k) => { o[k] = pick(byT.get(r.t), k); }); return o; });
-        return { pts, base, name: S.asOf.prov ? '오늘' : '최근 거래일' };
+        return { pts, base, name: S.asOf.prov ? '오늘' : '최근 거래일', baseLabel: '전일 종가' };
       }
     }
-    const n = period === 'week' ? 5 : period === 'month' ? 21 : 100000;
+    const w = dailyWindow();
+    if (!w) return { pts: [], base: {}, name: periodName(), none: true };
     const byD = new Map((C.daily || []).map((r) => [r.date, r]));
-    const pts = eqs.slice(-Math.min(eqs.length, n)).map((e) => { const o = { label: e.prov ? `${dLabel(e.date)} ${e.time} 기준` : dLabel(e.date), acct: e.eq }; keys.forEach((k) => { o[k] = pick(byD.get(e.date), k); }); return o; });
-    const base = { acct: pts.length ? pts[0].acct : S.capital };
+    const mk = (e, label) => { const o = { label: label || rowLabel(e), acct: e.eq }; keys.forEach((k) => { o[k] = pick(byD.get(e.date), k); }); return o; };
+    const all = (w.before ? [mk(w.before, `${dLabel(w.before.date)} 종가`)] : []).concat(w.rows.map((e) => mk(e)));
+    // one common start: the first point where the account and every chosen index have a value
+    let b = all.findIndex((p) => keys.every((k) => p[k] != null));
+    if (b < 0) b = 0;
+    const pts = all.slice(b);
+    const base = { acct: pts[0].acct };
     keys.forEach((k) => { const f = pts.find((p) => p[k] != null); base[k] = f ? f[k] : null; });
-    return { pts, base, name: { day: '최근 거래일', week: '1주', month: '1개월', all: '시작 후' }[period] };
+    return { pts, base, name: periodName(), baseLabel: pts[0].label };
   }
   function drawCompare(el, keys) {
     const sr = cmpSeries(keys), pts = sr.pts, lg = $('cmpLegend');
     const W = Math.floor(el.clientWidth), H = Math.floor(el.clientHeight);
-    if (!W || !H || !pts.length) return;
+    if (!W || !H) return;
+    if (sr.none || !pts.length) { noDays(el); lg.hidden = true; return; }
     const lines = [{ k: 'acct', name: '내 계좌', col: 'var(--ink)', w: 2.4 }].concat(keys.map((k) => { const d = IDX.find((x) => x[0] === k); return { k, name: d[1], col: d[2], w: 2 }; }));
     const ret = (p, k) => (p && p[k] != null && sr.base[k] ? p[k] / sr.base[k] - 1 : null);
     const lastAt = (k, upto) => { for (let i = upto; i >= 0; i--) if (ret(pts[i], k) != null) return i; return -1; };
     const legend = (i, when) => {
       lg.hidden = false;
       lg.innerHTML = lines.map((l) => { const j = lastAt(l.k, i), v = j < 0 ? null : ret(pts[j], l.k);
-        return `<li><i class="key" style="background:${l.col}"></i><span>${esc(l.name)}</span><b class="${v == null ? '' : rcls(v)}">${v == null ? '-' : pct(v)}</b></li>`; }).join('') + `<li class="when">${esc(when)} · 같은 출발점 대비 수익률</li>`;
+        return `<li><i class="key" style="background:${l.col}"></i><span>${esc(l.name)}</span><b class="${v == null ? '' : rcls(v)}">${v == null ? '-' : pct(v)}</b></li>`; }).join('') + `<li class="when">${esc(when)} · ${esc(sr.baseLabel || '같은 출발점')} 대비 수익률</li>`;
     };
     const end = pts.length - 1;
     $('heroValue').textContent = usd(pts[end].acct);
@@ -371,6 +398,12 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     el.onpointerup = (e) => { if (e.pointerType !== 'mouse') reset(); };
     el.onpointercancel = reset;
   }
+  function noDays(el) {
+    const eqs = S.account.equity, last = eqs[eqs.length - 1];
+    $('heroValue').textContent = usd(last.eq);
+    $('heroChange').innerHTML = `<span class="when" style="margin-left:0">${esc(periodName())}</span>`;
+    el.innerHTML = '<div class="empty">고른 기간에 거래일이 없습니다</div>';
+  }
   function drawChart() {
     const el = document.querySelector('#v-account .chart');
     if (!el || !S || !S.account) return;
@@ -380,6 +413,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const sr = series(), pts = sr.pts;
     const W = Math.floor(el.clientWidth), H = Math.floor(el.clientHeight);
     if (!W || !H) return;
+    if (sr.none) { noDays(el); return; }
     const end = pts[pts.length - 1].v;
     $('heroValue').textContent = usd(end);
     $('heroChange').innerHTML = heroChange(end, sr.base, sr.name);
@@ -484,7 +518,10 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const invested = last.eq - last.cash;
     let h = `<div class="hero"><div class="hero-label">총 자산</div><div class="hero-value num" id="heroValue">${usd(last.eq)}</div><div class="hero-change num" id="heroChange"></div></div>
       <div class="chart"></div><ul class="legend" id="cmpLegend" hidden></ul>
-      <div class="periods" role="group" aria-label="기간">${[['day', '1일'], ['week', '1주'], ['month', '1개월'], ['all', '전체']].map(([k, t]) => `<button type="button" data-p="${k}" aria-pressed="${period === k}">${t}</button>`).join('')}</div>`;
+      <div class="periods" role="group" aria-label="기간">${[['day', '1일'], ['week', '1주'], ['month', '1개월'], ['all', '전체'], ['custom', '직접']].map(([k, t]) => `<button type="button" data-p="${k}" aria-pressed="${period === k}">${t}</button>`).join('')}</div>`;
+    const d0 = eqs[0].date, d1 = eqs[eqs.length - 1].date, inR = (d) => (d < d0 ? d0 : d > d1 ? d1 : d);
+    range = period === 'custom' && range ? { from: inR(range.from), to: inR(range.to) } : { from: d0, to: d1 };
+    h += `<div class="range"${period === 'custom' ? '' : ' hidden'}><label><span>시작일</span><input type="date" id="rgFrom" min="${d0}" max="${d1}" value="${range.from}"></label><span class="dash" aria-hidden="true">~</span><label><span>끝일</span><input type="date" id="rgTo" min="${d0}" max="${d1}" value="${range.to}"></label></div>`;
     const avail = IDX.filter(([k]) => hasIdx(k));
     if (avail.length) h += `<div class="cmp" role="group" aria-label="지수와 수익률 비교"><span class="cmp-label">비교</span>${avail.map(([k, nm, col, chip]) => `<button type="button" data-k="${k}" aria-pressed="${cmp.includes(k)}" aria-label="${esc(nm)}와 비교"><i class="key" style="background:${col}"></i>${esc(chip)}</button>`).join('')}</div>`;
     h += kv([
@@ -511,7 +548,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         ${more([['하는 일', 'S&amp;P 500이 내리면 오르고, 오르면 내립니다'], ['시작', dLabel(hg.since)], ['시작 때 S&amp;P 500', hg.spx0.toLocaleString('en-US')], ['헷지 비율', `보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%`], ['담당', '리스크·헷지팀']])}</details></li></ul>`;
     }
     if (a.open.length) h += '<ul class="list">' + a.open.slice().sort((p, q) => q.value - p.value).map((p) => `<li><details><summary class="row">
-        <span class="l"><b>${esc(p.sym)}<span class="tag">${PB[p.pb]}</span></b><span>${esc(p.name)} · ${p.qty.toLocaleString()}주</span></span>
+        <span class="l"><b>${esc(p.sym)}</b><span>${esc(p.name)} · ${p.qty.toLocaleString()}주</span></span>
         <span class="r"><b>${usd(p.value)}</b><span class="${cls(p.pnl)}">${sgnUsd(p.pnl)} (${pct(p.pct)})</span></span></summary>
         ${more([['평균 매수가', usd(p.entry)], ['현재가', usd(p.price)], ['손절가', usd(p.stop)], ['매수', p.pb === 'dt' ? `오늘 ${esc(p.et || '')}` : `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]])}</details></li>`).join('') + '</ul>';
     // the latest fills
@@ -519,11 +556,22 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     h += `<div class="band"></div><h2>최근 체결</h2>`;
     h += recent.length ? '<ul class="list">' + recent.map(fillRow).join('') + '</ul><p class="sumline"><a href="#fills" style="color:inherit">체결내역 전체 보기</a></p>' : '<p class="empty-row">아직 체결된 매매가 없습니다.</p>';
     $('v-account').innerHTML = h;
+    const rg = $('v-account').querySelector('.range');
     $('v-account').querySelectorAll('.periods button').forEach((b) => b.addEventListener('click', () => {
       period = b.dataset.p;
       $('v-account').querySelectorAll('.periods button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      if (rg) rg.hidden = period !== 'custom';
       drawChart();
     }));
+    const onRange = () => {
+      let f = $('rgFrom').value || d0, t = $('rgTo').value || d1;
+      if (f > t) [f, t] = [t, f];
+      range = { from: inR(f), to: inR(t) };
+      $('rgFrom').value = range.from; $('rgTo').value = range.to;
+      drawChart();
+    };
+    $('rgFrom').addEventListener('change', onRange);
+    $('rgTo').addEventListener('change', onRange);
     $('v-account').querySelectorAll('.cmp button').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.k;
       cmp = cmp.includes(k) ? cmp.filter((x) => x !== k) : cmp.concat(k);
@@ -545,15 +593,15 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const when = o.time || '장 마감';
     if (o.side === 'buy') {
       return `<li><details><summary class="row"><span class="side buy">매수</span>
-        <span class="l"><b>${esc(o.sym)}<span class="tag">${PB[o.pb]}</span></b><span>${o.qty.toLocaleString()}주 · ${usd(o.price)}</span></span>
+        <span class="l"><b>${esc(o.sym)}</b><span>${o.qty.toLocaleString()}주 · ${usd(o.price)}</span></span>
         <span class="r"><b>${usd(amt)}</b><span class="muted">${esc(when)}</span></span></summary>
-        ${more([['종목', esc(o.name)], ['체결가', usd(o.price)], ['수량', o.qty.toLocaleString() + '주'], ['체결 금액', usd(amt)], ['수수료', usd(o.fee || 0)], ['상태', o.open ? '보유 중' : '매도 완료']])}</details></li>`;
+        ${more([['종목', esc(o.name)], ['방법', PB_LONG[o.pb] || ''], ['체결가', usd(o.price)], ['수량', o.qty.toLocaleString() + '주'], ['체결 금액', usd(amt)], ['수수료', usd(o.fee || 0)], ['상태', o.open ? '보유 중' : '매도 완료']])}</details></li>`;
     }
     const fd = o.feeDetail || {};
     return `<li><details><summary class="row"><span class="side sell">매도</span>
-      <span class="l"><b>${esc(o.sym)}<span class="tag">${PB[o.pb]}</span></b><span>${o.qty.toLocaleString()}주 · ${usd(o.price)}</span></span>
+      <span class="l"><b>${esc(o.sym)}</b><span>${o.qty.toLocaleString()}주 · ${usd(o.price)}</span></span>
       <span class="r"><b class="${cls(o.pnl)}">${sgnUsd(o.pnl)}</b><span class="muted">${esc(when)}</span></span></summary>
-      ${more([['종목', esc(o.name)], ['매도가 / 매수가', `${usd(o.price)} / ${usd(o.entry)}`], ['수익률', `<span class="${cls(o.pnl)}">${pct(o.pct)}</span>`], ['체결 금액', usd(amt)], ['이유', esc(o.reason)], ['보유', o.pb === 'dt' || !o.days ? '당일' : o.days + '거래일'],
+      ${more([['종목', esc(o.name)], ['방법', PB_LONG[o.pb] || ''], ['매도가 / 매수가', `${usd(o.price)} / ${usd(o.entry)}`], ['수익률', `<span class="${cls(o.pnl)}">${pct(o.pct)}</span>`], ['체결 금액', usd(amt)], ['이유', esc(o.reason)], ['보유', o.pb === 'dt' || !o.days ? '당일' : o.days + '거래일'],
         ['수수료', `${usd(o.fee || 0)}` + (o.fee ? ` (SEC ${usd(fd.sec || 0)} · FINRA ${usd(fd.taf || 0)} · CAT ${usd(fd.cat || 0)})` : '')]])}</details></li>`;
   }
 
