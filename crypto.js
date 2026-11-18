@@ -264,11 +264,19 @@
       if (q > 1e-9) hold.push({ c, qty: r8(q), arb: r8(arbQ), trade: r8(trQ), price: r2(m[c] || 0), value: r2(q * (m[c] || 0)) });
     }
     const usd = Object.values(st.venues).reduce((s, a) => s + a.usd, 0) + st.trade.usd;
+    // each coin's hourly trend as the trend strategy sees it: the last closed bar against the 100-hour average and the 20-hour high
+    const mkt = {};
+    for (const c of COINS) {
+      const hb = (st.bars.h[c] || []).slice(0, -1);
+      if (hb.length <= CFG.trend.ema) continue;
+      const last = hb[hb.length - 1], e = ema(hb.map((b) => b.c), CFG.trend.ema), hi = Math.max(...hb.slice(-CFG.trend.hi - 1, -1).map((b) => b.h)), c24 = hb.length > 24 ? hb[hb.length - 25].c : NaN;
+      mkt[c] = { px: r2(last.c), ema: r2(e), hi: r2(hi), up: last.c > e, d24: isNum(c24) ? Math.round((last.c / c24 - 1) * 1e4) / 1e4 : null };
+    }
     return {
       v: 1, at: st.at, start: st.start, funded: r2(st.funded), eq: st.eq, usd: r2(usd), hold, last: st.last,
       venues: Object.fromEntries(Object.entries(st.venues).map(([k, a]) => [k, { name: VENUES[k].name, taker: VENUES[k].taker, usd: r2(a.usd), coin: Object.fromEntries(COINS.map((c) => [c, r8(a.coin[c] || 0)])) }])),
       trade: { venue: VENUES[CFG.exec].name, usd: r2(st.trade.usd), coin: Object.fromEntries(COINS.map((c) => [c, r8(st.trade.coin[c] || 0)])) },
-      pos: st.pos, w: st.w, brake: st.brake, spreads: st.spreads,
+      pos: st.pos, w: st.w, brake: st.brake, spreads: st.spreads, mkt,
       stats: Object.fromEntries(Object.entries(st.stats).map(([k, v]) => [k, { n: v.n, pnl: r2(v.pnl || 0), fees: r2(v.fees || 0) }])),
       fills: st.fills.slice(-80).reverse(), log: st.log.slice(-30).reverse(), eqMin: st.eqMin.slice(-1440), eqHour: st.eqHour.slice(-720), transfers: st.transfers,
       cfg: { coins: COINS, exec: CFG.exec, arbShare: CFG.arbShare, arbMinEdge: CFG.arbMinEdge, scalp: CFG.scalp, trend: CFG.trend, brakes: CFG.brakes },

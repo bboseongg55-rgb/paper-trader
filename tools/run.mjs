@@ -98,11 +98,11 @@ function compareView() {
 const orders = [];
 if (lv) {
   for (const t of lv.trades) {
-    orders.push({ side: 'buy', id: t.id, date: t.entryDate, time: t.et || null, sym: t.sym, name: t.name, pb: t.pb, qty: t.qty, price: t.entry, fee: t.feeBuy || 0 });
+    orders.push({ side: 'buy', id: t.id, date: t.entryDate, time: t.et || null, sym: t.sym, name: t.name, pb: t.pb, qty: t.qty, price: t.entry, fee: t.feeBuy || 0, why: t.why || null, ctx: t.ctx || null });
     orders.push({ side: 'sell', id: t.id, date: t.exitDate, time: t.xt || null, sym: t.sym, name: t.name, pb: t.pb, qty: t.qty, price: t.exit, entry: t.entry,
       fee: t.feeSell ? t.feeSell.total : 0, feeDetail: t.feeSell || null, pnl: t.pnl, pct: t.pct, R: t.R, reason: t.reason, days: t.days });
   }
-  for (const p of lv.open) orders.push({ side: 'buy', id: p.id, date: p.entryDate, time: p.et || null, sym: p.sym, name: p.name, pb: p.pb, qty: p.qty, price: p.entry, fee: p.feeBuy || 0, open: true });
+  for (const p of lv.open) orders.push({ side: 'buy', id: p.id, date: p.entryDate, time: p.et || null, sym: p.sym, name: p.name, pb: p.pb, qty: p.qty, price: p.entry, fee: p.feeBuy || 0, open: true, why: p.why || null, ctx: p.ctx || null });
   (lv.hedgeFills || []).forEach((h, k) => orders.push({ side: h.side, id: 'h' + k, date: h.date, time: h.time || null, sym: 'SH', name: 'S&P 500 인버스(−1배) 헷지', pb: 'hedge',
     amount: h.amount, fee: h.fee || 0, spx: h.spx, ratio: h.ratio, why: h.why }));
   const key = (o) => `${o.date} ${o.time || '16:00'} ${o.side === 'sell' ? 1 : 0} ${String(o.id).padStart(6, '0')}`;
@@ -151,6 +151,7 @@ const state = {
     // money moved out after the last row (the row is before the move): the stock account's value now
     flowsAfter: Math.round(((book && book.flows) || []).filter((f) => lv.equity.length && f.date >= lv.equity[lv.equity.length - 1].date).reduce((a, f) => a + f.amount, 0) * 100) / 100 } : null,
   alloc: alloc ? { target: alloc.target, why: alloc.why, transfers: alloc.transfers } : null,
+  macro: lv ? E.macroView(D, lv) : null,
   teams: lv ? teamsView(lv) : null,
   evolution: Lab.view(E, evo),
   compare: compareView(),

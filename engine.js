@@ -301,6 +301,37 @@
     return { key: 'bad', text: '하락 추세 (200일선 아래)' };
   }
 
+  // ── the macro picture from data the engine already has: the S&P 500's trend and volatility, US rates (the 2-year
+  // yield's change over three months and the 10-year minus 2-year curve) and the median three-month change of 10-year
+  // yields across the bond countries. Changes of 0.25%p or more over three months count as a direction.
+  const pctS = (v, d = 1) => (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%';
+  const ppS = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%p';
+  function macroAt(D, t) {
+    if (!D._mx) {
+      const ys = {};
+      if (D.bond0 != null) for (let i = D.bond0; i < D.S.length; i++) { const x = D.S[i]; if (x.yld) ys[x.s] = x.yld; }
+      D._mx = { us2: ys.US2Y || null, us10: ys.US10Y || null, tens: Object.keys(ys).filter((k) => /10Y$/.test(k)).map((k) => ys[k]) };
+    }
+    const X = D._mx, s = D.spx[t];
+    const at = (arr, k) => { if (!arr || k < 0) return NaN; for (let j = k; j >= 0 && j > k - 6; j--) if (isNum(arr[j])) return arr[j]; return NaN; };
+    const y2 = at(X.us2, t), y10 = at(X.us10, t), dy2 = y2 - at(X.us2, t - 63);
+    const dTen = X.tens.map((a) => at(a, t) - at(a, t - 63)).filter(isNum).sort((a, b) => a - b);
+    const gl = dTen.length >= 5 ? dTen[dTen.length >> 1] : NaN;
+    const vol = D.spxVol[t] * Math.sqrt(252), volL = D.spxVolL[t] * Math.sqrt(252);
+    const dir = (v) => (!isNum(v) ? null : v <= -0.25 ? 'falling' : v >= 0.25 ? 'rising' : 'flat');
+    return { date: D.dates[t], spx: s, d200: s / D.spx200[t] - 1, d50: s / D.spx50[t] - 1,
+      trend: !(s > D.spx200[t]) ? 'down' : !(s > D.spx50[t]) ? 'mixed' : 'up',
+      vol, volL, volLv: !isNum(vol) || !isNum(volL) ? null : vol > 1.25 * volL ? 'high' : vol < 0.8 * volL ? 'low' : 'normal',
+      y2, dy2, rates: dir(dy2), y10, curve: y10 - y2, gl, glDir: dir(gl), glN: dTen.length };
+  }
+  // one line about the market on a given day, kept with each position as the market it was bought in
+  function macroLine(m) {
+    const out = [`S&P 500 ${m.trend === 'up' ? '상승 추세' : m.trend === 'mixed' ? '50일선 아래' : '하락 추세'}`];
+    if (isNum(m.vol)) out.push(`변동성 ${(m.vol * 100).toFixed(0)}%${isNum(m.volL) ? `(1년 ${(m.volL * 100).toFixed(0)}%)` : ''}`);
+    if (isNum(m.y2)) out.push(`미 2년 금리 ${m.y2.toFixed(2)}%${isNum(m.dy2) ? `(3개월 ${ppS(m.dy2)})` : ''}`);
+    return out.join(' · ');
+  }
+
   // ── 2. Simulation ───────────────────────────────────────────────────────────────────────────────────────
   // opts: {from, to, capital, params, adaptive, scores, label}
   function simulate(D, opts) {
@@ -313,6 +344,9 @@
     const from = BK ? tc + 1 : Math.max(opts.from, 210), to = Math.min(opts.to, T - 1);
     const base0 = BK ? Math.max(0, D.dates.indexOf(BK.from0)) : from;     // the account's first day
     const P = Object.assign({}, DEFAULTS, (BS ? BS.P : opts.params) || {});
+    let ctxT = -1, ctxS = '';
+    const ctxAt = (k) => { if (k !== ctxT) { ctxT = k; ctxS = macroLine(macroAt(D, k)); } return ctxS; };
+    const highTxt = (n) => (n >= 250 ? '1년 넘게 가장 높은 종가(신고가)' : `${n}거래일 신고가`);
     // the rules a correction steps back toward and the regular check compares with: the starting rules, or the rules
     // the evolution lab promoted last
     const B = Object.assign({}, DEFAULTS, (BS ? BS.base : opts.base) || {});
@@ -402,7 +436,7 @@
         pnl: round(p.qty * (fill - p.fill) - fs.total - (p.feeIn || 0), 2), pct: round(fill / p.fill - 1, 4), R: round(R, 2), days: t - p.t0,
         reason, mfeR: round(p.mfeR, 2), idx: round(D.spx[t] / D.spx[p.t0] - 1, 4),
         fee: cent(fs.total + (p.feeIn || 0)), feeBuy: p.feeIn || 0, feeSell: fs,
-        et: p.et || null, xt: tm || (D.times && D.times[t]) || null,
+        et: p.et || null, xt: tm || (D.times && D.times[t]) || null, why: p.why || null, ctx: p.ctx || null,
       };
       if (p.pb === 'dt') { tr.k0 = p.k0; tr.k1 = k == null ? 1e9 : k; }
       trades.push(tr);
@@ -566,7 +600,7 @@
                 const up = v / pc - 1;
                 if (up < P.dtMinUp / 100 || up > FIXED.dtMaxUp || up - spDay < FIXED.dtRel) continue;
                 if (!(x.rs[t - 1] >= P.dtRsMin) || !(pc > x.sma50[t - 1]) || !isNum(x.vol[t - 1]) || x.vol[t - 1] <= 0) continue;
-                cands.push({ i, score: up - spDay });
+                cands.push({ i, score: up - spDay, up });
               }
               cands.sort((a, b) => b.score - a.score);
               let heat = positions.reduce((sum, p) => sum + Math.max(0, p.fill - p.stop) * p.qty, 0);
@@ -585,7 +619,8 @@
                 const feeIn = catFee(qty);
                 cash -= qty * fill + feeIn;
                 heat += qty * perShare;
-                positions.push({ id: ++idSeq, i: cd.i, pb: 'dt', t0: t, k0: k, et: tm, fill, qty, stop, stop0: stop, R1: perShare, atr: x.vol[t - 1] * v, maxC: v, mfeR: 0, miss: 0, lastPx: v, feeIn });
+                positions.push({ id: ++idSeq, i: cd.i, pb: 'dt', t0: t, k0: k, et: tm, fill, qty, stop, stop0: stop, R1: perShare, atr: x.vol[t - 1] * v, maxC: v, mfeR: 0, miss: 0, lastPx: v, feeIn,
+                  why: `장중 ${tm} 그날 고점 돌파 · 전일 대비 ${pctS(cd.up)}(S&P 500보다 ${(cd.score * 100).toFixed(1)}%p 강함) · 상대강도 상위 ${Math.max(1, 100 - x.rs[t - 1])}%`, ctx: ctxAt(t - 1) });
                 held.add(cd.i);
                 dtDone.add(cd.i);
                 dtOpened++;
@@ -790,7 +825,9 @@
           const feeIn = catFee(qty);
           cash -= qty * fill + feeIn;
           heat += qty * perShare;
-          positions.push({ id: ++idSeq, i: cd.i, pb: cd.pb, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn });
+          const why = cd.pb === 'bo' ? `${highTxt(x.dom[t])} 돌파(기준 ${P.boLookback}일) · 상대강도 상위 ${Math.max(1, 100 - x.rs[t])}% · 50일선이 200일선 위인 상승 추세`
+            : `상승 추세(200일선 위) 속 짧은 하락: 2일 RSI ${x.rsi2[t].toFixed(1)}(기준 ${P.pbRsi} 미만) · 상대강도 상위 ${Math.max(1, 100 - x.rs[t])}%`;
+          positions.push({ id: ++idSeq, i: cd.i, pb: cd.pb, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn, why, ctx: ctxAt(t) });
           sig.taken = true; sig.qty = qty; sig.stop = round(stop, 2);
           opened++;
         }
@@ -808,7 +845,7 @@
           cands.sort((a, b) => b.score - a.score);
           const eq = marked(t);
           let heat = positions.reduce((s2, p) => s2 + Math.max(0, (p.fill - p.stop)) * p.qty, 0);
-          for (const cd of cands) {
+          for (const [ci, cd] of cands.entries()) {
             if (nb >= FIXED.bdMax) break;
             const x = D.S[cd.i], c = x.c[t];
             const atr = x.vol[t] * c, fill = c * (1 + FIXED.slip), stop = fill - P.stopK_bd * atr, perShare = fill - stop;
@@ -819,7 +856,8 @@
             const feeIn = x.syn ? 0 : catFee(qty);
             cash -= qty * fill + feeIn;
             heat += qty * perShare;
-            positions.push({ id: ++idSeq, i: cd.i, pb: 'bd', t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn });
+            const why = `가격이 100일 평균 위 · 3개월 수익 ${pctS(x.ret63[t])}${x.syn && x.ccy !== 'USD' ? '(환율 포함, 달러 기준)' : ''} · 위험 대비 수익 ${ci + 1}위(후보 ${cands.length}개)${x.yld && isNum(x.yld[t]) ? ` · 금리 ${x.yld[t].toFixed(2)}%` : ''}`;
+            positions.push({ id: ++idSeq, i: cd.i, pb: 'bd', t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn, why, ctx: ctxAt(t) });
             if (t === to) todaySignals.push({ sym: x.s, name: x.n, pb: 'bd', rs: null, price: round(c, 2), taken: true, why: '', qty, stop: round(stop, 2) });
             nb++;
           }
@@ -898,7 +936,7 @@
       return { id: p.id, sym: x.s, name: x.n, sec: x.sec, pb: p.pb, entryDate: D.dates[p.t0], entry: round(p.fill, 2), qty: p.qty, price: round(px, 2),
         value: round(px * p.qty, 2), pnl: round((px - p.fill) * p.qty - (p.feeIn || 0), 2), pct: round(px / p.fill - 1, 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2), feeBuy: p.feeIn || 0,
         R: round((px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, px - p.stop) * p.qty, 2), et: p.et || null,
-        kind: x.kind || 'stock', yld: x.yld && isNum(x.yld[lastT]) ? round(x.yld[lastT], 3) : null };
+        kind: x.kind || 'stock', yld: x.yld && isNum(x.yld[lastT]) ? round(x.yld[lastT], 3) : null, why: p.why || null, ctx: p.ctx || null };
     });
     // opts.snapshot: everything needed to continue after this day (a book's state), days kept relative to this day
     let snapshot = null;
@@ -1045,7 +1083,57 @@
     return { regime: regimeText(D, t), spxLast: D.spx[t], gate: { ok: regimeOk(D, t, lvl), level: lvl, spx: round(D.spx[t], 2), spx50: round(D.spx50[t], 2), spx200: round(D.spx200[t], 2) } };
   }
 
-  const api = { VERSION, DEFAULTS, BOUNDS, LABELS, UNITS, FIXED, PB_NAME, TEAMS, TEAM_OF, teamsOf, prepare, simulate, runAll, regimeText, regimeOk, lastFinalIdx, advanceBook, marketView };
+  // ── what the account leans on now and why: the engine's own budgets (the 20-day method tournament), the market filter,
+  // the loss brakes and the bond filter, read together with the macro picture. Nothing here changes a trade.
+  function macroView(D, res) {
+    if (!res) return null;
+    const t = res.to, P = res.params, m = macroAt(D, t), M = res.mults || {}, rk = res.risk || {};
+    const lvl = P.regimeLevel, gate = regimeOk(D, t, lvl), blocked = (rk.blocked || []).length > 0, mult = isNum(rk.mult) ? rk.mult : 1;
+    const bonds = [];
+    if (D.bond0 != null) for (let i = D.bond0; i < D.S.length; i++) {
+      const x = D.S[i], c = x.c[t];
+      if (isNum(c) && x.sma100 && isNum(x.sma100[t]) && isNum(x.ret63[t]) && isNum(x.vol[t]) && x.vol[t] > 0 && c > x.sma100[t] && x.ret63[t] > 0) bonds.push({ n: x.n.replace('(합성)', ''), score: x.ret63[t] / (x.vol[t] * Math.sqrt(63)) });
+    }
+    bonds.sort((a, b) => b.score - a.score);
+    const gateWhy = !(m.spx > D.spx200[t]) ? `S&P 500이 200일선 아래(${pctS(m.d200)})` : lvl >= 2 && !(m.spx > D.spx50[t]) ? `S&P 500이 50일선 아래(${pctS(m.d50)})` : '변동성이 평소의 1.25배를 넘어';
+    const brakeWhy = (rk.blocked || []).join(' ');
+    const rateTxt = !isNum(m.dy2) ? '미국 금리 자료 없음' : `미 2년 금리 3개월 ${ppS(m.dy2)}(${m.rates === 'falling' ? '금리 하락, 인하 기대' : m.rates === 'rising' ? '금리 상승, 긴축 압력' : '보합'})`;
+    const risky = m.trend !== 'up' || m.volLv === 'high';
+    const items = [
+      { k: 'bo', on: gate && !blocked, budget: (M.bo || 0) * mult,
+        why: !gate ? `${gateWhy}라 새 매수를 쉽니다. 하락 추세에서는 신고가를 넘은 종목도 되밀리기 쉽습니다.` : blocked ? brakeWhy
+          : `S&P 500 ${m.trend === 'up' ? `상승 추세(200일선 ${pctS(m.d200)})` : '시장 필터 통과'}: 신고가를 넘은 강한 종목이 추세를 이어 가기 쉬운 장입니다.` },
+      { k: 'pb', on: gate && !blocked, budget: (M.pb || 0) * mult,
+        why: !gate ? `${gateWhy}라 새 매수를 쉽니다. 하락 추세의 눌림은 반등보다 추가 하락이 잦습니다.` : blocked ? brakeWhy
+          : `상승 추세 안의 짧은 하락을 삽니다${m.volLv === 'high' ? '. 변동성이 커 이런 눌림이 자주 생깁니다' : ''}.` },
+      { k: 'dt', on: !res.dtPaused && !blocked, budget: (M.dt || 0) * mult,
+        why: res.dtPaused ? '최근 단타 성과가 나빠 잠시 쉽니다.' : blocked ? brakeWhy
+          : `밤사이 주식을 들고 있지 않아${risky ? ' 하락 추세·큰 변동성의 위험을 피하면서' : ''} 그날 시장보다 강한 종목만 짧게 노립니다.` },
+      { k: 'bd', on: !blocked && bonds.length > 0, budget: (M.bd || 0) * mult,
+        why: blocked ? brakeWhy : bonds.length ? `${rateTxt}. 가격이 오르는 채권 ${bonds.length}종(${bonds.slice(0, 3).map((b) => b.n).join(', ')})이 매수 조건을 통과했습니다.`
+          : `${rateTxt}. 매수 조건(100일 평균 위·3개월 수익 플러스)을 통과한 채권이 없습니다.` },
+    ];
+    const pref = risky ? ['dt', 'bd', 'pb', 'bo'] : ['bo', 'pb', 'dt', 'bd'];
+    items.sort((a, b) => (b.on - a.on) || (b.budget - a.budget) || (pref.indexOf(a.k) - pref.indexOf(b.k)));
+    let r = 0;
+    for (const it of items) { it.name = PB_NAME[it.k]; it.budget = round(it.budget, 3); it.rank = it.on ? ++r : null; }
+    const mood = m.trend === 'down' || (m.trend === 'mixed' && m.volLv === 'high') ? 'off' : m.trend === 'up' && m.volLv !== 'high' ? 'on' : 'mixed';
+    const state = m.trend === 'down' ? (m.volLv === 'high' ? '주식 하락 추세·변동성 확대' : '주식 하락 추세') : m.trend === 'mixed' ? (m.volLv === 'high' ? '주식 약세·변동성 확대' : '주식 약세(50일선 아래)') : m.volLv === 'high' ? '주식 상승 추세·변동성 큼' : '주식 상승 추세·안정';
+    const rate = m.rates === 'falling' ? '미 금리 하락(인하 기대)' : m.rates === 'rising' ? '미 금리 상승(긴축 압력)' : isNum(m.dy2) ? '미 금리 보합' : '';
+    const tops = items.filter((i) => i.on).slice(0, 2).map((i) => i.name);
+    const headline = `${state}${rate ? ', ' + rate : ''} → ${tops.length ? tops.join('·') + ' 우선' : '새 매매 쉼'}`;
+    const lab = (v, a) => a[v] || '';
+    const signals = [
+      { k: 'S&P 500 추세', v: lab(m.trend, { up: '상승', mixed: '약세', down: '하락' }), c: m.trend === 'up' ? 'up' : 'down', sub: `200일선 ${pctS(m.d200)} · 50일선 ${pctS(m.d50)}` },
+      isNum(m.vol) ? { k: '변동성(20일, 연율)', v: (m.vol * 100).toFixed(1) + '%', sub: `1년 평균 ${isNum(m.volL) ? (m.volL * 100).toFixed(1) + '%' : '-'} · ${lab(m.volLv, { high: '높음', normal: '보통', low: '낮음' })}` } : null,
+      isNum(m.y2) ? { k: '미 2년 금리', v: m.y2.toFixed(2) + '%', sub: `3개월 ${isNum(m.dy2) ? ppS(m.dy2) : '-'} · ${lab(m.rates, { falling: '하락', rising: '상승', flat: '보합' })}` } : null,
+      isNum(m.curve) ? { k: '장단기 금리차(10년−2년)', v: ppS(m.curve), sub: m.curve < 0 ? '역전: 경기 둔화 신호' : m.curve < 0.5 ? '평평' : '정상' } : null,
+      isNum(m.gl) ? { k: '세계 10년 금리', v: '3개월 ' + ppS(m.gl), sub: `${m.glN}개국 중앙값 · ${lab(m.glDir, { falling: '하락', rising: '상승', flat: '보합' })}` } : null,
+    ].filter(Boolean);
+    return { date: m.date, mood, headline, items, signals, gate: { ok: gate, level: lvl } };
+  }
+
+  const api = { VERSION, DEFAULTS, BOUNDS, LABELS, UNITS, FIXED, PB_NAME, TEAMS, TEAM_OF, teamsOf, prepare, simulate, runAll, regimeText, regimeOk, lastFinalIdx, advanceBook, marketView, macroAt, macroView };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PaperEngine = api;
 })(typeof self !== 'undefined' ? self : this);

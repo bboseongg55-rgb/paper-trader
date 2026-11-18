@@ -167,6 +167,26 @@ ul.list > li > details > summary::-webkit-details-marker { display: none; }
 .more b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .tag { display: inline-block; font-size: 13px; font-weight: 600; line-height: 20px; padding: 0 7px; border-radius: 6px; background: var(--band); color: var(--sub); margin-left: 6px; vertical-align: middle; }
 .empty-row { padding: 18px 20px; color: var(--muted); font-size: 16px; }
+.mac { margin: 4px 20px 0; padding: 14px 16px; border-radius: 14px; background: var(--band); }
+.mac-head { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.45; word-break: keep-all; overflow-wrap: anywhere; }
+.mac-sub { display: block; margin-top: 6px; font-size: 14px; color: var(--muted); }
+.prio { list-style: none; margin: 0; padding: 6px 0 0; }
+.prio li { display: flex; gap: 12px; padding: 12px 20px; align-items: flex-start; }
+.prio .rk { flex: none; min-width: 52px; height: 28px; padding: 0 8px; border-radius: 14px; display: grid; place-items: center; font-size: 14px; font-weight: 700; background: var(--ink); color: var(--bg); }
+.prio li.off .rk { background: var(--band); color: var(--muted); }
+.prio .bd { min-width: 0; display: grid; gap: 4px; }
+.prio .bd b { font-size: 17px; font-weight: 600; }
+.prio li.off .bd b { color: var(--sub); }
+.prio .bd p { margin: 0; font-size: 15px; color: var(--sub); line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.sub-h { margin: 14px 20px 0; font-size: 16px; font-weight: 700; color: var(--sub); }
+.sig { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 12px 20px 0; }
+.sig div { display: grid; gap: 2px; min-width: 0; }
+.sig span { font-size: 14px; color: var(--muted); word-break: keep-all; }
+.sig b { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sig small { font-size: 14px; color: var(--muted); line-height: 1.4; word-break: keep-all; }
+.why { margin: -4px 20px 0; padding: 0 0 14px; font-size: 15px; color: var(--sub); line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.why b { font-weight: 600; color: var(--ink); margin-right: 6px; }
+@media (max-width: 350px) { .sig { grid-template-columns: minmax(0, 1fr); } }
 
 .filters { display: flex; gap: 8px; padding: 12px 20px 0; }
 .filters button { min-height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid var(--line); background: var(--bg); font-size: 15px; font-weight: 600; color: var(--sub); cursor: pointer; transition: transform 120ms var(--ease-out); }
@@ -510,6 +530,39 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     segs.forEach((x) => { x.share = total > 0 ? x.v / total : 0; });
     return { segs, total };
   }
+  // what the account leans on now and why: the engine's own order (S.macro), the crypto account's strategies, the split
+  // between the two accounts, and the macro numbers behind it
+  function coinPrio() {
+    const w = CV.w || {}, br = CV.brake || {}, mk = CV.mkt || null, pos = CV.pos || {}, cf = CV.cfg || {};
+    const ups = mk ? Object.keys(mk).filter((c) => mk[c].up) : null;
+    const heldT = Object.keys(pos.trend || {}), heldS = Object.keys(pos.scalp || {});
+    const sp = Object.entries(CV.spreads || {}).sort((a, b) => b[1].net - a[1].net)[0];
+    const minE = cf.arbMinEdge || 0;
+    const stop = !!br.stopNew;
+    const items = [
+      { k: 'trend', name: '코인 추세(1시간)', w: w.trend || 0, on: !stop,
+        why: stop ? '손실 브레이크로 새 매매를 잠시 멈췄습니다.' : `${mk ? (ups.length ? `100시간 평균 위(상승 추세): ${ups.join('·')}. 이 코인이 20시간 신고가를 넘으면 삽니다.` : '모든 코인이 100시간 평균 아래(하락 추세)라 새 매수는 기다립니다.') : '100시간 평균 위에서 20시간 신고가를 넘으면 삽니다.'}${heldT.length ? ` 보유 중: ${heldT.join('·')}.` : ''}` },
+      { k: 'scalp', name: '코인 초단타(1분)', w: w.scalp || 0, on: !stop,
+        why: stop ? '손실 브레이크로 새 매매를 잠시 멈췄습니다.' : `15분 고점을 넘고 5분 새 ${((cf.scalp && cf.scalp.mom) || 0.003) * 100}% 넘게 오르면 짧게 사고팝니다.${heldS.length ? ` 보유 중: ${heldS.join('·')}.` : ''}` },
+      { k: 'arb', name: '거래소 간 차익거래', w: null, on: !!sp && sp[1].net > minE,
+        why: sp ? (sp[1].net > minE ? `${sp[0]} 가격 차이가 수수료를 빼고도 ${pct(sp[1].net, 2)}라 사고팔 수 있습니다.` : `수수료를 빼면 가장 큰 가격 차이가 ${pct(sp[1].net, 2)}(${sp[0]})라 기다립니다. 기준은 +${fmt(minE * 100, 2)}%입니다.`) : '거래소 호가를 기다리는 중입니다.' },
+    ];
+    items.sort((a, b) => (b.on - a.on) || ((b.w == null ? -1 : b.w) - (a.w == null ? -1 : a.w)));
+    let r = 0;
+    return `<h3 class="sub-h">코인 계좌</h3><ol class="prio">` + items.map((it) => `<li class="${it.on ? '' : 'off'}"><span class="rk">${it.on ? ++r + '순위' : '대기'}</span><div class="bd"><b>${esc(it.name)}${it.on && it.w != null ? `<span class="tag">AI 위험 배분 ${Math.round(it.w * 100)}%</span>` : ''}</b><p>${esc(it.why)}</p></div></li>`).join('') + '</ol>';
+  }
+  function prioHTML() {
+    const mc = S.macro;
+    if (!mc) return '';
+    let h = `<div class="band"></div><h2>지금 우선할 매매</h2><div class="mac"><p class="mac-head">${esc(mc.headline)}</p><span class="mac-sub">${md(mc.date)} 종가 기준 · AI가 실제로 위험을 싣는 순서입니다</span></div>`;
+    h += `${hasCoin() ? '<h3 class="sub-h">주식·채권 계좌</h3>' : ''}<ol class="prio">` + mc.items.map((it) => `<li class="${it.on ? '' : 'off'}"><span class="rk">${it.on ? it.rank + '순위' : '쉼'}</span><div class="bd"><b>${esc(it.name)}${it.on ? `<span class="tag">AI 위험 배분 ${Math.round(it.budget * 100)}%</span>` : ''}</b><p>${esc(it.why)}</p></div></li>`).join('')
+      + (S.account.hedge ? `<li><span class="rk">헷지</span><div class="bd"><b>S&amp;P 500 인버스</b><p>하락 추세에서 들고 있는 주식의 위험을 줄이려고 보유 중입니다.</p></div></li>` : '') + '</ol>';
+    if (funded()) h += coinPrio();
+    if (hasCoin() && S.alloc) { const t = totalNow(); h += `<p class="sumline" style="padding-top:10px">계좌 배분: 주식·채권 ${fmt(stockNow() / t * 100, 0)}% · 코인 ${fmt(coinTotal() / t * 100, 0)}%. ${esc(S.alloc.why)}</p>`; }
+    h += `<h3 class="sub-h">매크로 지표</h3><div class="sig">${mc.signals.map((g) => `<div><span>${esc(g.k)}</span><b class="${g.c || ''}">${esc(g.v)}</b><small>${esc(g.sub)}</small></div>`).join('')}</div>`;
+    h += `<p class="sumline" style="padding-top:12px">판단 기준: S&amp;P 500이 200일선 아래면 돌파·눌림목 새 매수를 쉽니다. 방법별 위험 배분은 20거래일마다 최근 120거래일 성과로 다시 정합니다. 채권은 가격이 100일 평균 위이고 3개월 수익이 플러스일 때만 삽니다. 변동성과 금리는 지금 국면을 설명하는 참고 지표로, 매매 규칙을 직접 바꾸지는 않습니다. 금리 방향은 3개월 0.25%p 이상 움직였을 때 하락·상승으로 봅니다.</p>`;
+    return h;
+  }
   function arcPath(c, r0, r1, a0, a1) {
     const p = (r, a) => `${(c + r * Math.sin(a)).toFixed(2)} ${(c - r * Math.cos(a)).toFixed(2)}`;
     const big = a1 - a0 > Math.PI ? 1 : 0;
@@ -575,12 +628,13 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     acctPrev = prevTotal;
     // why the account may not be buying
     const notes = [];
-    if (S.gate && !S.gate.ok) notes.push(`시장이 하락 추세라 돌파·눌림목 새 매수는 쉬고 ${a.dtPaused ? '있습니다. 단타도 성과가 나빠 쉬는 중입니다.' : '단타만 합니다.'}`);
+    const onNames = S.macro ? S.macro.items.filter((x) => x.on).map((x) => x.name) : null;
+    if (S.gate && !S.gate.ok) notes.push(onNames ? `시장이 하락 추세라 돌파·눌림목 새 매수는 쉽니다. ${onNames.length ? `지금은 ${onNames.join('·')} 위주로 매매합니다.` : '다른 매매도 지금은 쉽니다.'}` : `시장이 하락 추세라 돌파·눌림목 새 매수는 쉬고 ${a.dtPaused ? '있습니다. 단타도 성과가 나빠 쉬는 중입니다.' : '단타만 합니다.'}`);
     else if (a.dtPaused) notes.push('단타는 최근 성과가 나빠 잠시 쉬는 중입니다.');
     if (a.risk && a.risk.blocked && a.risk.blocked.length) notes.push(a.risk.blocked.join(' '));
     else if (a.risk && a.risk.mult < 1) notes.push(`손실 관리: ${a.risk.why.join(' ')}`);
     h += notes.map((n) => `<p class="note"><i aria-hidden="true"></i><span>${esc(n)}</span></p>`).join('');
-    h += `<div class="band"></div><h2>포트폴리오 구성</h2>` + allocHTML();
+    h += `<div class="band"></div><h2>포트폴리오 구성</h2>` + allocHTML() + prioHTML();
     const hg = a.hedge;
     h += `<div class="band"></div><h2>보유 종목 <span class="count num">${a.open.length + (hg ? 1 : 0)}</span></h2>`;
     if (!a.open.length && !hg) h += '<p class="empty-row">보유 종목이 없습니다. 전부 현금입니다.</p>';
@@ -588,13 +642,14 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       const hp = hg.value + hg.got - hg.paid;
       h += `<ul class="list"><li><details><summary class="row"><span class="l"><b>SH<span class="tag">헷지</span></b><span>S&amp;P 500 인버스(−1배)</span></span>
         <span class="r"><b>${usd(hg.value)}</b><span class="${cls(hp)}">${sgnUsd(hp)}</span></span></summary>
-        ${more([['하는 일', 'S&amp;P 500이 내리면 오르고, 오르면 내립니다'], ['시작', dLabel(hg.since)], ['시작 때 S&amp;P 500', hg.spx0.toLocaleString('en-US')], ['헷지 비율', `보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%`], ['담당', '리스크·헷지팀']])}</details></li></ul>`;
+        ${more([['하는 일', 'S&amp;P 500이 내리면 오르고, 오르면 내립니다'], ['시작', dLabel(hg.since)], ['시작 때 S&amp;P 500', hg.spx0.toLocaleString('en-US')], ['헷지 비율', `보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%`], ['담당', '리스크·헷지팀']])}</details>
+        <p class="why"><b>편입 이유</b>S&amp;P 500이 하락 추세라, 들고 있는 주식의 위험을 줄이려고 보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%만큼 샀습니다.</p></li></ul>`;
     }
     if (a.open.length) h += '<ul class="list">' + a.open.slice().sort((p, q) => q.value - p.value).map((p) => `<li><details><summary class="row">
         <span class="l"><b>${esc(p.sym)}</b><span>${esc(p.name)}${p.kind === 'bond' ? (p.yld != null ? ` · 금리 ${p.yld}%` : '') : ` · ${p.qty.toLocaleString()}주`}</span></span>
         <span class="r"><b>${usd(p.value)}</b><span class="${cls(p.pnl)}">${sgnUsd(p.pnl)} (${pct(p.pct)})</span></span></summary>
-        ${more(p.kind === 'bond' ? [['평가액', usd(p.value)], ['손익', `${sgnUsd(p.pnl)} (${pct(p.pct)})`], ['손절 기준', `지수 ${fmt(p.stop, 2)} (지금 ${fmt(p.price, 2)})`], ['매수', `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]]
-          : [['평균 매수가', usd(p.entry)], ['현재가', usd(p.price)], ['손절가', usd(p.stop)], ['매수', p.pb === 'dt' ? `오늘 ${esc(p.et || '')}` : `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]])}</details></li>`).join('') + '</ul>';
+        ${more((p.kind === 'bond' ? [['평가액', usd(p.value)], ['손익', `${sgnUsd(p.pnl)} (${pct(p.pct)})`], ['손절 기준', `지수 ${fmt(p.stop, 2)} (지금 ${fmt(p.price, 2)})`], ['매수', `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]]
+          : [['평균 매수가', usd(p.entry)], ['현재가', usd(p.price)], ['손절가', usd(p.stop)], ['매수', p.pb === 'dt' ? `오늘 ${esc(p.et || '')}` : `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]]).concat(p.ctx ? [['편입 당시 시장', esc(p.ctx)]] : []))}</details>${p.why ? `<p class="why"><b>편입 이유</b>${esc(p.why)}</p>` : ''}</li>`).join('') + '</ul>';
     // the latest fills
     const recent = (S.orders || []).slice(0, 3);
     h += `<div class="band"></div><h2>최근 체결</h2>`;
@@ -639,7 +694,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       return `<li><details><summary class="row"><span class="side buy">매수</span>
         <span class="l"><b>${esc(o.sym)}</b><span>${o.pb === 'bd' ? esc(o.name) : `${o.qty.toLocaleString()}주 · ${usd(o.price)}`}</span></span>
         <span class="r"><b>${usd(amt)}</b><span class="muted">${esc(when)}</span></span></summary>
-        ${more([['종목', esc(o.name)], ['방법', PB_LONG[o.pb] || ''], ['체결가', usd(o.price)], ['수량', o.qty.toLocaleString() + '주'], ['체결 금액', usd(amt)], ['수수료', usd(o.fee || 0)], ['상태', o.open ? '보유 중' : '매도 완료']])}</details></li>`;
+        ${more([['종목', esc(o.name)], ['방법', PB_LONG[o.pb] || ''], ['체결가', usd(o.price)], ['수량', o.qty.toLocaleString() + '주'], ['체결 금액', usd(amt)], ['수수료', usd(o.fee || 0)], ['상태', o.open ? '보유 중' : '매도 완료'], o.why ? ['편입 이유', esc(o.why)] : null, o.ctx ? ['편입 당시 시장', esc(o.ctx)] : null])}</details></li>`;
     }
     const fd = o.feeDetail || {};
     return `<li><details><summary class="row"><span class="side sell">매도</span>
