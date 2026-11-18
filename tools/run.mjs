@@ -25,7 +25,7 @@ const state = {
   v: 1, built: new Date().toISOString(),
   asOf: { date: res.D.last, time: res.D.lastTime, prov: !!res.D.prov },
   D: { last: res.D.last, symbols: res.D.symbols, nDates: res.D.dates.length, liveDays: res.D.liveDays },
-  regime: res.regime, capital: res.capital, liveStart: res.liveStart, warm: res.warm,
+  regime: res.regime, gate: res.gate, capital: res.capital, liveStart: res.liveStart, warm: res.warm,
   bt: sim(res.bt), live: sim(res.live),
   data: { seedBuilt: seed.built || null, liveBuilt: live.built || null, liveDays: (live.days || []).length, sources: readJSON('data/source.json', null) },
 };

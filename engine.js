@@ -553,6 +553,7 @@
     return {
       D: { dates: D.dates, last: D.dates[T - 1], lastTime: D.times[T - 1] || null, prov: D.prov ? { date: D.dates[D.prov.t], time: D.prov.time } : null, liveDays: D.liveDays, notes: D.notes, symbols: D.S.length },
       regime: regimeText(D, T - 1), spxLast: D.spx[T - 1],
+      gate: { ok: regimeOk(D, T - 1, (lv ? lv.params : warm).regimeLevel), level: (lv ? lv.params : warm).regimeLevel, spx: round(D.spx[T - 1], 2), spx50: round(D.spx50[T - 1], 2), spx200: round(D.spx200[T - 1], 2) },
       bt, live: lv, warm, liveStart, liveStartIdx: li, capital,
     };
   }
