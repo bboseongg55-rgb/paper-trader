@@ -1,6 +1,6 @@
 /* 진화 연구소 (evolution lab) for the paper-trading engine.
-   Every evening after a trading day closes, the lab makes small variations of the live rules and tests each one on
-   the past year, split into two halves of 125 trading days. A variation that beats the live rules in both halves
+   Every evening after a trading day closes, the lab trades its shadow accounts through the day, and when a place is
+   free it makes small variations of the live rules and tests each one on the past year, split into two halves of 125 trading days. A variation that beats the live rules in both halves
    (more return, a better return-to-drawdown ratio, a drawdown at most 2 points deeper, at least 15 trades) starts
    trading in a shadow account: the same prices and the same account at its start, but no fills in the real book.
    Day-trade rules cannot be tested on the past prices (they have no intraday samples), so one shadow always tries a
@@ -9,8 +9,8 @@
    generation of rules from the next trading day. The rules it replaced keep trading in a shadow, so a step that
    turns out worse can be taken back the same way. A shadow ends after 40 trading days, or after 10 if it is 2 points
    or more behind. Fills already in the book never change. The fixed risk limits (1-trade risk, open risk, loss stops)
-   are not part of what evolves, and the market filter, position size and hedge can only stay as strict as the
-   starting rules or get stricter. */
+   are not part of what evolves, and a candidate's market filter, position size and hedge ratio are never looser than
+   the live account's starting rules. */
 (function (root) {
   'use strict';
 
@@ -29,8 +29,8 @@
   const INT = new Set(['boLookback', 'regimeLevel', 'rsMin', 'pbRsMin', 'pbRsi', 'timeStop_bo', 'timeStop_pb', 'dtRsMin']);
   const fix = (k, v) => (k === 'maxPosW' ? Math.round(v * 1000) / 1000 : INT.has(k) ? Math.round(v) : Math.round(v * 100) / 100);
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  // limits for evolution: the engine's own limits, and the risk team's rules never looser than at the start
-  const limits = (E) => Object.assign({}, E.BOUNDS, { regimeLevel: [1, 3], maxPosW: [0.08, 0.15], hedgeK: [0.2, 1] });
+  // limits for evolution: the engine's own limits, and the risk team's rules never looser than at the account's start
+  const limits = (E) => Object.assign({}, E.BOUNDS, { regimeLevel: [1, 3], maxPosW: [0.08, 0.15], hedgeK: [0.3, 1] });
   const keyOf = (E, P) => Object.keys(E.DEFAULTS).map((k) => P[k]).join('|');
   const pct = (v, d = 1) => (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%';
   const dayKo = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일`;
