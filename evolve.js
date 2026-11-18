@@ -73,7 +73,10 @@
   function forward(E, D, book, sh, td) {
     const r = E.simulate(D, { resume: { date: sh.born, from0: book.from0, capital: book.capital, state: sh.state, hist: {} }, to: td, adaptive: true, log: false });
     const rows = r.equity, eq0 = sh.eq0, end = D.dates[td];
-    const live = book.hist.equity.filter((e) => e.date > sh.born && e.date <= end);
+    // the live account's rows, with money moved out to the crypto account added back (a move is not a loss)
+    // (moves the shadow's starting state already had are left as they are)
+    const seen = new Set(sh.seen || []), flows = (book.flows || []).filter((f) => !seen.has(f.id));
+    const live = book.hist.equity.filter((e) => e.date > sh.born && e.date <= end).map((e) => ({ eq: e.eq - flows.filter((f) => f.date < e.date).reduce((s, f) => s + f.amount, 0) }));
     const mdd = (xs) => { let pk = eq0, m = 0; for (const e of xs) { pk = Math.max(pk, e.eq); m = Math.max(m, 1 - e.eq / pk); } return m; };
     const last = (xs) => (xs.length ? xs[xs.length - 1].eq : eq0);
     const ret = last(rows) / eq0 - 1, champRet = last(live) / eq0 - 1;
@@ -84,8 +87,8 @@
   function spawn(E, evo, book, kind, P, base, d, scr) {
     const st = JSON.parse(JSON.stringify(book.state));
     st.P = Object.assign({}, P); st.base = Object.assign({}, base);
-    const eqs = book.hist.equity;
-    const sh = { id: ++evo.seq, kind, born: book.date, eq0: eqs.length ? eqs[eqs.length - 1].eq : book.capital, params: Object.assign({}, P), base: Object.assign({}, base), diff: d, screen: scr || null, state: st, fwd: null };
+    const eqs = book.hist.equity, moved = (book.flows || []).filter((f) => f.date >= book.date).reduce((s, f) => s + f.amount, 0);
+    const sh = { id: ++evo.seq, kind, born: book.date, eq0: (eqs.length ? eqs[eqs.length - 1].eq : book.capital) + moved, seen: (book.flows || []).map((f) => f.id), params: Object.assign({}, P), base: Object.assign({}, base), diff: d, screen: scr || null, state: st, fwd: null };
     evo.shadows.push(sh);
     note(evo, { date: book.date, type: 'born', id: sh.id, kind, diff: d, screen: scr || null });
     return sh;

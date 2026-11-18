@@ -54,6 +54,23 @@ if (book && (!evo || !evo.lastRun || evo.lastRun < book.date) && !(evo && evo.la
   }
   labMs = Date.now() - t1;
 }
+// money for the crypto account (data/alloc.json): the AI's first allocation is a tenth of the account, because the
+// crypto strategies swing about four times as much as the stock strategies; it leaves the book after its last close
+// and the crypto loop (tools/crypto_loop.mjs) takes it in
+let alloc = readJSON('data/alloc.json', null);
+if (book && !alloc && !(book.flows || []).length) {
+  const last = book.hist.equity[book.hist.equity.length - 1], amount = Math.round(last.eq * 0.10 * 100) / 100;
+  if (book.state.cash >= amount) {
+    const id = 't1';
+    book = JSON.parse(JSON.stringify(book));
+    book.state.cash -= amount; book.state.peak -= amount; book.state.prevEq -= amount;
+    book.flows = [{ id, date: book.date, amount: -amount, to: 'crypto' }];
+    bookChanged = true;
+    alloc = { v: 1, target: { crypto: 0.1 }, why: '코인 전략의 변동성이 주식 전략의 약 4배라 위험을 비슷하게 맞추려고 계좌의 10%로 시작합니다.',
+      transfers: [{ id, at: new Date().toISOString(), date: book.date, to: 'crypto', amount, stockDone: true }] };
+    fs.writeFileSync('data/alloc.json', JSON.stringify(alloc, null, 1));
+  }
+}
 if (bookChanged) fs.writeFileSync('data/book.json', JSON.stringify(book));
 if (evoChanged) fs.writeFileSync('data/evolution.json', JSON.stringify(evo));
 // what the page shows: the book, plus today while the market is open
@@ -130,7 +147,10 @@ const state = {
   regime: res.regime, gate: res.gate, capital: res.capital, liveStart: res.liveStart,
   account: lv ? { equity: lv.equity, intraday: lv.intraday, open: lv.open, stats: fin(lv.stats), mults: lv.mults, dtPaused: lv.dtPaused, risk: lv.risk,
     hedge: lv.hedge, hedgeFees: Math.round((lv.hedgeFills || []).reduce((a, h) => a + (h.fee || 0), 0) * 100) / 100, lockedThrough: book ? book.date : null,
-    marginPaid: lv.marginPaid || 0, lev: lv.lev || 1 } : null,
+    marginPaid: lv.marginPaid || 0, lev: lv.lev || 1, flows: (book && book.flows) || [],
+    // money moved out after the last row (the row is before the move): the stock account's value now
+    flowsAfter: Math.round(((book && book.flows) || []).filter((f) => lv.equity.length && f.date >= lv.equity[lv.equity.length - 1].date).reduce((a, f) => a + f.amount, 0) * 100) / 100 } : null,
+  alloc: alloc ? { target: alloc.target, why: alloc.why, transfers: alloc.transfers } : null,
   teams: lv ? teamsView(lv) : null,
   evolution: Lab.view(E, evo),
   compare: compareView(),

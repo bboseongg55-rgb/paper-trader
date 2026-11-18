@@ -1,0 +1,26 @@
+# 코인 계좌: one job polls five US crypto exchanges about every 15 seconds, runs the crypto strategies and saves the
+# account every 2 minutes; each job runs up to about 6 hours and the hourly schedule keeps the next one waiting, so the
+# account trades around the clock. Public price endpoints only, no API keys.
+name: crypto
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency:
+  group: crypto
+  cancel-in-progress: false
+jobs:
+  crypto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Crypto loop (every 15 seconds, saved every 2 minutes)
+        run: node tools/crypto_loop.mjs
+        env:
+          MINUTES: '340'
