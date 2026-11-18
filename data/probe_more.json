@@ -1,0 +1,2244 @@
+{
+ "at": "2026-11-18T23:51:38.546Z",
+ "results": {
+  "kraken:pairs-tokenized": {
+   "ok": true,
+   "ms": 276,
+   "sample": {
+    "n": 354,
+    "usd": 354,
+    "first": [
+     {
+      "key": "AAOISPVUSD",
+      "alt": "AAOIxUSD",
+      "ws": "AAOIx/USD",
+      "quote": "ZUSD",
+      "base": "AAOIx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.04",
+      "status": "online"
+     },
+     {
+      "key": "AAOIxUSD",
+      "alt": "AAOIxUSD",
+      "ws": "AAOIx/USD",
+      "quote": "ZUSD",
+      "base": "AAOIx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.04",
+      "status": "online"
+     },
+     {
+      "key": "AAPLSPVUSD",
+      "alt": "AAPLxUSD",
+      "ws": "AAPLx/USD",
+      "quote": "ZUSD",
+      "base": "AAPLx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.00000001",
+      "status": "online"
+     },
+     {
+      "key": "AAPLxUSD",
+      "alt": "AAPLxUSD",
+      "ws": "AAPLx/USD",
+      "quote": "ZUSD",
+      "base": "AAPLx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.00000001",
+      "status": "online"
+     },
+     {
+      "key": "ABBVSPVUSD",
+      "alt": "ABBVxUSD",
+      "ws": "ABBVx/USD",
+      "quote": "ZUSD",
+      "base": "ABBVx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.00000001",
+      "status": "online"
+     },
+     {
+      "key": "ABBVxUSD",
+      "alt": "ABBVxUSD",
+      "ws": "ABBVx/USD",
+      "quote": "ZUSD",
+      "base": "ABBVx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.00000001",
+      "status": "online"
+     },
+     {
+      "key": "ABTSPVUSD",
+      "alt": "ABTxUSD",
+      "ws": "ABTx/USD",
+      "quote": "ZUSD",
+      "base": "ABTx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.000000001",
+      "status": "online"
+     },
+     {
+      "key": "ABTxUSD",
+      "alt": "ABTxUSD",
+      "ws": "ABTx/USD",
+      "quote": "ZUSD",
+      "base": "ABTx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.000000001",
+      "status": "online"
+     },
+     {
+      "key": "ACNSPVUSD",
+      "alt": "ACNxUSD",
+      "ws": "ACNx/USD",
+      "quote": "ZUSD",
+      "base": "ACNx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.00000001",
+      "status": "online"
+     },
+     {
+      "key": "ACNxUSD",
+      "alt": "ACNxUSD",
+      "ws": "ACNx/USD",
+      "quote": "ZUSD",
+      "base": "ACNx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.00000001",
+      "status": "online"
+     },
+     {
+      "key": "ADBESPVUSD",
+      "alt": "ADBExUSD",
+      "ws": "ADBEx/USD",
+      "quote": "ZUSD",
+      "base": "ADBEx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.02",
+      "status": "online"
+     },
+     {
+      "key": "ADBExUSD",
+      "alt": "ADBExUSD",
+      "ws": "ADBEx/USD",
+      "quote": "ZUSD",
+      "base": "ADBEx",
+      "aclass": "tokenized_asset",
+      "lot": 8,
+      "ordermin": "0.02",
+      "status": "online"
+     }
+    ],
+    "names": [
+     "AAOIxUSD",
+     "AAOIxUSD",
+     "AAPLxUSD",
+     "AAPLxUSD",
+     "ABBVxUSD",
+     "ABBVxUSD",
+     "ABTxUSD",
+     "ABTxUSD",
+     "ACNxUSD",
+     "ACNxUSD",
+     "ADBExUSD",
+     "ADBExUSD",
+     "AMATxUSD",
+     "AMATxUSD",
+     "AMBRxUSD",
+     "AMBRxUSD",
+     "AMDxUSD",
+     "AMDxUSD",
+     "AMZNxUSD",
+     "AMZNxUSD",
+     "ANETxUSD",
+     "ANETxUSD",
+     "APLDxUSD",
+     "APLDxUSD",
+     "APPxUSD",
+     "APPxUSD",
+     "ARMxUSD",
+     "ARMxUSD",
+     "ASMLxUSD",
+     "ASMLxUSD",
+     "ASTSxUSD",
+     "ASTSxUSD",
+     "AVGOxUSD",
+     "AVGOxUSD",
+     "AZNxUSD",
+     "AZNxUSD",
+     "BACxUSD",
+     "BACxUSD",
+     "BExUSD",
+     "BExUSD",
+     "BITXxUSD",
+     "BITXxUSD",
+     "BKRxUSD",
+     "BKRxUSD",
+     "BMNRxUSD",
+     "BMNRxUSD",
+     "BOTxUSD",
+     "BOTxUSD",
+     "BRK.BxUSD",
+     "BRK.BxUSD",
+     "BSPxUSD",
+     "BSPxUSD",
+     "BTBTxUSD",
+     "BTBTxUSD",
+     "BTGOxUSD",
+     "BTGOxUSD",
+     "CBRSxUSD",
+     "CBRSxUSD",
+     "CEGxUSD",
+     "CEGxUSD",
+     "CLSKxUSD",
+     "CLSKxUSD",
+     "CMCSAxUSD",
+     "CMCSAxUSD",
+     "COINxUSD",
+     "COINxUSD",
+     "COPXxUSD",
+     "COPXxUSD",
+     "CORZxUSD",
+     "CORZxUSD",
+     "CRCLxUSD",
+     "CRCLxUSD",
+     "CRMxUSD",
+     "CRMxUSD",
+     "CRWDxUSD",
+     "CRWDxUSD",
+     "CRWVxUSD",
+     "CRWVxUSD",
+     "CSCOxUSD",
+     "CSCOxUSD",
+     "CVXxUSD",
+     "CVXxUSD",
+     "DAXxUSD",
+     "DAXxUSD",
+     "DELLxUSD",
+     "DELLxUSD",
+     "DFDVxUSD",
+     "DFDVxUSD",
+     "DHRxUSD",
+     "DHRxUSD",
+     "ENHAxUSD",
+     "ENHAxUSD",
+     "ETNxUSD",
+     "ETNxUSD",
+     "EWGxUSD",
+     "EWGxUSD",
+     "EWQxUSD",
+     "EWQxUSD",
+     "EWUxUSD",
+     "EWUxUSD",
+     "EWYxUSD",
+     "EWYxUSD",
+     "FAAAxUSD",
+     "FAAAxUSD",
+     "FDXFxUSD",
+     "FDXFxUSD",
+     "FEZxUSD",
+     "FEZxUSD",
+     "FGDLxUSD",
+     "FGDLxUSD",
+     "FLBLxUSD",
+     "FLBLxUSD",
+     "FLQMxUSD",
+     "FLQMxUSD",
+     "FSMLxUSD",
+     "FSMLxUSD",
+     "GDXxUSD",
+     "GDXxUSD",
+     "GEVxUSD",
+     "GEVxUSD",
+     "GLDxUSD",
+     "GLDxUSD",
+     "GLXYxUSD",
+     "GLXYxUSD",
+     "GMExUSD",
+     "GMExUSD",
+     "GOOGLxUSD",
+     "GOOGLxUSD",
+     "GSxUSD",
+     "GSxUSD",
+     "HIMSxUSD",
+     "HIMSxUSD",
+     "HONxUSD",
+     "HONxUSD",
+     "HOODxUSD",
+     "HOODxUSD",
+     "HUTxUSD",
+     "HUTxUSD",
+     "IBMxUSD",
+     "IBMxUSD",
+     "IEMGxUSD",
+     "IEMGxUSD",
+     "IJRxUSD",
+     "IJRxUSD",
+     "INTCxUSD",
+     "INTCxUSD",
+     "IQMxUSD",
+     "IQMxUSD",
+     "IRENxUSD",
+     "IRENxUSD",
+     "ITAxUSD",
+     "ITAxUSD",
+     "IWMxUSD",
+     "IWMxUSD",
+     "JAAAxUSD",
+     "JAAAxUSD",
+     "JMKExUSD",
+     "JMKExUSD",
+     "JNJxUSD",
+     "JNJxUSD",
+     "JPMxUSD",
+     "JPMxUSD",
+     "JPSTxUSD",
+     "JPSTxUSD",
+     "KLACxUSD",
+     "KLACxUSD",
+     "KOxUSD",
+     "KOxUSD",
+     "KRAQxUSD",
+     "KRAQxUSD",
+     "LINxUSD",
+     "LINxUSD",
+     "LITExUSD",
+     "LITExUSD",
+     "LLYxUSD",
+     "LLYxUSD",
+     "LNGxUSD",
+     "LNGxUSD",
+     "LRCXxUSD",
+     "LRCXxUSD",
+     "MARAxUSD",
+     "MARAxUSD",
+     "MCDxUSD",
+     "MCDxUSD",
+     "MDTxUSD",
+     "MDTxUSD",
+     "METAxUSD",
+     "METAxUSD",
+     "MOOxUSD",
+     "MOOxUSD",
+     "MRKxUSD",
+     "MRKxUSD",
+     "MRNAxUSD",
+     "MRNAxUSD",
+     "MRVLxUSD",
+     "MRVLxUSD",
+     "MSFTxUSD",
+     "MSFTxUSD",
+     "MSTRxUSD",
+     "MSTRxUSD",
+     "MUxUSD",
+     "MUxUSD",
+     "NBISxUSD",
+     "NBISxUSD",
+     "NETxUSD",
+     "NETxUSD",
+     "NFLXxUSD",
+     "NFLXxUSD",
+     "NLRxUSD",
+     "NLRxUSD",
+     "NVDAxUSD",
+     "NVDAxUSD",
+     "NVOxUSD",
+     "NVOxUSD",
+     "OKLOxUSD",
+     "OKLOxUSD",
+     "ONDSxUSD",
+     "ONDSxUSD",
+     "OPENxUSD",
+     "OPENxUSD",
+     "ORCLxUSD",
+     "ORCLxUSD",
+     "PALLxUSD",
+     "PALLxUSD",
+     "PANWxUSD",
+     "PANWxUSD",
+     "PEPxUSD",
+     "PEPxUSD",
+     "PFExUSD",
+     "PFExUSD",
+     "PGxUSD",
+     "PGxUSD",
+     "PLxUSD",
+     "PLTRxUSD",
+     "PLTRxUSD",
+     "PLxUSD",
+     "PMxUSD",
+     "PMxUSD",
+     "PPLTxUSD",
+     "PPLTxUSD",
+     "PWRxUSD",
+     "PWRxUSD",
+     "PYPLxUSD",
+     "PYPLxUSD",
+     "QQQxUSD",
+     "QQQxUSD",
+     "QURExUSD",
+     "QURExUSD",
+     "RBLXxUSD",
+     "RBLXxUSD",
+     "RCATxUSD",
+     "RCATxUSD",
+     "RIOTxUSD",
+     "RIOTxUSD",
+     "SATAxUSD",
+     "SATAxUSD",
+     "SBETxUSD",
+     "SBETxUSD",
+     "SCHFxUSD",
+     "SCHFxUSD",
+     "SGOVxUSD",
+     "SGOVxUSD",
+     "SHAZxUSD",
+     "SHAZxUSD",
+     "SKHYxUSD",
+     "SKHYxUSD",
+     "SLVxUSD",
+     "SLVxUSD",
+     "SMCIxUSD",
+     "SMCIxUSD",
+     "SMHxUSD",
+     "SMHxUSD",
+     "SMRxUSD",
+     "SMRxUSD",
+     "SNDKxUSD",
+     "SNDKxUSD",
+     "SOXLxUSD",
+     "SOXLxUSD",
+     "SOXXxUSD",
+     "SOXXxUSD",
+     "SPCExUSD",
+     "SPCExUSD",
+     "SPCXxUSD",
+     "SPCXxUSD",
+     "SPYxUSD",
+     "SPYxUSD",
+     "STRCxUSD",
+     "STRCxUSD",
+     "TBLLxUSD",
+     "TBLLxUSD",
+     "TERxUSD",
+     "TERxUSD",
+     "TExUSD",
+     "TExUSD",
+     "TMOxUSD",
+     "TMOxUSD",
+     "TMUSxUSD",
+     "TMUSxUSD",
+     "TONXxUSD",
+     "TONXxUSD",
+     "TQQQxUSD",
+     "TQQQxUSD",
+     "TSLAxUSD",
+     "TSLAxUSD",
+     "TSMxUSD",
+     "TSMxUSD",
+     "TWSTxUSD",
+     "TWSTxUSD",
+     "UBERxUSD",
+     "UBERxUSD",
+     "UNHxUSD",
+     "UNHxUSD",
+     "URAxUSD",
+     "URAxUSD",
+     "USARxUSD",
+     "USARxUSD",
+     "USPXxUSD",
+     "USPXxUSD",
+     "UUUUxUSD",
+     "UUUUxUSD",
+     "VCXxUSD",
+     "VCXxUSD",
+     "VGKxUSD",
+     "VGKxUSD",
+     "VIDAxUSD",
+     "VIDAxUSD",
+     "VOOxUSD",
+     "VOOxUSD",
+     "VRTxUSD",
+     "VRTxUSD",
+     "VxUSD",
+     "VTIxUSD",
+     "VTIxUSD",
+     "VTxUSD",
+     "VTxUSD",
+     "VUGxUSD",
+     "VUGxUSD",
+     "VXUSxUSD",
+     "VXUSxUSD",
+     "VxUSD",
+     "WBDxUSD",
+     "WBDxUSD",
+     "WENxUSD",
+     "WENxUSD",
+     "WULFxUSD",
+     "WULFxUSD",
+     "XLExUSD",
+     "XLExUSD",
+     "XOMxUSD",
+     "XOMxUSD",
+     "XOPxUSD",
+     "XOPxUSD",
+     "YLDExUSD",
+     "YLDExUSD"
+    ]
+   }
+  },
+  "kraken:pairs-all-x": {
+   "ok": true,
+   "ms": 34,
+   "sample": {
+    "n": 0,
+    "first": []
+   }
+  },
+  "kraken:ticker": {
+   "ok": false,
+   "ms": 144,
+   "err": "EQuery:Unknown asset pair"
+  },
+  "kraken:ticker-aclass": {
+   "ok": true,
+   "ms": 190,
+   "sample": {
+    "err": [
+     "EQuery:Unknown asset pair"
+    ],
+    "got": {
+     "TSLAxUSD": {
+      "bid": "384.84",
+      "ask": "384.93",
+      "last": "385.13",
+      "vol24": "653.249135",
+      "trades24": 562
+     },
+     "AAPLxUSD": {
+      "bid": "353.74",
+      "ask": "353.75",
+      "last": "353.62",
+      "vol24": "332.096145",
+      "trades24": 362
+     },
+     "NVDAxUSD": {
+      "bid": "152.08",
+      "ask": "152.09",
+      "last": "152.35",
+      "vol24": "8235.364749",
+      "trades24": 1828
+     },
+     "SPYxUSD": {
+      "bid": "733.99",
+      "ask": "734.00",
+      "last": "734.37",
+      "vol24": "286.567953",
+      "trades24": 665
+     },
+     "AMZNxUSD": {
+      "bid": "270.13",
+      "ask": "270.15",
+      "last": "270.37",
+      "vol24": "117.218214",
+      "trades24": 140
+     },
+     "GLDxUSD": {
+      "bid": "342.61",
+      "ask": "342.62",
+      "last": "341.12",
+      "vol24": "53.91102",
+      "trades24": 38
+     },
+     "GOOGLxUSD": {
+      "bid": "285.51",
+      "ask": "285.52",
+      "last": "285.69",
+      "vol24": "739.901808",
+      "trades24": 438
+     },
+     "METAxUSD": {
+      "bid": "618.65",
+      "ask": "618.68",
+      "last": "618.28",
+      "vol24": "56.040344",
+      "trades24": 113
+     },
+     "QQQxUSD": {
+      "bid": "665.45",
+      "ask": "665.48",
+      "last": "665.42",
+      "vol24": "317.258366",
+      "trades24": 1072
+     },
+     "IWMxUSD": {
+      "bid": "269.68",
+      "ask": "272.44",
+      "last": "268.45",
+      "vol24": "0.877524",
+      "trades24": 1
+     },
+     "MSFTxUSD": {
+      "bid": "506.86",
+      "ask": "509.51",
+      "last": "506.31",
+      "vol24": "26.139363",
+      "trades24": 60
+     }
+    }
+   }
+  },
+  "kraken:ohlc-SPYx": {
+   "ok": false,
+   "ms": 139,
+   "err": "EGeneral:Internal error"
+  },
+  "kraken:depth-SPYx": {
+   "ok": false,
+   "ms": 149,
+   "err": "EQuery:Invalid asset pair"
+  },
+  "kraken:ohlc-SPYx-aclass": {
+   "ok": true,
+   "ms": 157,
+   "sample": {
+    "key": "SPYxUSD",
+    "n": 721,
+    "first": [
+     1792450800,
+     "766.29",
+     "766.29",
+     "766.06",
+     "766.06",
+     "766.11",
+     "0.230575",
+     3
+    ],
+    "last": [
+     1795042800,
+     "733.03",
+     "734.44",
+     "732.51",
+     "734.37",
+     "733.32",
+     "0.029610",
+     24
+    ]
+   }
+  },
+  "kraken:depth-SPYx-aclass": {
+   "ok": true,
+   "ms": 157,
+   "sample": {
+    "SPYxUSD": {
+     "asks": [
+      [
+       "734.01",
+       "5.108988",
+       1795045819
+      ],
+      [
+       "734.05",
+       "0.022189",
+       1795045830
+      ],
+      [
+       "734.06",
+       "5.108633",
+       1795045815
+      ],
+      [
+       "734.15",
+       "3.000000",
+       1795045819
+      ],
+      [
+       "734.16",
+       "10.261830",
+       1795045830
+      ]
+     ],
+     "bids": [
+      [
+       "733.99",
+       "0.000682",
+       1795045825
+      ],
+      [
+       "733.97",
+       "0.000682",
+       1795045893
+      ],
+      [
+       "733.95",
+       "0.000682",
+       1795045893
+      ],
+      [
+       "733.93",
+       "0.000682",
+       1795045825
+      ],
+      [
+       "733.91",
+       "0.000682",
+       1795045894
+      ]
+     ]
+    }
+   }
+  },
+  "cnbc:futures-names": {
+   "ok": true,
+   "ms": 4073,
+   "sample": [
+    {
+     "s": "@SP.1",
+     "name": "S&P 500 Fut (Dec'26)",
+     "last": "7,378.75",
+     "prev": "7,340.50",
+     "t": "2026-11-18T18:41:39.000-0500",
+     "exp": "2026-12-18",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@SP.2",
+     "name": "S&P 500 E-mini 2nd (Mar'27)",
+     "last": "7,451.00",
+     "prev": "7,412.25",
+     "t": "2026-11-18T18:41:34.000-0500",
+     "exp": "2027-03-19",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@ND.1",
+     "name": "NASDAQ 100 Fut (Dec'26)",
+     "last": "27,461.00",
+     "prev": "27,186.75",
+     "t": "2026-11-18T18:41:37.000-0500",
+     "exp": "2026-12-18",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@ND.2",
+     "name": "NASDAQ 100 E-mini (Mar'27)",
+     "last": "27,768.00",
+     "prev": "27,489.25",
+     "t": "2026-11-18T18:41:36.000-0500",
+     "exp": "2027-03-19",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@DJ.1",
+     "name": "Dow Jones Fut (Dec'26)",
+     "last": "50,413.00",
+     "prev": "50,273.00",
+     "t": "2026-11-18T18:41:37.000-0500",
+     "exp": "2026-12-18",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@DJ.2",
+     "name": "Dow Jones E-mini (Mar'27)",
+     "last": "50,820.00",
+     "prev": "50,718.00",
+     "t": "2026-11-18T18:41:34.000-0500",
+     "exp": "2027-03-19",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@TFS.1",
+     "name": "Russell 2000 E-mini (Dec'26)",
+     "last": "2,730.50",
+     "prev": "2,722.00",
+     "t": "2026-11-18T18:41:36.000-0500",
+     "exp": "2026-12-18",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@TFS.2",
+     "name": "Russell 2000 E-mini (Mar'27)",
+     "last": "2,745.00",
+     "prev": "2,745.00",
+     "t": "2026-11-18T18:09:20.000-0500",
+     "exp": "2027-03-19",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@TU.1",
+     "name": "2-YR Treasury Future (Dec'26)",
+     "last": "101.8789",
+     "prev": "101.9023",
+     "t": "2026-11-18T18:41:06.000-0500",
+     "exp": "2026-12-31",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@TU.2",
+     "name": "2 Year U.S. Treasury Note Future (Mar'27)",
+     "last": "101.7539",
+     "prev": "101.7773",
+     "t": "2026-11-18T18:41:05.000-0500",
+     "exp": "2027-03-31",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@FV.1",
+     "name": "5-YR Treasury Future (Dec'26)",
+     "last": "104.2031",
+     "prev": "104.25",
+     "t": "2026-11-18T18:40:55.000-0500",
+     "exp": "2026-12-31",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@FV.2",
+     "name": "5 Year U.S. Treasury Note Future (Mar'27)",
+     "last": "104.0625",
+     "prev": "104.1094",
+     "t": "2026-11-18T18:38:41.000-0500",
+     "exp": "2027-03-31",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@TY.1",
+     "name": "10-YR Treasury Future (Dec'26)",
+     "last": "105.7188",
+     "prev": "105.7813",
+     "t": "2026-11-18T18:41:39.000-0500",
+     "exp": "2026-12-21",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@TY.2",
+     "name": "10 Year U.S. Treasury Note Future (Mar'27)",
+     "last": "105.5625",
+     "prev": "105.625",
+     "t": "2026-11-18T18:38:41.000-0500",
+     "exp": "2027-03-19",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@US.1",
+     "name": "30-Yr Treasury Future (Dec'26)",
+     "last": "106.1875",
+     "prev": "106.25",
+     "t": "2026-11-18T18:41:28.000-0500",
+     "exp": "2026-12-21",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@US.2",
+     "name": "30 Year U.S. Bond Future (Mar'27)",
+     "last": "105.6563",
+     "prev": "105.7188",
+     "t": "2026-11-18T18:41:28.000-0500",
+     "exp": "2027-03-19",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@CL.1",
+     "name": "WTI Crude (Dec'26)",
+     "last": "82.92",
+     "prev": "83.26",
+     "t": "2026-11-18T18:41:06.000-0500",
+     "exp": "2026-11-20",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@CL.2",
+     "name": "WTI Crude (Jan'27)",
+     "last": "82.07",
+     "prev": "82.31",
+     "t": "2026-11-18T18:40:58.000-0500",
+     "exp": "2026-12-21",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@GC.1",
+     "name": "Gold COMEX (Dec'26)",
+     "last": "3,742.90",
+     "prev": "3,741.90",
+     "t": "2026-11-18T18:41:39.000-0500",
+     "exp": "2026-12-29",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@GC.2",
+     "name": "Gold COMEX (Jan'27)",
+     "last": "3,760.20",
+     "prev": "3,758.10",
+     "t": "2026-11-18T18:25:05.000-0500",
+     "exp": "2027-01-27",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@SI.1",
+     "name": "Silver COMEX (Dec'26)",
+     "last": "45.40",
+     "prev": "45.059",
+     "t": "2026-11-18T18:41:38.000-0500",
+     "exp": "2026-12-29",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@SI.2",
+     "name": "Silver (Jan'27)",
+     "last": "45.26",
+     "prev": "45.26",
+     "t": "2026-11-18T00:00:00.000-0500",
+     "exp": "2027-01-27",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@HG.1",
+     "name": "Copper (Dec'26)",
+     "last": "5.6825",
+     "prev": "5.6685",
+     "t": "2026-11-18T18:41:19.000-0500",
+     "exp": "2026-12-29",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@HG.2",
+     "name": "Copper (Jan'27)",
+     "last": "5.703",
+     "prev": "5.703",
+     "t": "2026-11-18T00:00:00.000-0500",
+     "exp": "2027-01-27",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@NG.1",
+     "name": "Natural Gas (Dec'26)",
+     "last": "3.388",
+     "prev": "3.372",
+     "t": "2026-11-18T18:40:49.000-0500",
+     "exp": "2026-11-25",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@NG.2",
+     "name": "Natural Gas (Jan'27)",
+     "last": "3.785",
+     "prev": "3.765",
+     "t": "2026-11-18T18:41:28.000-0500",
+     "exp": "2026-12-29",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@BTC.1",
+     "name": "Bitcoin Futures CME (Nov'26)",
+     "last": "62,950.00",
+     "prev": "62,515.00",
+     "t": "2026-11-18T18:41:29.000-0500",
+     "exp": "2026-11-27",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@BTC.2",
+     "name": "Bitcoin Futures CME (Dec'26)",
+     "last": "63,220.00",
+     "prev": "62,765.00",
+     "t": "2026-11-18T18:38:23.000-0500",
+     "exp": "2026-12-24",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@ETH.1",
+     "name": "Ether Futures (Nov'26)",
+     "last": "1,773.00",
+     "prev": "1,750.50",
+     "t": "2026-11-18T18:40:44.000-0500",
+     "exp": "2026-11-27",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@ETH.2",
+     "name": "Ether Futures (Dec'26)",
+     "last": "1,777.50",
+     "prev": "1,758.00",
+     "t": "2026-11-18T18:38:23.000-0500",
+     "exp": "2026-12-24",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@JY.1",
+     "name": "Japanese Yen Future (Dec'26)",
+     "last": "0.0063",
+     "prev": "0.0063",
+     "t": "2026-11-18T18:41:39.000-0500",
+     "exp": "2026-12-14",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@JY.2",
+     "name": "Japanese Yen Future (Jan'27)",
+     "last": "0.0063",
+     "prev": "0.0063",
+     "t": "2026-11-18T18:41:34.000-0500",
+     "exp": "2027-01-15",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@EC.1",
+     "exp": null,
+     "keys": []
+    },
+    {
+     "s": "@EC.2",
+     "exp": null,
+     "keys": []
+    },
+    {
+     "s": "@BP.1",
+     "name": "British Pound Future (Dec'26)",
+     "last": "1.3147",
+     "prev": "1.314",
+     "t": "2026-11-18T18:40:38.000-0500",
+     "exp": "2026-12-14",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@BP.2",
+     "name": "British Pound Future (Jan'27)",
+     "last": "1.3141",
+     "prev": "1.3141",
+     "t": "2026-11-18T18:36:20.000-0500",
+     "exp": "2027-01-15",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@AD.1",
+     "name": "Aust. Dollar (Dec'26)",
+     "last": "0.6712",
+     "prev": "0.6707",
+     "t": "2026-11-18T18:41:42.000-0500",
+     "exp": "2026-12-14",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@AD.2",
+     "name": "Australian Dollar Future (Jan'27)",
+     "last": "0.6709",
+     "prev": "0.6703",
+     "t": "2026-11-18T18:40:00.000-0500",
+     "exp": "2027-01-15",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@CD.1",
+     "name": "Canadian Futures (Dec'26)",
+     "last": "0.6985",
+     "prev": "0.6986",
+     "t": "2026-11-18T18:41:42.000-0500",
+     "exp": "2026-12-15",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    },
+    {
+     "s": "@CD.2",
+     "name": "Canadian Dollar Future (Jan'27)",
+     "last": "0.6998",
+     "prev": "0.6998",
+     "t": "2026-11-18T18:36:21.000-0500",
+     "exp": "2027-01-19",
+     "keys": [
+      "open_interest",
+      "expiration_date",
+      "settlePrice",
+      "settleDate"
+     ]
+    }
+   ]
+  },
+  "cnbc:bars-@SP": {
+   "ok": true,
+   "ms": 614,
+   "sample": {
+    "n1": 471,
+    "n2": 0,
+    "first": [
+     "20250102",
+     5916.5
+    ],
+    "last": [
+     "20261117",
+     7359
+    ],
+    "biggestGap": [
+     {
+      "d": "20250409",
+      "r1": 0.09377023056620692,
+      "r2": null,
+      "c1": 5491,
+      "c2": null
+     },
+     {
+      "d": "20250404",
+      "r1": -0.05936220146334725,
+      "r2": null,
+      "c1": 5110.25,
+      "c2": null
+     },
+     {
+      "d": "20250403",
+      "r1": -0.04892993128802137,
+      "r2": null,
+      "c1": 5432.75,
+      "c2": null
+     },
+     {
+      "d": "20261105",
+      "r1": -0.04371478531183215,
+      "r2": null,
+      "c1": 7383,
+      "c2": null
+     },
+     {
+      "d": "20250410",
+      "r1": -0.03441995993443814,
+      "r2": null,
+      "c1": 5302,
+      "c2": null
+     },
+     {
+      "d": "20250512",
+      "r1": 0.03293413173652704,
+      "r2": null,
+      "c1": 5865,
+      "c2": null
+     }
+    ]
+   }
+  },
+  "cnbc:bars-@CL": {
+   "ok": true,
+   "ms": 606,
+   "sample": {
+    "n1": 469,
+    "n2": 0,
+    "first": [
+     "20250102",
+     73.13
+    ],
+    "last": [
+     "20261117",
+     86.01
+    ],
+    "biggestGap": [
+     {
+      "d": "20260408",
+      "r1": -0.16414342629482082,
+      "r2": null,
+      "c1": 94.41,
+      "c2": null
+     },
+     {
+      "d": "20260306",
+      "r1": 0.12208369337118885,
+      "r2": null,
+      "c1": 90.9,
+      "c2": null
+     },
+     {
+      "d": "20260310",
+      "r1": -0.11944708241004531,
+      "r2": null,
+      "c1": 83.45,
+      "c2": null
+     },
+     {
+      "d": "20260417",
+      "r1": -0.1144788256415673,
+      "r2": null,
+      "c1": 83.85,
+      "c2": null
+     },
+     {
+      "d": "20260402",
+      "r1": 0.11406312425089893,
+      "r2": null,
+      "c1": 111.54,
+      "c2": null
+     },
+     {
+      "d": "20260323",
+      "r1": -0.10364117168429621,
+      "r2": null,
+      "c1": 88.13,
+      "c2": null
+     }
+    ]
+   }
+  },
+  "cnbc:bars-@GC": {
+   "ok": true,
+   "ms": 345,
+   "sample": {
+    "n1": 472,
+    "n2": 0,
+    "first": [
+     "20250102",
+     2669
+    ],
+    "last": [
+     "20261117",
+     3864.2
+    ],
+    "biggestGap": [
+     {
+      "d": "20260130",
+      "r1": -0.10779557761732839,
+      "r2": null,
+      "c1": 4745.1,
+      "c2": null
+     },
+     {
+      "d": "20260203",
+      "r1": 0.06069724455143355,
+      "r2": null,
+      "c1": 4935,
+      "c2": null
+     },
+     {
+      "d": "20260319",
+      "r1": -0.059331726645153404,
+      "r2": null,
+      "c1": 4605.7,
+      "c2": null
+     },
+     {
+      "d": "20251021",
+      "r1": -0.05741615818690626,
+      "r2": null,
+      "c1": 4109.1,
+      "c2": null
+     },
+     {
+      "d": "20251229",
+      "r1": -0.04592878950952173,
+      "r2": null,
+      "c1": 4343.6,
+      "c2": null
+     },
+     {
+      "d": "20260128",
+      "r1": 0.043481682603391913,
+      "r2": null,
+      "c1": 5303.6,
+      "c2": null
+     }
+    ]
+   }
+  },
+  "cnbc:bars-@TY": {
+   "ok": true,
+   "ms": 570,
+   "sample": {
+    "n1": 473,
+    "n2": 0,
+    "first": [
+     "20250102",
+     108.8125
+    ],
+    "last": [
+     "20261117",
+     105.6094
+    ],
+    "biggestGap": [
+     {
+      "d": "20261022",
+      "r1": 0.012337621563818235,
+      "r2": null,
+      "c1": 106.4062,
+      "c2": null
+     },
+     {
+      "d": "20250801",
+      "r1": 0.010269893078221681,
+      "r2": null,
+      "c1": 112.2031,
+      "c2": null
+     },
+     {
+      "d": "20250409",
+      "r1": -0.010233356777860636,
+      "r2": null,
+      "c1": 110.3281,
+      "c2": null
+     },
+     {
+      "d": "20250403",
+      "r1": 0.010229596412556052,
+      "r2": null,
+      "c1": 112.6406,
+      "c2": null
+     },
+     {
+      "d": "20250414",
+      "r1": 0.009255074069753899,
+      "r2": null,
+      "c1": 110.75,
+      "c2": null
+     },
+     {
+      "d": "20260923",
+      "r1": -0.00913962264150947,
+      "r2": null,
+      "c1": 105.0312,
+      "c2": null
+     }
+    ]
+   }
+  },
+  "cnbc:bars-@TFS": {
+   "ok": true,
+   "ms": 305,
+   "sample": {
+    "n1": 471,
+    "n2": 0,
+    "first": [
+     "20250102",
+     2249.4
+    ],
+    "last": [
+     "20261117",
+     2711.2
+    ],
+    "biggestGap": [
+     {
+      "d": "20250409",
+      "r1": 0.08506200676437436,
+      "r2": null,
+      "c1": 1924.9,
+      "c2": null
+     },
+     {
+      "d": "20250403",
+      "r1": -0.06570831916856879,
+      "r2": null,
+      "c1": 1923.8,
+      "c2": null
+     },
+     {
+      "d": "20261105",
+      "r1": -0.0455354338951115,
+      "r2": null,
+      "c1": 2735.4,
+      "c2": null
+     },
+     {
+      "d": "20250404",
+      "r1": -0.043871504314377696,
+      "r2": null,
+      "c1": 1839.4,
+      "c2": null
+     },
+     {
+      "d": "20250410",
+      "r1": -0.041716452802743054,
+      "r2": null,
+      "c1": 1844.6,
+      "c2": null
+     },
+     {
+      "d": "20250822",
+      "r1": 0.038717881259317855,
+      "r2": null,
+      "c1": 2368.9,
+      "c2": null
+     }
+    ]
+   }
+  },
+  "cnbc:bars-@BTC": {
+   "ok": true,
+   "ms": 413,
+   "sample": {
+    "n1": 472,
+    "n2": 465,
+    "first": [
+     "20250102",
+     98190
+    ],
+    "last": [
+     "20261117",
+     63955
+    ],
+    "biggestGap": [
+     {
+      "d": "20251124",
+      "r1": 0.05407801418439706,
+      "r2": null,
+      "c1": 89175,
+      "c2": 89555
+     },
+     {
+      "d": "20250825",
+      "r1": -0.05083440308087295,
+      "r2": null,
+      "c1": 110910,
+      "c2": null
+     },
+     {
+      "d": "20250822",
+      "r1": 0.04065547490760113,
+      "r2": null,
+      "c1": 116850,
+      "c2": null
+     },
+     {
+      "d": "20250819",
+      "r1": -0.028859348198970847,
+      "r2": null,
+      "c1": 113235,
+      "c2": null
+     },
+     {
+      "d": "20260831",
+      "r1": 0.00197600871527559,
+      "r2": 0.023511273848525693,
+      "c1": 79245,
+      "c2": 79665
+     },
+     {
+      "d": "20251121",
+      "r1": -0.021286441462285977,
+      "r2": null,
+      "c1": 84600,
+      "c2": null
+     }
+    ]
+   }
+  },
+  "cnbc:bars-.VIX": {
+   "ok": true,
+   "ms": 345,
+   "sample": {
+    "n": 745,
+    "first": [
+     "20240102",
+     13.2
+    ],
+    "last": [
+     "20261118",
+     24.56
+    ]
+   }
+  },
+  "cnbc:bars-.VXN": {
+   "ok": true,
+   "ms": 317,
+   "sample": {
+    "n": 723,
+    "first": [
+     "20240102",
+     17.59
+    ],
+    "last": [
+     "20261117",
+     34.44
+    ]
+   }
+  },
+  "cnbc:bars-.RUT": {
+   "ok": true,
+   "ms": 472,
+   "sample": {
+    "n": 723,
+    "first": [
+     "20240102",
+     2012.7952
+    ],
+    "last": [
+     "20261117",
+     2701.8707
+    ]
+   }
+  },
+  "cnbc:bars-US1M": {
+   "ok": true,
+   "ms": 475,
+   "sample": {
+    "n": 769,
+    "first": [
+     "20240102",
+     5.394
+    ],
+    "last": [
+     "20261118",
+     3.973
+    ]
+   }
+  },
+  "cnbc:bars-US3M": {
+   "ok": true,
+   "ms": 372,
+   "sample": {
+    "n": 742,
+    "first": [
+     "20240102",
+     5.381
+    ],
+    "last": [
+     "20261118",
+     4.257
+    ]
+   }
+  },
+  "cnbc:bars-.MOVE": {
+   "ok": true,
+   "ms": 156,
+   "sample": {
+    "n": 716,
+    "first": [
+     "20240102",
+     127.02
+    ],
+    "last": [
+     "20261117",
+     101.88
+    ]
+   }
+  },
+  "cnbc:bars-.DXY": {
+   "ok": true,
+   "ms": 269,
+   "sample": {
+    "n": 810,
+    "first": [
+     "20240102",
+     102.2
+    ],
+    "last": [
+     "20261118",
+     103.779
+    ]
+   }
+  },
+  "fred:DTB4WK": {
+   "ok": true,
+   "ms": 1538,
+   "sample": {
+    "rows": 6602,
+    "head": "observation_date,DTB4WK",
+    "last": "2026-11-17,3.92"
+   }
+  },
+  "fred:DFF": {
+   "ok": true,
+   "ms": 135,
+   "sample": {
+    "rows": 26439,
+    "head": "observation_date,DFF",
+    "last": "2026-11-17,3.88"
+   }
+  },
+  "fred:SOFR": {
+   "ok": true,
+   "ms": 355,
+   "sample": {
+    "rows": 2252,
+    "head": "observation_date,SOFR",
+    "last": "2026-11-17,3.92"
+   }
+  },
+  "fred:BAMLH0A0HYM2": {
+   "ok": true,
+   "ms": 31,
+   "sample": {
+    "rows": 794,
+    "head": "observation_date,BAMLH0A0HYM2",
+    "last": "2026-11-17,3.43"
+   }
+  },
+  "fred:T10Y2Y": {
+   "ok": true,
+   "ms": 50,
+   "sample": {
+    "rows": 13168,
+    "head": "observation_date,T10Y2Y",
+    "last": "2026-11-18,0.27"
+   }
+  },
+  "fred:DTWEXBGS": {
+   "ok": true,
+   "ms": 33,
+   "sample": {
+    "rows": 5446,
+    "head": "observation_date,DTWEXBGS",
+    "last": "2026-11-13,122.6503"
+   }
+  },
+  "cboe:VXN_History.csv": {
+   "ok": true,
+   "ms": 207,
+   "sample": {
+    "rows": 4326,
+    "head": "DATE,OPEN,HIGH,LOW,CLOSE",
+    "first": "09/14/2009,26.410000,26.480000,24.810000,24.930000",
+    "last": "11/18/2026,32.450000,34.570000,32.440000,33.120000"
+   }
+  },
+  "cboe:RVX_History.csv": {
+   "ok": true,
+   "ms": 57,
+   "sample": {
+    "rows": 4317,
+    "head": "DATE,OPEN,HIGH,LOW,CLOSE",
+    "first": "09/16/2009,28.890000,29.320000,28.660000,28.860000",
+    "last": "11/18/2026,27.140000,28.110000,25.320000,26.730000"
+   }
+  },
+  "cboe:VIX3M_History.csv": {
+   "ok": true,
+   "ms": 42,
+   "sample": {
+    "rows": 4320,
+    "head": "DATE,OPEN,HIGH,LOW,CLOSE",
+    "first": "09/18/2009,25.910000,26.660000,25.910000,26.540000",
+    "last": "11/18/2026,24.140000,25.530000,23.480000,24.290000"
+   }
+  },
+  "cboe:opt-QQQ": {
+   "ok": true,
+   "ms": 102,
+   "sample": {
+    "bytes": 4615356,
+    "n": 10328,
+    "price": 665.77,
+    "exps": [
+     "261118",
+     "261119",
+     "261120",
+     "261123",
+     "261124",
+     "261125",
+     "261127",
+     "261130",
+     "261201",
+     "261202",
+     "261204",
+     "261211"
+    ],
+    "sample": {
+     "option": "QQQ261118P00575000",
+     "bid": 0,
+     "bid_size": 0,
+     "ask": 0.01,
+     "ask_size": 133,
+     "iv": 8.0781,
+     "open_interest": 7195,
+     "volume": 101,
+     "delta": 0,
+     "gamma": 0,
+     "vega": 0,
+     "theta": 0,
+     "rho": 0,
+     "theo": 0,
+     "change": -0.055,
+     "open": 0.01,
+     "high": 0.01,
+     "low": 0.01,
+     "tick": "no_change",
+     "last_trade_price": 0.01,
+     "last_trade_time": "2026-11-18T15:25:52",
+     "percent_change": -84.6154,
+     "prev_day_close": 0.0649999994784594
+    }
+   }
+  },
+  "cboe:opt-IWM": {
+   "ok": true,
+   "ms": 155,
+   "sample": {
+    "bytes": 2210075,
+    "n": 5004,
+    "price": 270.82,
+    "exps": [
+     "B1IWM261120C00260000",
+     "B1IWM261120P00260000",
+     "B1IWM261120C00265000",
+     "B1IWM261120P00265000",
+     "B1IWM261120C00270000",
+     "B1IWM261120P00270000",
+     "B1IWM261120C00275000",
+     "B1IWM261120P00275000",
+     "B1IWM261120C00280000",
+     "B1IWM261120P00280000",
+     "B1IWM261120C00285000",
+     "B1IWM261120P00285000"
+    ],
+    "sample": {
+     "option": "IWM261118P00230000",
+     "bid": 0,
+     "bid_size": 0,
+     "ask": 0.01,
+     "ask_size": 801,
+     "iv": 0,
+     "open_interest": 292,
+     "volume": 0,
+     "delta": 0,
+     "gamma": 0,
+     "vega": 0,
+     "theta": 0,
+     "rho": 0,
+     "theo": 0,
+     "change": 0,
+     "open": 0,
+     "high": 0,
+     "low": 0,
+     "tick": "down",
+     "last_trade_price": 0.01,
+     "last_trade_time": "2026-11-17T15:21:20",
+     "percent_change": 0,
+     "prev_day_close": 0.00499999988824129
+    }
+   }
+  },
+  "cboe:opt-_SPX": {
+   "ok": true,
+   "ms": 1063,
+   "sample": {
+    "bytes": 14080959,
+    "n": 31580,
+    "price": 7323.6299,
+    "exps": [
+     "261120",
+     "261218",
+     "270115",
+     "270219",
+     "270319",
+     "270416",
+     "270521",
+     "270617",
+     "270716",
+     "270820",
+     "270917",
+     "271015"
+    ],
+    "sample": {
+     "option": "SPX261120C00400000",
+     "bid": 6907.3,
+     "bid_size": 1,
+     "ask": 6927.7,
+     "ask_size": 2,
+     "iv": 0,
+     "open_interest": 2509,
+     "volume": 0,
+     "delta": 0.9999,
+     "gamma": 0,
+     "vega": 0,
+     "theta": 0,
+     "rho": 0.0439,
+     "theo": 6921.3343,
+     "change": 0,
+     "open": 0,
+     "high": 0,
+     "low": 0,
+     "tick": "down",
+     "last_trade_price": 6959.59,
+     "last_trade_time": "2026-11-17T10:38:03",
+     "percent_change": 0,
+     "prev_day_close": 6928.59985351562
+    }
+   }
+  },
+  "cboe:opt-TLT": {
+   "ok": true,
+   "ms": 275,
+   "sample": {
+    "bytes": 1227815,
+    "n": 2778,
+    "price": 80.15,
+    "exps": [
+     "261118",
+     "261120",
+     "261123",
+     "261125",
+     "261127",
+     "261130",
+     "261202",
+     "261204",
+     "261211",
+     "261218",
+     "261224",
+     "261231"
+    ],
+    "sample": {
+     "option": "TLT261118P00076000",
+     "bid": 0,
+     "bid_size": 0,
+     "ask": 1.87,
+     "ask_size": 2,
+     "iv": 4.2305,
+     "open_interest": 204,
+     "volume": 0,
+     "delta": 0,
+     "gamma": 0,
+     "vega": 0,
+     "theta": 0,
+     "rho": 0,
+     "theo": 0,
+     "change": 0,
+     "open": 0,
+     "high": 0,
+     "low": 0,
+     "tick": "no_change",
+     "last_trade_price": 0.01,
+     "last_trade_time": "2026-11-13T09:45:08",
+     "percent_change": 0,
+     "prev_day_close": 0.00499999988824129
+    }
+   }
+  },
+  "cboe:opt-GLD": {
+   "ok": true,
+   "ms": 181,
+   "sample": {
+    "bytes": 3170940,
+    "n": 7196,
+    "price": 342.4608,
+    "exps": [
+     "261118",
+     "261119",
+     "261120",
+     "261123",
+     "261124",
+     "261125",
+     "261127",
+     "261130",
+     "261201",
+     "261202",
+     "261204",
+     "261211"
+    ],
+    "sample": {
+     "option": "GLD261118P00320000",
+     "bid": 0,
+     "bid_size": 0,
+     "ask": 0.01,
+     "ask_size": 67,
+     "iv": 4.1376,
+     "open_interest": 322,
+     "volume": 415,
+     "delta": 0,
+     "gamma": 0,
+     "vega": 0,
+     "theta": 0,
+     "rho": 0,
+     "theo": 0,
+     "change": -0.005,
+     "open": 0.01,
+     "high": 0.01,
+     "low": 0.01,
+     "tick": "no_change",
+     "last_trade_price": 0.01,
+     "last_trade_time": "2026-11-18T15:32:17",
+     "percent_change": -33.3333,
+     "prev_day_close": 0.0149999996647239
+    }
+   }
+  },
+  "hyperliquid:perpDexs": {
+   "ok": true,
+   "ms": 327,
+   "sample": "[null,{\"name\":\"xyz\",\"fullName\":\"XYZ\",\"deployer\":\"0x88806a71d74ad0a510b350545c9ae490912f0888\",\"oracleUpdater\":null,\"feeRecipient\":\"0x83ffcfb1f2ad843c474b2e28df86c721cb869d3a\",\"assetToStreamingOiCap\":[[\"xyz:AAOI\",\"25000000.0\"],[\"xyz:AAPL\",\"200000000.0\"],[\"xyz:ACN\",\"25000000.0\"],[\"xyz:ALUMINIUM\",\"25000000.0\"],[\"xyz:AMAT\",\"25000000.0\"],[\"xyz:AMD\",\"100000000.0\"],[\"xyz:AMZN\",\"100000000.0\"],[\"xyz:ANT\",\"300000000.0\"],[\"xyz:ARM\",\"50000000.0\"],[\"xyz:ASML\",\"25000000.0\"],[\"xyz:AVGO\",\"75000000.0\"],[\"xyz:BABA\",\"50000000.0\"],[\"xyz:BB\",\"75000000.0\"],[\"xyz:BE\",\"25000000.0\"],[\"xyz:BIRD\",\"25000000.0\"],[\"xyz:BMNR\",\"25000000.0\"],[\"xyz:BOT\",\"25000000.0\"],[\"xyz:BRENTOIL\",\"750000000.0\"],[\"xyz:BX\",\"25000000.0\"],[\"xyz:CAMBRICON\",\"25000000.0\"],[\"xyz:CBRS\",\"150000000.0\"],[\"xyz:CL\",\"1000000000.0\"],[\"xyz:COIN\",\"50000000.0\"],[\"xyz:COPPER\",\"300000000.0\"],[\"xyz:CORN\",\"25000000.0\"],[\"xyz:COST\",\"25000000.0\"],[\"xyz:CRCL\",\"250000000.0\"],[\"xyz:CRWD\",\"25000000.0\"],[\"xyz:CRWV\",\"150000000.0\"],[\"xyz:CVX\",\"25000000.0\"],[\"xyz:CXMT\",\"250000000.0\"],[\"xyz:DELL\",\"25000000.0\"],[\"xyz:DKNG\",\"25000000.0\"],[\"xyz:DRAM\",\"250000000.0\"],[\"xyz:DXY\",\"25000000.0\"],[\"xyz:EBAY\",\"25000000.0\"],[\"xyz:EUR\",\"100000000.0\"],[\"xyz:EWJ\",\"25000000.0\"],[\"xyz:EWT\",\"25000000.0\"],[\"xyz:EWY\",\"100000000.0\"],[\"xyz:EWZ\",\"50000000.0\"],[\"xyz:GBP\",\"25000000.0\"],[\"xyz:GEV\",\"25000000.0\"],[\"xyz:GIGADEV\",\"25000000.0\"],[\"xyz:GLW\",\"25000000.0\"],[\"xyz:GME\",\"50000000.0\"],[\"xyz:GOLD\",\"750000000.0\"],[\"xyz:GOOGL\",\"500000000.0\"],[\"xyz:H100\",\"25000000.0\"],[\"xyz:HIMS\",\"2…"
+  },
+  "deribit:futures": {
+   "ok": true,
+   "ms": 381,
+   "sample": [
+    {
+     "i": "BTC-29JAN27",
+     "bid": 63802.5,
+     "ask": 63825,
+     "mark": 63819.01,
+     "oi": 9498550,
+     "f8": null
+    },
+    {
+     "i": "BTC-27NOV26",
+     "bid": 63232.5,
+     "ask": 63237.5,
+     "mark": 63233.99,
+     "oi": 70909890,
+     "f8": null
+    },
+    {
+     "i": "BTC-24SEP27",
+     "bid": 66225,
+     "ask": 66270,
+     "mark": 66253.3,
+     "oi": 17364700,
+     "f8": null
+    },
+    {
+     "i": "BTC-19NOV26",
+     "bid": 63145,
+     "ask": 63165,
+     "mark": 63160.64,
+     "oi": 1209360,
+     "f8": null
+    },
+    {
+     "i": "BTC-25JUN27",
+     "bid": 65280,
+     "ask": 65312.5,
+     "mark": 65299.92,
+     "oi": 71875330,
+     "f8": null
+    },
+    {
+     "i": "BTC-22NOV26",
+     "bid": 63172.5,
+     "ask": 63185,
+     "mark": 63184.46,
+     "oi": 218660,
+     "f8": null
+    },
+    {
+     "i": "BTC-21NOV26",
+     "bid": 63165,
+     "ask": 63182.5,
+     "mark": 63179.4,
+     "oi": 1263820,
+     "f8": null
+    },
+    {
+     "i": "BTC-PERPETUAL",
+     "bid": 63168.5,
+     "ask": 63169,
+     "mark": 63173.57,
+     "oi": 728727640,
+     "f8": 0.00000197
+    },
+    {
+     "i": "BTC-4DEC26",
+     "bid": 63282.5,
+     "ask": 63302.5,
+     "mark": 63298.44,
+     "oi": 6940210,
+     "f8": null
+    },
+    {
+     "i": "BTC-26MAR27",
+     "bid": 64355,
+     "ask": 64392.5,
+     "mark": 64381,
+     "oi": 115456810,
+     "f8": null
+    },
+    {
+     "i": "BTC-25DEC26",
+     "bid": 63470,
+     "ask": 63487.5,
+     "mark": 63485.61,
+     "oi": 302333100,
+     "f8": null
+    },
+    {
+     "i": "BTC-20NOV26",
+     "bid": 63160,
+     "ask": 63175,
+     "mark": 63172.2,
+     "oi": 34871930,
+     "f8": null
+    },
+    {
+     "i": "ETH-26MAR27",
+     "bid": 1804.25,
+     "ask": 1805,
+     "mark": 1804.75,
+     "oi": 30179912,
+     "f8": null
+    },
+    {
+     "i": "ETH-19NOV26",
+     "bid": 1778.25,
+     "ask": 1778.5,
+     "mark": 1778.39,
+     "oi": 1239878,
+     "f8": null
+    },
+    {
+     "i": "ETH-25DEC26",
+     "bid": 1785.25,
+     "ask": 1785.5,
+     "mark": 1785.52,
+     "oi": 73485413,
+     "f8": null
+    },
+    {
+     "i": "ETH-27NOV26",
+     "bid": 1780.25,
+     "ask": 1780.75,
+     "mark": 1780.63,
+     "oi": 27154027,
+     "f8": null
+    },
+    {
+     "i": "ETH-20NOV26",
+     "bid": 1778.25,
+     "ask": 1778.75,
+     "mark": 1778.6,
+     "oi": 7757511,
+     "f8": null
+    },
+    {
+     "i": "ETH-22NOV26",
+     "bid": 1778.75,
+     "ask": 1779.25,
+     "mark": 1779.11,
+     "oi": 275295,
+     "f8": null
+    },
+    {
+     "i": "ETH-25JUN27",
+     "bid": 1826.75,
+     "ask": 1827.5,
+     "mark": 1827.38,
+     "oi": 17447946,
+     "f8": null
+    },
+    {
+     "i": "ETH-21NOV26",
+     "bid": 1778.5,
+     "ask": 1779,
+     "mark": 1778.92,
+     "oi": 892475,
+     "f8": null
+    },
+    {
+     "i": "ETH-29JAN27",
+     "bid": 1793.5,
+     "ask": 1793.75,
+     "mark": 1793.93,
+     "oi": 17113345,
+     "f8": null
+    },
+    {
+     "i": "ETH-PERPETUAL",
+     "bid": 1778.9,
+     "ask": 1778.95,
+     "mark": 1779,
+     "oi": 275547960,
+     "f8": -0.000011
+    },
+    {
+     "i": "ETH-4DEC26",
+     "bid": 1781.5,
+     "ask": 1781.75,
+     "mark": 1781.73,
+     "oi": 1238302,
+     "f8": null
+    },
+    {
+     "i": "ETH-24SEP27",
+     "bid": 1851.25,
+     "ask": 1851.75,
+     "mark": 1851.69,
+     "oi": 13403605,
+     "f8": null
+    }
+   ]
+  }
+ }
+}
