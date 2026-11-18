@@ -1,29 +1,25 @@
-# 자동매매 연습장: collects prices about every 15 minutes during the US session, runs the trading engine,
-# saves the data and publishes the page on GitHub Pages. No API keys: public price sources only.
+# 자동매매 연습장: during the US session one job collects prices every 5 minutes, runs the trading engine and saves
+# the data; the page reads data/state.json from the repository. No API keys: public price sources only.
 name: trade
 on:
   schedule:
-    - cron: '7,22,37,52 13-21 * * 1-5'   # US session in both summer and winter time; the script checks the New York clock
-    - cron: '41 1 * * 2-6'               # evening: official closes and the S&P 500 from public snapshots
+    - cron: '3 13-20 * * 1-5'   # keeps one session job alive through US market hours (it waits for the open)
+    - cron: '41 1 * * 2-6'      # evening: official closes and the S&P 500 from public snapshots
   workflow_dispatch:
     inputs:
       mode:
-        description: 'collect | collect-now | nightly | rebuild | probe'
+        description: 'session | collect-now | nightly | rebuild | probe'
         required: true
-        default: rebuild
+        default: session
 permissions:
   contents: write
-  pages: write
-  id-token: write
 concurrency:
   group: trade
   cancel-in-progress: false
 jobs:
   trade:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    outputs:
-      deploy: ${{ steps.site.outputs.deploy }}
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,17 +30,19 @@ jobs:
         run: |
           M="${{ github.event.inputs.mode }}"
           if [ -z "$M" ]; then
-            if [ "${{ github.event.schedule }}" = "41 1 * * 2-6" ]; then M=nightly; else M=collect; fi
+            if [ "${{ github.event.schedule }}" = "41 1 * * 2-6" ]; then M=nightly; else M=session; fi
           fi
           echo "mode=$M" >> "$GITHUB_OUTPUT"
           echo "mode: $M"
+      - name: Market session (every 5 minutes)
+        if: steps.mode.outputs.mode == 'session'
+        run: bash tools/session.sh
       - name: Probe price sources
         if: steps.mode.outputs.mode == 'probe'
         run: node tools/probe.mjs
-      - name: Intraday prices
-        id: collect
-        if: steps.mode.outputs.mode == 'collect' || steps.mode.outputs.mode == 'collect-now'
-        run: node tools/collect.mjs ${{ steps.mode.outputs.mode == 'collect-now' && '--force' || '' }}
+      - name: Collect once now
+        if: steps.mode.outputs.mode == 'collect-now'
+        run: node tools/collect.mjs --force
       - name: Evening closes from public snapshots
         if: steps.mode.outputs.mode == 'nightly'
         run: |
@@ -54,38 +52,11 @@ jobs:
           git clone -q --depth 1 --filter=blob:none --no-checkout https://github.com/ravelab/l-etf /tmp/letf
           python3 tools/feed_live.py /tmp/uss /tmp/letf /tmp/feed.json $SINCE $AFTER
           node tools/merge_feed.mjs /tmp/feed.json
-      - name: Run the engine
-        id: run
-        if: steps.mode.outputs.mode == 'nightly' || steps.mode.outputs.mode == 'rebuild' || steps.collect.outputs.changed == 'true'
-        run: node tools/run.mjs
-      - name: Save data
+      - name: Run the engine and save
+        if: steps.mode.outputs.mode != 'session' && steps.mode.outputs.mode != 'probe'
         run: |
-          git config user.name "paper-trader-bot"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data
-          if git diff --cached --quiet; then echo "nothing to save"; exit 0; fi
-          git commit -q -m "data: ${{ steps.mode.outputs.mode }} $(TZ=America/New_York date '+%F %H:%M') ET"
-          for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done
-      - name: Build site
-        id: site
-        if: steps.run.outcome == 'success'
-        run: |
-          mkdir -p _site/data
-          cp index.html engine.js _site/
-          cp -r fonts _site/
-          cp data/state.json _site/data/
-          echo "deploy=true" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-pages-artifact@v3
-        if: steps.run.outcome == 'success'
-        with:
-          path: _site
-  deploy:
-    needs: trade
-    if: needs.trade.outputs.deploy == 'true'
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          node tools/run.mjs
+          bash tools/save.sh "${{ steps.mode.outputs.mode }}"
+      - name: Save probe
+        if: steps.mode.outputs.mode == 'probe'
+        run: bash tools/save.sh probe

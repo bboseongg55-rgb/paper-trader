@@ -1,0 +1,38 @@
+# Publishes the page on GitHub Pages when the page or the engine changes. The account data itself is read by the page
+# from the repository (data/state.json), so it does not need a new deployment every few minutes.
+name: pages
+on:
+  push:
+    branches: [main]
+    paths: ['index.html', 'engine.js', 'fonts/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build site
+        run: |
+          mkdir -p _site/data
+          cp index.html engine.js _site/
+          cp -r fonts _site/
+          if [ -f data/state.json ]; then cp data/state.json _site/data/; fi
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

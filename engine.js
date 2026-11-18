@@ -328,7 +328,8 @@
         streak = tr.R < 0 ? streak + 1 : 0;
         if (!adaptive) return;
         const si = D.S.findIndex((x) => x.s === tr.sym);
-        const dtQuick = tr.pb === 'dt' && tr.R < 0 && tr.reason.indexOf('손절') >= 0 && tr.k1 - tr.k0 <= 2;
+        const hmMin = (hm) => (/^\d\d:\d\d$/.test(hm || '') ? +hm.slice(0, 2) * 60 + +hm.slice(3) : NaN);
+        const dtQuick = tr.pb === 'dt' && tr.R < 0 && tr.reason.indexOf('손절') >= 0 && hmMin(tr.xt) - hmMin(tr.et) <= 30;
         const dtFade = tr.pb === 'dt' && tr.R < 0 && tr.reason.indexOf('장 마감') >= 0;
         const isFake = tr.pb === 'bo' && tr.R < 0 && tr.reason.startsWith('손절') && tr.days <= 7 && tr.mfeR < 0.5;
         const isGap = tr.R <= -1.5;
@@ -340,7 +341,7 @@
         const diag = [], chg = [], evid = [];
         if (tr.R < 0) {
           if (isMkt) diag.push(`보유 기간에 S&P 500이 ${(tr.idx * 100).toFixed(1)}% 빠졌습니다. 시장 전체에 끌려 내려간 손실입니다.`);
-          if (isGap) diag.push(tr.pb === 'dt' ? `손절선보다 훨씬 아래에서 팔렸습니다(${tr.R}R). 15분 사이에 크게 빠진 경우라 이 종목은 ${FIXED.cooldownGap}거래일 쉽니다.` : `손절선보다 훨씬 아래에서 끝났습니다(${tr.R}R). 하루 사이에 크게 빠진 경우라 이 종목은 ${FIXED.cooldownGap}거래일 쉽니다.`);
+          if (isGap) diag.push(tr.pb === 'dt' ? `손절선보다 훨씬 아래에서 팔렸습니다(${tr.R}R). 몇 분 사이에 크게 빠진 경우라 이 종목은 ${FIXED.cooldownGap}거래일 쉽니다.` : `손절선보다 훨씬 아래에서 끝났습니다(${tr.R}R). 하루 사이에 크게 빠진 경우라 이 종목은 ${FIXED.cooldownGap}거래일 쉽니다.`);
           if (isFake) diag.push(`돌파 후 ${tr.days}거래일 만에 손절됐고 +0.5R에 한 번도 닿지 못한 가짜 돌파입니다.`);
           if (tr.pb === 'pb') diag.push('눌림목에서 샀지만 반등하지 못했습니다.');
           if (dtQuick) diag.push('산 뒤 30분 안에 손절됐습니다. 장중 흔들림에 털린 단타입니다.');

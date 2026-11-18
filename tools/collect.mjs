@@ -45,7 +45,7 @@ const now = process.env.ET_NOW ? { date: process.env.ET_NOW.slice(0, 10), hm: pr
 const today = now.date;
 if (!FORCE && !isTradingDay(today)) { out({ changed: false, skip: '휴장일', et: now }); process.exit(0); }
 const early = EARLY_CLOSE.has(today);
-const finalFrom = early ? '12:40' : '15:40', gateEnd = early ? '13:40' : '16:40';
+const finalFrom = early ? '12:50' : '15:50', gateEnd = early ? '13:40' : '16:40';
 if (!FORCE && (now.hm < '09:35' || now.hm > gateEnd)) { out({ changed: false, skip: '장 시간 아님', et: now }); process.exit(0); }
 const cfg = readJSON('data/source.json', null);
 if (!cfg || !cfg.bulk) { out({ changed: false, skip: 'data/source.json 없음(가격 출처 미설정)', et: now }); process.exit(0); }
