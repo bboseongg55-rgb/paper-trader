@@ -4,7 +4,7 @@ name: pages
 on:
   push:
     branches: [main]
-    paths: ['index.html', 'engine.js', 'fonts/**', '.github/workflows/pages.yml']
+    paths: ['index.html', 'manifest.webmanifest', 'icons/**', 'fonts/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,8 +21,8 @@ jobs:
       - name: Build site
         run: |
           mkdir -p _site/data
-          cp index.html engine.js _site/
-          cp -r fonts _site/
+          cp index.html manifest.webmanifest _site/
+          cp -r fonts icons _site/
           if [ -f data/state.json ]; then cp data/state.json _site/data/; fi
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -270,7 +270,7 @@
     const adaptive = !!opts.adaptive;
     const capital = opts.capital;
     let cash = capital, peak = capital, idSeq = 0;
-    const positions = [], trades = [], equity = [], changes = [], reviews = [], holdReviews = [], signals = [];
+    const positions = [], trades = [], equity = [], changes = [], reviews = [], holdReviews = [], signals = [], intraday = [];
     const cool = new Map();                         // symbol index → first day it may be bought again
     const scores = Object.assign({ bo: 0, pb: 0, dt: 0 }, opts.scores || {});
     // share of the normal 1-trade risk each playbook may use, set by the strategy tournament
@@ -310,15 +310,18 @@
     function closeTrade(p, t, px, reason, tm, k) {
       const x = D.S[p.i];
       const fill = px * (1 - FIXED.slip);
-      cash += p.qty * fill;
+      const fs = sellFee(p.qty, fill, D.dates[t]);
+      cash += p.qty * fill - fs.total;
       const R = (fill - p.fill) / p.R1;
       const tr = {
         id: p.id, sym: x.s, name: x.n, sec: x.sec, pb: p.pb, entryDate: D.dates[p.t0], exitDate: D.dates[t],
         entry: round(p.fill, 2), exit: round(fill, 2), qty: p.qty, stop0: round(p.stop0, 2),
-        pnl: round(p.qty * (fill - p.fill), 2), pct: round(fill / p.fill - 1, 4), R: round(R, 2), days: t - p.t0,
+        pnl: round(p.qty * (fill - p.fill) - fs.total - (p.feeIn || 0), 2), pct: round(fill / p.fill - 1, 4), R: round(R, 2), days: t - p.t0,
         reason, mfeR: round(p.mfeR, 2), idx: round(D.spx[t] / D.spx[p.t0] - 1, 4),
+        fee: cent(fs.total + (p.feeIn || 0)), feeBuy: p.feeIn || 0, feeSell: fs,
+        et: p.et || null, xt: tm || (D.times && D.times[t]) || null,
       };
-      if (p.pb === 'dt') { tr.et = p.et; tr.xt = tm || '장 마감'; tr.k0 = p.k0; tr.k1 = k == null ? 1e9 : k; }
+      if (p.pb === 'dt') { tr.k0 = p.k0; tr.k1 = k == null ? 1e9 : k; }
       trades.push(tr);
       positions.splice(positions.indexOf(p), 1);
       return tr;
@@ -489,9 +492,10 @@
                 qty = Math.min(qty, Math.floor((P.maxPosW * prevEq) / fill), Math.floor(cash / fill));
                 if (heat + qty * perShare > FIXED.heatMax * prevEq) qty = Math.floor(Math.max(0, FIXED.heatMax * prevEq - heat) / perShare);
                 if (qty < 1 || qty * fill < FIXED.minValue * prevEq) continue;
-                cash -= qty * fill;
+                const feeIn = catFee(qty);
+                cash -= qty * fill + feeIn;
                 heat += qty * perShare;
-                positions.push({ id: ++idSeq, i: cd.i, pb: 'dt', t0: t, k0: k, et: tm, fill, qty, stop, stop0: stop, R1: perShare, atr: x.vol[t - 1] * v, maxC: v, mfeR: 0, miss: 0, lastPx: v });
+                positions.push({ id: ++idSeq, i: cd.i, pb: 'dt', t0: t, k0: k, et: tm, fill, qty, stop, stop0: stop, R1: perShare, atr: x.vol[t - 1] * v, maxC: v, mfeR: 0, miss: 0, lastPx: v, feeIn });
                 held.add(cd.i);
                 dtDone.add(cd.i);
                 dtOpened++;
@@ -500,6 +504,12 @@
           }
           // c) running highs of today's samples
           for (let i = 0; i < nS; i++) { const v = px[i]; if (isNum(v) && v > runHi[i]) runHi[i] = v; }
+          // d) account value at this time (last day only)
+          if (t === to) {
+            let eqK = cash;
+            for (const p of positions) { const v = px[p.i]; eqK += p.qty * (isNum(v) ? v : isNum(p.lastPx) ? p.lastPx : price(D.S[p.i], t - 1)); }
+            intraday.push({ t: tm, eq: round(eqK, 2), spx: isNum(sm.spx) ? sm.spx : null });
+          }
         }
       }
       // ── exits at today's close (they wait while the market is open)
@@ -672,9 +682,10 @@
           qty = Math.min(qty, Math.floor((P.maxPosW * eq) / fill), Math.floor(cash / fill));
           if (heat + qty * perShare > FIXED.heatMax * eq) qty = Math.floor(Math.max(0, FIXED.heatMax * eq - heat) / perShare);
           if (qty < 1 || qty * fill < FIXED.minValue * eq) { sig.why = cash < fill ? '현금 부족' : '위험 한도(열린 위험 6%) 소진'; continue; }
-          cash -= qty * fill;
+          const feeIn = catFee(qty);
+          cash -= qty * fill + feeIn;
           heat += qty * perShare;
-          positions.push({ id: ++idSeq, i: cd.i, pb: cd.pb, t0: t, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0 });
+          positions.push({ id: ++idSeq, i: cd.i, pb: cd.pb, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn });
           sig.taken = true; sig.qty = qty; sig.stop = round(stop, 2);
           opened++;
         }
@@ -693,12 +704,29 @@
     const open = positions.map((p) => {
       const x = D.S[p.i], px = price(x, lastT);
       return { id: p.id, sym: x.s, name: x.n, sec: x.sec, pb: p.pb, entryDate: D.dates[p.t0], entry: round(p.fill, 2), qty: p.qty, price: round(px, 2),
-        value: round(px * p.qty, 2), pnl: round((px - p.fill) * p.qty, 2), pct: round(px / p.fill - 1, 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2),
+        value: round(px * p.qty, 2), pnl: round((px - p.fill) * p.qty - (p.feeIn || 0), 2), pct: round(px / p.fill - 1, 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2), feeBuy: p.feeIn || 0,
         R: round((px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, px - p.stop) * p.qty, 2), et: p.et || null };
     });
-    return { from, to: lastT, capital, equity, trades, open, changes, params: P, scores, mults: M, weights: normW(M), dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState, signals, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
+    return { from, to: lastT, capital, equity, trades, open, changes, params: P, scores, mults: M, weights: normW(M), dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState, signals, intraday, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
   }
 
+  // ── Robinhood fees for US stocks (fee schedule checked 2026-11-18). No commission. Sells: SEC fee $20.60 per
+  // $1 million from 2026-04-04 ($0 from 2025-05-14; the earlier $27.80 is from the older schedule, 확인필요), rounded
+  // up to the cent, not passed on for sales of $500 or less; FINRA trading activity fee $0.000195 a share from
+  // 2026-01-01 ($0.000166 before), at most $9.79 ($8.30 before), nearest cent, not passed on for 50 shares or less,
+  // paused by FINRA from 2026-10-01 to 2026-12-31. Buys and sells: CAT fee $0.000003 a share (under one cent: none).
+  const cent = (v) => Math.round(v * 100) / 100;
+  function secRate(d) { return d >= '2026-04-04' ? 20.6e-6 : d >= '2025-05-14' ? 0 : 27.8e-6; }
+  function tafRule(d) { if (d >= '2026-10-01' && d <= '2026-12-31') return null; return d >= '2026-01-01' ? [0.000195, 9.79] : [0.000166, 8.3]; }
+  function catFee(qty) { const v = qty * 0.000003; return v < 0.01 ? 0 : cent(v); }
+  function sellFee(qty, px, d) {
+    const notional = qty * px;
+    const sec = notional > 500 ? Math.ceil(notional * secRate(d) * 100 - 1e-9) / 100 : 0;
+    const tr = tafRule(d);
+    const taf = tr && qty > 50 ? Math.min(tr[1], cent(qty * tr[0])) : 0;
+    const cat = catFee(qty);
+    return { sec, taf, cat, total: cent(sec + taf + cat) };
+  }
   function hmMin(hm) { return /^\d\d:\d\d$/.test(hm || '') ? +hm.slice(0, 2) * 60 + +hm.slice(3) : NaN; }
   function normW(w) {
     const sum = (w.bo || 0) + (w.pb || 0) + (w.dt || 0) || 1;
@@ -730,6 +758,8 @@
       cagr: years >= 1 ? Math.pow(last.eq / capital, 1 / years) - 1 : null, bcagr: years >= 1 ? Math.pow(last.bench / capital, 1 / years) - 1 : null,
       days: equity.length, avgDays: trades.length ? trades.reduce((s, t) => s + t.days, 0) / trades.length : 0,
       exposure: equity.reduce((s, e) => s + (1 - e.cash / e.eq), 0) / equity.length,
+      fees: Math.round(trades.reduce((s, t) => s + (t.fee || 0), 0) * 100) / 100,
+      realized: Math.round(trades.reduce((s, t) => s + t.pnl, 0) * 100) / 100,
     };
   }
 
