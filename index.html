@@ -138,11 +138,29 @@ ul.list > li > details > summary::-webkit-details-marker { display: none; }
 .mix .pnl { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 footer { margin: 28px 20px 8px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+.team-head { padding: 4px 20px 0; }
+.team-head p { margin: 2px 0 0; font-size: 15px; color: var(--muted); }
+.rules { list-style: none; margin: 10px 20px 0; padding: 12px 14px; border-radius: 12px; background: var(--band); display: grid; gap: 8px; font-size: 15px; }
+.rules li { display: flex; justify-content: space-between; gap: 12px; }
+.rules span { color: var(--muted); }
+.rules b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.rules b.changed::after { content: "조정됨"; margin-left: 6px; font-size: 12px; font-weight: 600; padding: 0 6px; border-radius: 6px; background: var(--up-soft); color: var(--up); vertical-align: 1px; }
+details.teamlog { margin: 10px 20px 0; }
+details.teamlog > summary { cursor: pointer; font-size: 15px; font-weight: 600; color: var(--sub); padding: 8px 0; list-style: none; }
+details.teamlog > summary::-webkit-details-marker { display: none; }
+details.teamlog > summary::after { content: " 보기"; color: var(--muted); font-weight: 500; }
+details.teamlog[open] > summary::after { content: " 접기"; }
+.logitem { padding: 10px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.logitem b { display: block; font-size: 16px; }
+.logitem .d { color: var(--muted); font-size: 14px; }
+.logitem p { margin: 4px 0 0; color: var(--sub); }
+.flag { display: inline-block; font-size: 13px; font-weight: 600; line-height: 20px; padding: 0 7px; border-radius: 6px; margin-left: 6px; vertical-align: middle; background: var(--up-soft); color: var(--up); }
+.flag.gray { background: var(--band); color: var(--sub); }
 
 /* bottom tabs */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--bg); border-top: 1px solid var(--line);
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
 }
 .tabbar a { display: grid; justify-items: center; gap: 2px; padding: 6px 0; text-decoration: none; color: var(--muted); font-size: 13px; font-weight: 600; border-radius: 10px; }
 .tabbar a svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -167,12 +185,14 @@ footer { margin: 28px 20px 8px; font-size: 13px; color: var(--muted); line-heigh
     <section class="view" id="v-account" aria-label="계좌"></section>
     <section class="view" id="v-fills" aria-label="체결내역"></section>
     <section class="view" id="v-profit" aria-label="수익"></section>
+    <section class="view" id="v-team" aria-label="AI팀"></section>
   </main>
 </div>
 <nav class="tabbar" aria-label="화면">
   <a href="#account" data-v="account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h14a3 3 0 0 1 3 3v6.5a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3v-9.5z"/><path d="M3.5 7.5 15 4.5v3"/><circle cx="16.2" cy="13.8" r="1.1"/></svg><span>계좌</span></a>
   <a href="#fills" data-v="fills"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2v-17z"/><path d="M9 8.5h6M9 12.5h6"/></svg><span>체결내역</span></a>
   <a href="#profit" data-v="profit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 17.5 9 12l4 4 7.5-7.5"/><path d="M15 8.5h5.5V14"/></svg><span>수익</span></a>
+  <a href="#team" data-v="team"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19.5c0-3.1 2.4-5.3 5.5-5.3s5.5 2.2 5.5 5.3"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.8 14.3c2.5.3 4.4 2.2 4.4 5"/></svg><span>AI팀</span></a>
 </nav>
 <script>
 (function () {
@@ -186,10 +206,10 @@ footer { margin: 28px 20px 8px; font-size: 13px; color: var(--muted); line-heigh
   const cls = (v) => (v >= 0.005 ? 'up' : v <= -0.005 ? 'down' : '');
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const dLabel = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일 (${WD[new Date(d + 'T12:00:00Z').getUTCDay()]})`;
-  const PB = { bo: '돌파', pb: '눌림목', dt: '단타' };
-  const PB_LONG = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타' };
-  const VIEWS = ['account', 'fills', 'profit'];
-  const TITLES = { account: '계좌', fills: '체결내역', profit: '수익' };
+  const PB = { bo: '돌파', pb: '눌림목', dt: '단타', hedge: '헷지' };
+  const PB_LONG = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', hedge: 'S&P 500 인버스 헷지' };
+  const VIEWS = ['account', 'fills', 'profit', 'team'];
+  const TITLES = { account: '계좌', fills: '체결내역', profit: '수익', team: 'AI팀' };
   const HOLIDAYS = ['2026-11-26', '2026-12-25', '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24'];
   const EARLY_CLOSE = ['2026-11-27', '2026-12-24', '2027-11-26'];
   let S = null, period = 'day', filter = 'all';
@@ -312,9 +332,16 @@ footer { margin: 28px 20px 8px; font-size: 13px; color: var(--muted); line-heigh
     if (a.risk && a.risk.blocked && a.risk.blocked.length) notes.push(a.risk.blocked.join(' '));
     else if (a.risk && a.risk.mult < 1) notes.push(`손실 관리: ${a.risk.why.join(' ')}`);
     h += notes.map((n) => `<p class="note"><i aria-hidden="true"></i><span>${esc(n)}</span></p>`).join('');
-    h += `<div class="band"></div><h2>보유 종목 <span class="count num">${a.open.length}</span></h2>`;
-    if (!a.open.length) h += '<p class="empty-row">보유 종목이 없습니다. 전부 현금입니다.</p>';
-    else h += '<ul class="list">' + a.open.slice().sort((p, q) => q.value - p.value).map((p) => `<li><details><summary class="row">
+    const hg = a.hedge;
+    h += `<div class="band"></div><h2>보유 종목 <span class="count num">${a.open.length + (hg ? 1 : 0)}</span></h2>`;
+    if (!a.open.length && !hg) h += '<p class="empty-row">보유 종목이 없습니다. 전부 현금입니다.</p>';
+    if (hg) {
+      const hp = hg.value + hg.got - hg.paid;
+      h += `<ul class="list"><li><details><summary class="row"><span class="l"><b>SH<span class="tag">헷지</span></b><span>S&amp;P 500 인버스(−1배)</span></span>
+        <span class="r"><b>${usd(hg.value)}</b><span class="${cls(hp)}">${sgnUsd(hp)}</span></span></summary>
+        ${more([['하는 일', 'S&amp;P 500이 내리면 오르고, 오르면 내립니다'], ['시작', dLabel(hg.since)], ['시작 때 S&amp;P 500', hg.spx0.toLocaleString('en-US')], ['헷지 비율', `보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%`], ['담당', '리스크·헷지팀']])}</details></li></ul>`;
+    }
+    if (a.open.length) h += '<ul class="list">' + a.open.slice().sort((p, q) => q.value - p.value).map((p) => `<li><details><summary class="row">
         <span class="l"><b>${esc(p.sym)}<span class="tag">${PB[p.pb]}</span></b><span>${esc(p.name)} · ${p.qty.toLocaleString()}주</span></span>
         <span class="r"><b>${usd(p.value)}</b><span class="${cls(p.pnl)}">${sgnUsd(p.pnl)} (${pct(p.pct)})</span></span></summary>
         ${more([['평균 매수가', usd(p.entry)], ['현재가', usd(p.price)], ['손절가', usd(p.stop)], ['매수', p.pb === 'dt' ? `오늘 ${esc(p.et || '')}` : `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]])}</details></li>`).join('') + '</ul>';
@@ -331,6 +358,12 @@ footer { margin: 28px 20px 8px; font-size: 13px; color: var(--muted); line-heigh
   }
 
   function fillRow(o) {
+    if (o.pb === 'hedge') {
+      return `<li><details><summary class="row"><span class="side ${o.side}">${o.side === 'buy' ? '매수' : '매도'}</span>
+        <span class="l"><b>SH<span class="tag">헷지</span></b><span>S&amp;P 500 인버스 · S&amp;P ${Number(o.spx).toLocaleString('en-US')}</span></span>
+        <span class="r"><b>${usd(o.amount)}</b><span class="muted">${esc(o.time || '장 마감')}</span></span></summary>
+        ${more([['종류', 'S&amp;P 500 인버스(−1배), SH와 같은 방식'], ['체결 금액', usd(o.amount)], ['이유', esc(o.why || '')], ['헷지 비율', `보유 주식의 ${Math.round((o.ratio || 0) * 100)}%`], ['수수료', usd(o.fee || 0) + (o.side === 'sell' ? ' (SEC)' : '')], ['담당', '리스크·헷지팀']])}</details></li>`;
+    }
     const amt = o.qty * o.price;
     const when = o.time || '장 마감';
     if (o.side === 'buy') {
@@ -370,8 +403,9 @@ footer { margin: 28px 20px 8px; font-size: 13px; color: var(--muted); line-heigh
     if (!a) { $('v-profit').innerHTML = '<p class="empty-row">연습 계좌가 아직 시작되지 않았습니다.</p>'; return; }
     const last = a.equity[a.equity.length - 1], st = a.stats || {};
     const total = last.eq - S.capital;
-    const unreal = a.open.reduce((s, p) => s + p.pnl, 0);
-    const realized = st.realized || 0;
+    const hb = (S.byPb || {}).hedge || { pnl: 0, open: 0 };
+    const unreal = a.open.reduce((s, p) => s + p.pnl, 0) + (hb.open || 0);
+    const realized = (st.realized || 0) + (hb.pnl || 0);
     const feesOpen = a.open.reduce((s, p) => s + (p.feeBuy || 0), 0);
     const sells = (S.orders || []).filter((o) => o.side === 'sell');
     const wins = sells.filter((o) => o.pnl > 0), losses = sells.filter((o) => o.pnl <= 0);
@@ -382,7 +416,7 @@ footer { margin: 28px 20px 8px; font-size: 13px; color: var(--muted); line-heigh
     h += kv([
       ['실현 손익', sgnUsd(realized), cls(realized)],
       ['평가 손익', sgnUsd(unreal), cls(unreal)],
-      ['낸 수수료', usd((st.fees || 0) + feesOpen)],
+      ['낸 수수료', usd((st.fees || 0) + feesOpen + (a.hedgeFees || 0))],
       ['최대 낙폭', fmt((st.mdd || 0) * 100, 1) + '%'],
     ]);
     // by day
@@ -395,7 +429,8 @@ footer { margin: 28px 20px 8px; font-size: 13px; color: var(--muted); line-heigh
       const b = bp[k] || { n: 0, wins: 0, pnl: 0 };
       return `<li><span class="name">${PB_LONG[k]}</span><span class="pnl ${cls(b.pnl)}">${sgnUsd(b.pnl)}</span>
         <span class="stat">매도 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''} · AI 위험 배분 ${Math.round((mm[k] == null ? 0 : mm[k]) * 100)}%${k === 'dt' && a.dtPaused ? ' · 쉬는 중' : ''}</span></li>`;
-    }).join('') + '</ul>';
+    }).join('') + (bp.hedge ? `<li><span class="name">S&amp;P 500 인버스 헷지</span><span class="pnl ${cls(bp.hedge.pnl + (bp.hedge.open || 0))}">${sgnUsd(bp.hedge.pnl + (bp.hedge.open || 0))}</span>
+        <span class="stat">헷지 ${bp.hedge.n}번 정리${bp.hedge.open ? ' · 지금 보유 중' : ''} · 리스크·헷지팀 담당</span></li>` : '') + '</ul>';
     h += `<div class="band"></div><h2>매매 성적</h2>`;
     h += kv([
       ['승률', sells.length ? Math.round((wins.length / sells.length) * 100) + '%' : '-'],
@@ -407,10 +442,48 @@ footer { margin: 28px 20px 8px; font-size: 13px; color: var(--muted); line-heigh
     $('v-profit').innerHTML = h;
   }
 
+  const ruleVal = (r) => {
+    const v = r.value;
+    if (r.key === 'maxPosW') return Math.round(v * 100) + '%';
+    if (r.unit === '백분위') return `상위 ${100 - v}%`;
+    if (r.unit === '%') return v + '%';
+    if (r.unit === '거래일') return v + '거래일';
+    if (r.unit === '단계') return v + '단계';
+    return `${r.unit} ${v}`.trim();
+  };
+  const teamBlock = (tm, intro, body) => {
+    const logs = tm.log || [];
+    return `<div class="band"></div><div class="team-head"><h2 style="padding:0">${esc(tm.name)}</h2><p>${intro}</p></div>${body}
+      <ul class="rules">${tm.rules.map((r) => `<li><span>${esc(r.label)}</span><b class="${r.changed ? 'changed' : ''}">${esc(ruleVal(r))}</b></li>`).join('')}</ul>
+      <details class="teamlog"><summary>스스로 고친 기록 ${logs.length}건</summary>${logs.length ? logs.map((c) => `<div class="logitem"><span class="d">${dLabel(c.date)}</span><b>${esc(c.title)}</b><p>${esc(c.body)}</p>${(c.changes || []).length ? `<p>${c.changes.map((g) => `${esc(g.label)} ${esc(g.from)} → <b style="display:inline">${esc(g.to)}</b>`).join(', ')}</p>` : ''}</div>`).join('') : '<div class="logitem"><p>아직 이 팀이 고친 규칙이 없습니다.</p></div>'}</details>`;
+  };
+  function renderTeam() {
+    const T = S.teams;
+    if (!T) { $('v-team').innerHTML = '<p class="empty-row">연습 계좌가 아직 시작되지 않았습니다.</p>'; return; }
+    let h = `<p class="sumline" style="padding-top:4px">네 팀이 차례로 일합니다. 종목선정팀이 후보를 고르고, 매수팀이 살 때와 수량을 정하고, 매도팀이 팔 때를 정하고, 리스크·헷지팀이 계좌 전체의 위험과 하락 대비를 맡습니다. 각 팀은 결과를 보고 자기 규칙을 스스로 고칩니다.</p>`;
+    const w = T.select.watch || [];
+    h += teamBlock(T.select, '상승 추세이면서 6개월 상승률이 강한 대형주를 골라 매수팀에 넘깁니다.',
+      `<h3 class="day">오늘의 후보 상위 ${w.length}</h3><ul class="list">` + (w.length ? w.map((x) => `<li><div class="row"><span class="l"><b>${esc(x.sym)}${x.held ? '<span class="flag gray">보유 중</span>' : x.bo ? '<span class="flag">돌파 준비</span>' : x.pb ? '<span class="flag">눌림목 준비</span>' : ''}</b><span>${esc(x.name)}</span></span>
+        <span class="r"><b class="${cls(x.ret6m)}">${pct(x.ret6m, 1)}</b><span class="muted">6개월 · 상위 ${Math.max(1, 100 - x.rs)}%</span></span></div></li>`).join('') : '<li><p class="empty-row">상승 추세인 후보가 없습니다.</p></li>') + '</ul>');
+    const mm = T.entry.mults || {};
+    h += teamBlock(T.entry, '후보 중 매수 신호가 난 종목을 사고, 1회 위험에 맞춰 수량을 정합니다. 방법별 위험은 20거래일마다 성적순으로 다시 나눕니다.',
+      `<ul class="mix" style="padding-top:10px"><li><span class="name">오늘 매수</span><span class="pnl">${T.entry.buysToday}건</span></li>${['dt', 'bo', 'pb'].map((k) => `<li><span class="name">${PB_LONG[k]}</span><span class="pnl">${Math.round((mm[k] == null ? 0 : mm[k]) * 100)}%</span><span class="stat">정상 1회 위험 대비${k === 'dt' && T.entry.dtPaused ? ' · 쉬는 중' : ''}</span></li>`).join('')}</ul>`);
+    const nr = T.exit.nearest;
+    h += teamBlock(T.exit, '보유 종목마다 손절가·추적 손절·기한·목표가를 지키고, 단타는 장 마감 전에 모두 팝니다.',
+      `<ul class="mix" style="padding-top:10px"><li><span class="name">오늘 매도</span><span class="pnl">${T.exit.sellsToday}건</span></li><li><span class="name">지키는 종목</span><span class="pnl">${T.exit.watching}개</span>${nr && nr.gap != null ? `<span class="stat">손절가에 가장 가까운 종목: ${esc(nr.sym)} (손절가까지 ${pct(-nr.gap, 1).replace('−', '')})</span>` : ''}</li></ul>`);
+    const g = T.risk.gate, hg = T.risk.hedge, rk = T.risk.risk || {};
+    h += teamBlock(T.risk, '시장이 하락 추세면 새 매수를 멈추고, 다음 날로 넘기는 주식이 있으면 S&amp;P 500 인버스로 하락에 대비합니다. 낙폭과 연패가 커지면 1회 위험을 줄입니다.',
+      `<ul class="mix" style="padding-top:10px"><li><span class="name">시장</span><span class="pnl ${g && g.ok ? '' : 'down'}">${g && g.ok ? '매수 가능' : '새 매수 멈춤'}</span><span class="stat">${esc(T.risk.regime ? T.risk.regime.text : '')}${g ? ` · S&amp;P 500 ${g.spx.toLocaleString('en-US')} (200일 평균 ${g.spx200.toLocaleString('en-US')})` : ''}</span></li>
+        <li><span class="name">헷지</span><span class="pnl">${hg ? usd(hg.value) : '없음'}</span><span class="stat">${hg ? `${dLabel(hg.since)}부터, 보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%` : '다음 날로 넘기는 주식이 없거나 시장이 상승 추세일 때는 헷지하지 않습니다'}</span></li>
+        <li><span class="name">손실 브레이크</span><span class="pnl">${rk.mult < 1 || (rk.blocked || []).length ? '작동 중' : '정상'}</span>${(rk.why || []).concat(rk.blocked || []).length ? `<span class="stat">${esc((rk.why || []).concat(rk.blocked || []).join(' '))}</span>` : ''}</li></ul>`);
+    $('v-team').innerHTML = h;
+  }
+
   function render() {
     renderAccount();
     renderFills();
     renderProfit();
+    renderTeam();
     if ($('loading')) $('loading').remove();
     setLive();
     showView();

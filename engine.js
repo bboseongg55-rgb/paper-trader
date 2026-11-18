@@ -26,23 +26,24 @@
     dtStopK: 0.6,       // day trade: stop = entry − k × daily price swing
     dtMinUp: 1.0,       // day trade: up at least this % on the day
     dtRsMin: 70,        // day trade: 6-month return rank
+    hedgeK: 0.5,        // hedge: inverse S&P 500 worth this share of the stocks held overnight when the S&P 500 is below its 200-day average
   };
   const BOUNDS = {
     stopK_bo: [1.5, 3.5], stopK_pb: [1.5, 3.5], trailK: [2.0, 4.5], boLookback: [20, 120], rsMin: [50, 90],
     pbRsMin: [60, 95], pbRsi: [3, 20], regimeLevel: [0, 3], maxPosW: [0.08, 0.20],
-    timeStop_bo: [10, 60], timeStop_pb: [4, 20], holdK: [0, 3], dtStopK: [0.4, 1.5], dtMinUp: [0.5, 3], dtRsMin: [50, 90],
+    timeStop_bo: [10, 60], timeStop_pb: [4, 20], holdK: [0, 3], dtStopK: [0.4, 1.5], dtMinUp: [0.5, 3], dtRsMin: [50, 90], hedgeK: [0, 1],
   };
   const LABELS = {
     stopK_bo: '돌파 매매 손절 폭', stopK_pb: '눌림목 매매 손절 폭', trailK: '추적 손절 폭',
     boLookback: '돌파 기준 기간', rsMin: '돌파 매매 최소 상대강도', pbRsMin: '눌림목 매매 최소 상대강도',
     pbRsi: '눌림목 과매도 기준', regimeLevel: '시장 필터 단계', maxPosW: '종목당 최대 비중',
     timeStop_bo: '돌파 매매 기다리는 기간', timeStop_pb: '눌림목 매매 최대 보유', holdK: '크게 오른 종목 추가 추적 폭',
-    dtStopK: '단타 손절 폭', dtMinUp: '단타 최소 당일 상승률', dtRsMin: '단타 최소 상대강도',
+    dtStopK: '단타 손절 폭', dtMinUp: '단타 최소 당일 상승률', dtRsMin: '단타 최소 상대강도', hedgeK: '하락장 헷지 비율',
   };
   const UNITS = {
     stopK_bo: '변동폭 ×', stopK_pb: '변동폭 ×', trailK: '변동폭 ×', boLookback: '거래일', rsMin: '백분위',
     pbRsMin: '백분위', pbRsi: 'RSI(2) 미만', regimeLevel: '단계', maxPosW: '%',
-    timeStop_bo: '거래일', timeStop_pb: '거래일', holdK: '변동폭 ×', dtStopK: '하루 변동폭 ×', dtMinUp: '%', dtRsMin: '백분위',
+    timeStop_bo: '거래일', timeStop_pb: '거래일', holdK: '변동폭 ×', dtStopK: '하루 변동폭 ×', dtMinUp: '%', dtRsMin: '백분위', hedgeK: '× 보유 주식',
   };
   // Fixed risk rules (never changed by the system)
   const FIXED = {
@@ -53,12 +54,25 @@
     dtFrom: '10:00', dtUntil: '14:30', dtRiskMult: 0.5, dtMax: 3, dtNewPerDay: 4, dtTargetR: 2, dtMaxUp: 0.08,
     dtRel: 0.01, dtMktMin: -0.003, dtCooldown: 3, dtPauseScore: -0.3, dtPauseMin: 8, dtPauseDays: 10,
     // strategy tournament: every 20 trading days each playbook runs alone over the last 120 trading days
+    // hedge: an inverse S&P 500 position (like ProShares SH, −1× the daily move, 0.89% a year in fund costs), set at the
+    // close; it moves only when the target differs by more than $1,000 and 20%
+    hedgeExp: 0.0089, hedgeMin: 1000, hedgeBand: 0.2,
     selectEvery: 20, selectWindow: 120, selectMinTrades: 5, selectTrialM: 0.25, selectTiers: [1, 0.5, 0.17], selectLoserM: 0.17,
     dailyLossStop: 0.025, ddHalf: 0.08, ddStop: 0.15, ddResume: 0.10,
     cooldown: 10, cooldownGap: 30, reviewDays: 10,
     validateEvery: 20, validateWindow: 120, validateMargin: 0.03, minValue: 0.005,
   };
   const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타' };
+  // the four teams and the rules each one owns
+  const TEAMS = { select: '종목선정팀', entry: '매수팀', exit: '매도팀', risk: '리스크·헷지팀' };
+  const TEAM_OF = { rsMin: 'select', pbRsMin: 'select', dtRsMin: 'select', boLookback: 'select', pbRsi: 'entry', dtMinUp: 'entry',
+    stopK_bo: 'exit', stopK_pb: 'exit', trailK: 'exit', holdK: 'exit', timeStop_bo: 'exit', timeStop_pb: 'exit', dtStopK: 'exit',
+    regimeLevel: 'risk', maxPosW: 'risk', hedgeK: 'risk' };
+  function teamsOf(kind, chg) {
+    const ts = [...new Set((chg || []).map((g) => TEAM_OF[g.key] || (/^m_/.test(g.key) ? 'risk' : null)).filter(Boolean))];
+    if (ts.length) return ts;
+    return [{ loss: 'exit', review: 'exit', budget: 'risk', risk: 'risk', rollback: 'risk', check: 'risk', hedge: 'risk', pick: 'select', relax: 'select', start: 'risk' }[kind] || 'risk'];
+  }
 
   const SPLITS = [2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 40, 50, 1 / 2, 1 / 3, 1 / 4, 1 / 5, 1 / 6, 1 / 7, 1 / 8, 1 / 10, 1 / 12, 1 / 15, 1 / 20, 1 / 25, 1 / 30, 1 / 40, 1 / 50, 2 / 3, 3 / 2];
   const nearestSplit = (v) => SPLITS.reduce((b, c) => (Math.abs(v / c - 1) < Math.abs(v / b - 1) ? c : b), SPLITS[0]);
@@ -271,6 +285,8 @@
     const capital = opts.capital;
     let cash = capital, peak = capital, idSeq = 0;
     const positions = [], trades = [], equity = [], changes = [], reviews = [], holdReviews = [], signals = [], intraday = [];
+    let hedge = null;                               // inverse S&P 500 position held by the risk & hedge team
+    const hedgeFills = [], hedgeEpisodes = [];
     const cool = new Map();                         // symbol index → first day it may be bought again
     const scores = Object.assign({ bo: 0, pb: 0, dt: 0 }, opts.scores || {});
     // share of the normal 1-trade risk each playbook may use, set by the strategy tournament
@@ -280,7 +296,7 @@
     let lastSelect = -1e9, dtPausedUntil = -1, dtCount = 0;
     let streak = 0, blockUntil = -1, ddStopOn = false, lastMarketLoss = -1e9, lastValidate = from, prevEq = capital;
     let riskState = { mult: 1, why: [], blocked: [] }, lastRiskKey = '1|0';
-    const ev = Object.assign({ fake: [], pb: [], gap: [], mkt: [], noise_bo: [], noise_pb: [], tbo: [], tpb: [], trail: [], hold: [], dtq: [], dtf: [] }, opts.evidence ? JSON.parse(JSON.stringify(opts.evidence)) : {});
+    const ev = Object.assign({ fake: [], pb: [], gap: [], mkt: [], noise_bo: [], noise_pb: [], tbo: [], tpb: [], trail: [], hold: [], dtq: [], dtf: [], hedge: [] }, opts.evidence ? JSON.parse(JSON.stringify(opts.evidence)) : {});
     ev.mkt = [];                                    // day indexes do not carry over between runs
     const push = (arr, v, n) => { arr.push(v); while (arr.length > n) arr.shift(); };
     const count = (arr) => arr.filter(Boolean).length;
@@ -289,7 +305,7 @@
 
     function log(t, kind, title, body, chg, extra) {
       if (!opts.log) return;
-      changes.push(Object.assign({ date: D_.dates[t], t, kind, title, body, changes: chg || [] }, extra || {}));
+      changes.push(Object.assign({ date: D_.dates[t], t, kind, title, body, changes: chg || [], teams: teamsOf(kind, chg) }, extra || {}));
     }
     function setParam(key, val, list) {
       const [lo, hi] = BOUNDS[key];
@@ -305,6 +321,7 @@
     function marked(t) {
       let v = cash;
       for (const p of positions) v += p.qty * price(D.S[p.i], t);
+      if (hedge) v += hedge.value;
       return v;
     }
     function closeTrade(p, t, px, reason, tm, k) {
@@ -425,6 +442,7 @@
       const regimeNow = regimeOk(D, t, 1);
       const prov = !!(D.prov && D.prov.t === t);     // market still open: today's prices are not final yet
       const closedToday = [];
+      if (hedge) { hedge.prev = hedge.value; hedge.value *= (1 - (D.spx[t] / D.spx[t - 1] - 1)) * (1 - FIXED.hedgeExp / 252); }
       // ── intraday: prices sampled about every 15 minutes during the session
       const snaps = D.snap && D.snap[t];
       if (snaps && snaps.length) {
@@ -508,6 +526,7 @@
           if (t === to) {
             let eqK = cash;
             for (const p of positions) { const v = px[p.i]; eqK += p.qty * (isNum(v) ? v : isNum(p.lastPx) ? p.lastPx : price(D.S[p.i], t - 1)); }
+            if (hedge) eqK += isNum(sm.spx) && isNum(spPrev) ? hedge.prev * (1 - (sm.spx / spPrev - 1)) : hedge.value;
             intraday.push({ t: tm, eq: round(eqK, 2), spx: isNum(sm.spx) ? sm.spx : null });
           }
         }
@@ -595,6 +614,18 @@
         // with too few trades to judge keeps a small trial budget.
         if (!only && t - lastSelect >= FIXED.selectEvery) {
           lastSelect = t;
+          // selection team check: did its top-10 list of 10 trading days ago beat the whole list of large caps?
+          const t0 = t - 10;
+          if (t0 > 210) {
+            const pool = [];
+            for (const x of D.S) { const c0 = x.c[t0], c1 = x.c[t]; if (!x.e[t0] || !isNum(c0) || !isNum(c1) || c0 <= 0) continue; pool.push({ x, r: c1 / c0 - 1, ok: c0 > x.sma50[t0] && x.sma50[t0] > x.sma200[t0] && isNum(x.rs[t0]) }); }
+            const top = pool.filter((q) => q.ok).sort((a, b) => b.x.rs[t0] - a.x.rs[t0]).slice(0, 10);
+            if (top.length >= 5 && pool.length >= 50) {
+              const avg = (xs) => xs.reduce((a, q) => a + q.r, 0) / xs.length;
+              const aT = avg(top), aA = avg(pool);
+              log(t, 'pick', '종목선정팀 점검', `10거래일 전 상승 추세·상대강도 상위 10종목(${top.map((q) => q.x.s).join(', ')})은 그 뒤 평균 ${pctTxt(aT)}, 대형주 전체는 평균 ${pctTxt(aA)}였습니다. 차이 ${((aT - aA) * 100).toFixed(1)}%p.`, [], { edge: round(aT - aA, 4) });
+            }
+          }
           const res = {};
           for (const k of ['bo', 'pb', 'dt']) {
             const r = simulate(D, { from: Math.max(210, t - FIXED.selectWindow + 1), to: t, capital: 100000, params: P, adaptive: false, only: k });
@@ -692,8 +723,51 @@
       }
       if (t === to) signals.push(...todaySignals);
 
+      // ── risk & hedge team: inverse S&P 500 against the stocks held overnight while the market trend is down
+      if (!only && !prov) {
+        const s = D.spx[t], s50 = D.spx50[t], s200 = D.spx200[t];
+        let H = 0, why = '';
+        if (isNum(s200) && s < s200) { H = P.hedgeK; why = 'S&P 500이 200일 평균선 아래'; }
+        else if (isNum(s50) && s < s50) { H = P.hedgeK * 0.5; why = 'S&P 500이 50일 평균선 아래'; }
+        const eqH = marked(t), ddH = 1 - eqH / Math.max(peak, eqH);
+        if (H > 0 && ddH >= FIXED.ddHalf) { H = Math.min(1, H + 0.25); why += `, 계좌 낙폭 ${(ddH * 100).toFixed(1)}%`; }
+        const longVal = positions.filter((p) => p.pb !== 'dt').reduce((sum, p) => sum + p.qty * price(D.S[p.i], t), 0);
+        let target = H * longVal;
+        if (target < FIXED.hedgeMin) target = 0;
+        const cur = hedge ? hedge.value : 0;
+        const tm = (D.times && D.times[t]) || null;
+        if (target > cur && target - cur > Math.max(FIXED.hedgeMin, FIXED.hedgeBand * cur)) {
+          const amt = target - cur, cost = amt * (1 + FIXED.slip);
+          cash -= cost;
+          const fresh = !hedge;
+          if (!hedge) hedge = { value: 0, prev: 0, t0: t, paid: 0, got: 0, fees: 0, spx0: s };
+          hedge.value += amt; hedge.paid += cost; hedge.ratio = H;
+          hedgeFills.push({ side: 'buy', date: D.dates[t], time: tm, amount: round(cost, 2), spx: round(s, 2), ratio: round(H, 2), why });
+          if (fresh && adaptive) log(t, 'hedge', 'S&P 500 인버스 헷지 시작', `${why}라, 다음 날로 넘기는 보유 주식 $${Math.round(longVal).toLocaleString('en-US')}의 ${Math.round(H * 100)}%만큼 S&P 500이 내리면 오르는 인버스 상품(SH와 같은 −1배)을 삽니다.`, []);
+        } else if (cur > 0 && (target === 0 || cur - target > Math.max(FIXED.hedgeMin, FIXED.hedgeBand * cur))) {
+          const amt = cur - target, gross = amt * (1 - FIXED.slip);
+          const fee = gross > 500 ? Math.ceil(gross * secRate(D.dates[t]) * 100 - 1e-9) / 100 : 0;
+          cash += gross - fee;
+          hedge.value -= amt; hedge.got += gross - fee; hedge.fees += fee; hedge.ratio = H;
+          hedgeFills.push({ side: 'sell', date: D.dates[t], time: tm, amount: round(gross - fee, 2), fee, spx: round(s, 2), ratio: round(H, 2), why: target === 0 ? '하락 추세가 끝나 정리' : why });
+          if (target === 0) {
+            const pnl = hedge.got - hedge.paid, mv = s / hedge.spx0 - 1;
+            hedgeEpisodes.push({ from: D.dates[hedge.t0], to: D.dates[t], pnl: round(pnl, 2), spx: round(mv, 4) });
+            if (adaptive) {
+              push(ev.hedge, pnl > 0 ? 1 : -1, 6);
+              const chg = [], sum = ev.hedge.reduce((a, b) => a + b, 0);
+              let body = `${D.dates[hedge.t0]}부터 들고 있던 인버스 헷지를 정리했습니다. 헷지 손익 ${pnl >= 0 ? '+' : '−'}$${Math.abs(round(pnl, 2)).toLocaleString('en-US')}, 그동안 S&P 500 ${pctTxt(mv)}입니다. 최근 헷지 ${ev.hedge.length}번 중 ${ev.hedge.filter((v) => v > 0).length}번이 하락을 막았습니다.`;
+              if (ev.hedge.length >= 4 && sum <= -2 && P.hedgeK > BOUNDS.hedgeK[0]) { setParam('hedgeK', P.hedgeK - 0.1, chg); ev.hedge = []; body += ' 시장이 다시 오르며 비용만 낸 경우가 많아 헷지 비율을 줄입니다.'; }
+              else if (ev.hedge.length >= 4 && sum >= 2 && P.hedgeK < BOUNDS.hedgeK[1]) { setParam('hedgeK', P.hedgeK + 0.1, chg); ev.hedge = []; body += ' 하락을 막은 경우가 많아 헷지 비율을 늘립니다.'; }
+              log(t, 'hedge', 'S&P 500 인버스 헷지 정리', body, chg);
+            }
+            hedge = null;
+          }
+        }
+      }
+
       const eqEnd = marked(t);
-      const ep = { date: D.dates[t], eq: round(eqEnd, 2), cash: round(cash, 2), n: positions.length, dd: round(1 - eqEnd / Math.max(peak, eqEnd), 4), bench: round(capital * D.spx[t] / D.spx[from], 2) };
+      const ep = { date: D.dates[t], eq: round(eqEnd, 2), cash: round(cash, 2), hedge: hedge ? round(hedge.value, 2) : 0, n: positions.length, dd: round(1 - eqEnd / Math.max(peak, eqEnd), 4), bench: round(capital * D.spx[t] / D.spx[from], 2) };
       if (D.times && D.times[t]) ep.time = D.times[t];
       if (prov) ep.prov = true;
       equity.push(ep);
@@ -701,13 +775,26 @@
     }
 
     const lastT = Math.min(to, T - 1);
+    // selection team: today's strongest large caps in an uptrend, and which ones are ready to buy
+    const watch = [];
+    if (opts.log && !only) {
+      const tt = lastT;
+      for (let i = 0; i < D.S.length; i++) {
+        const x = D.S[i], c = price(x, tt);
+        if (!x.e[tt] || !isNum(c) || !isNum(x.rs[tt]) || !(c > x.sma50[tt]) || !(x.sma50[tt] > x.sma200[tt])) continue;
+        watch.push({ sym: x.s, name: x.n, sec: x.sec, rs: x.rs[tt], ret6m: round(x.ret126[tt], 4), price: round(c, 2),
+          bo: x.dom[tt] >= P.boLookback && x.rs[tt] >= P.rsMin, pb: x.rsi2[tt] < P.pbRsi && x.rs[tt] >= P.pbRsMin, held: positions.some((p) => p.i === i) });
+      }
+      watch.sort((a, b) => b.rs - a.rs || b.ret6m - a.ret6m);
+      watch.length = Math.min(watch.length, 10);
+    }
     const open = positions.map((p) => {
       const x = D.S[p.i], px = price(x, lastT);
       return { id: p.id, sym: x.s, name: x.n, sec: x.sec, pb: p.pb, entryDate: D.dates[p.t0], entry: round(p.fill, 2), qty: p.qty, price: round(px, 2),
         value: round(px * p.qty, 2), pnl: round((px - p.fill) * p.qty - (p.feeIn || 0), 2), pct: round(px / p.fill - 1, 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2), feeBuy: p.feeIn || 0,
         R: round((px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, px - p.stop) * p.qty, 2), et: p.et || null };
     });
-    return { from, to: lastT, capital, equity, trades, open, changes, params: P, scores, mults: M, weights: normW(M), dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState, signals, intraday, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
+    return { from, to: lastT, capital, equity, trades, open, changes, params: P, scores, mults: M, weights: normW(M), dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState, signals, intraday, watch, hedge: hedge ? { value: round(hedge.value, 2), since: D.dates[hedge.t0], paid: round(hedge.paid, 2), got: round(hedge.got, 2), ratio: hedge.ratio, spx0: round(hedge.spx0, 2) } : null, hedgeFills, hedgeEpisodes, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
   }
 
   // ── Robinhood fees for US stocks (fee schedule checked 2026-11-18). No commission. Sells: SEC fee $20.60 per
@@ -774,22 +861,26 @@
     let li = D.dates.findIndex((d) => d >= liveStart);
     const liveReady = li >= 0;
     if (!liveReady) li = T;
-    const bt = simulate(D, { from: bi, to: li - 1, capital, params: DEFAULTS, adaptive: true, log: true });
-    const warm = Object.assign({}, bt.params);
+    // the live account starts from a fixed snapshot of what the past test learned (settings.warm), so that a later
+    // change to the engine does not rewrite the account's starting rules; without a snapshot the test is run here
+    const fw = settings && settings.warm;
+    const bt = fw ? null : simulate(D, { from: bi, to: li - 1, capital, params: DEFAULTS, adaptive: true, log: true });
+    const start = fw ? { params: Object.assign({}, DEFAULTS, fw.params), scores: fw.scores, mults: fw.mults, evidence: fw.evidence } : { params: bt.params, scores: bt.scores, mults: bt.mults, evidence: bt.evidence };
+    const warm = Object.assign({}, start.params);
     let lv = null;
     if (liveReady) {
-      lv = simulate(D, { from: li, to: T - 1, capital, params: warm, scores: bt.scores, mults: bt.mults, evidence: bt.evidence, adaptive: true, log: true });
-      lv.changes.unshift({ date: D.dates[li], t: li, kind: 'start', title: '연습 계좌 시작', body: `시작 자금 $${capital.toLocaleString('en-US')}. 과거 검증(${D.dates[bi]}~${D.dates[li - 1]}) 동안 스스로 고친 규칙에서 출발합니다.`, changes: Object.keys(DEFAULTS).filter((k) => warm[k] !== DEFAULTS[k]).map((k) => ({ key: k, label: LABELS[k], from: DEFAULTS[k], to: warm[k] })) });
+      lv = simulate(D, { from: li, to: T - 1, capital, params: warm, scores: start.scores, mults: start.mults, evidence: start.evidence, adaptive: true, log: true });
+      lv.changes.unshift({ date: D.dates[li], t: li, kind: 'start', title: '연습 계좌 시작', body: `시작 자금 $${capital.toLocaleString('en-US')}. 과거 검증(${D.dates[bi]}~${D.dates[li - 1]}) 동안 스스로 고친 규칙에서 출발합니다.${fw ? ` (출발 상태 고정: ${fw.saved || ''})` : ''}`, changes: Object.keys(DEFAULTS).filter((k) => warm[k] !== DEFAULTS[k]).map((k) => ({ key: k, label: LABELS[k], from: DEFAULTS[k], to: warm[k] })) });
     }
     return {
       D: { dates: D.dates, last: D.dates[T - 1], lastTime: D.times[T - 1] || null, prov: D.prov ? { date: D.dates[D.prov.t], time: D.prov.time } : null, liveDays: D.liveDays, notes: D.notes, symbols: D.S.length },
       regime: regimeText(D, T - 1), spxLast: D.spx[T - 1],
       gate: { ok: regimeOk(D, T - 1, (lv ? lv.params : warm).regimeLevel), level: (lv ? lv.params : warm).regimeLevel, spx: round(D.spx[T - 1], 2), spx50: round(D.spx50[T - 1], 2), spx200: round(D.spx200[T - 1], 2) },
-      bt, live: lv, warm, liveStart, liveStartIdx: li, capital,
+      bt, live: lv, warm, start: fw ? null : { params: bt.params, scores: bt.scores, mults: bt.mults, evidence: bt.evidence }, liveStart, liveStartIdx: li, capital,
     };
   }
 
-  const api = { DEFAULTS, BOUNDS, LABELS, UNITS, FIXED, PB_NAME, prepare, simulate, runAll, regimeText };
+  const api = { DEFAULTS, BOUNDS, LABELS, UNITS, FIXED, PB_NAME, TEAMS, TEAM_OF, prepare, simulate, runAll, regimeText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PaperEngine = api;
 })(typeof self !== 'undefined' ? self : this);

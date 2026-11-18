@@ -18,7 +18,10 @@ if (fs.existsSync('data/intraday')) for (const f of fs.readdirSync('data/intrada
   const m = /^(\d{4}-\d{2}-\d{2})\.json$/.exec(f);
   if (m && m[1] >= (settings.liveStart || '')) intra[m[1]] = readJSON(`data/intraday/${f}`, null);
 }
-const res = E.runAll(seed, Object.assign({}, live, { days }), settings, intra);
+// the live account's starting state is saved once (data/warm.json) and reused, so engine changes keep its start
+const warm = readJSON('data/warm.json', null);
+const res = E.runAll(seed, Object.assign({}, live, { days }), warm ? Object.assign({}, settings, { warm }) : settings, intra);
+if (!warm && res.start) fs.writeFileSync('data/warm.json', JSON.stringify(Object.assign({ saved: new Date().toISOString().slice(0, 10) }, res.start)));
 const fin = (st) => Object.fromEntries(Object.entries(st || {}).map(([k, v]) => [k, typeof v === 'number' && !Number.isFinite(v) ? null : v]));
 const lv = res.live;
 // fills: every buy and sell, newest first (a trade still open has only its buy)
@@ -30,6 +33,8 @@ if (lv) {
       fee: t.feeSell ? t.feeSell.total : 0, feeDetail: t.feeSell || null, pnl: t.pnl, pct: t.pct, R: t.R, reason: t.reason, days: t.days });
   }
   for (const p of lv.open) orders.push({ side: 'buy', id: p.id, date: p.entryDate, time: p.et || null, sym: p.sym, name: p.name, pb: p.pb, qty: p.qty, price: p.entry, fee: p.feeBuy || 0, open: true });
+  (lv.hedgeFills || []).forEach((h, k) => orders.push({ side: h.side, id: 'h' + k, date: h.date, time: h.time || null, sym: 'SH', name: 'S&P 500 인버스(−1배) 헷지', pb: 'hedge',
+    amount: h.amount, fee: h.fee || 0, spx: h.spx, ratio: h.ratio, why: h.why }));
   const key = (o) => `${o.date} ${o.time || '16:00'} ${o.side === 'sell' ? 1 : 0} ${String(o.id).padStart(6, '0')}`;
   orders.sort((a, b) => (key(a) < key(b) ? 1 : -1));
 }
@@ -39,17 +44,40 @@ if (lv) lv.equity.forEach((e, k) => {
   const prev = k ? lv.equity[k - 1] : { eq: res.capital, bench: res.capital };
   daily.push({ date: e.date, time: e.time || null, prov: !!e.prov, eq: e.eq, pnl: Math.round((e.eq - prev.eq) * 100) / 100, pct: e.eq / prev.eq - 1, bench: e.bench / prev.bench - 1 });
 });
-// by playbook
+// by playbook (and the hedge)
 const byPb = {};
+if (lv) {
+  const ep = lv.hedgeEpisodes || [];
+  const open = lv.hedge ? lv.hedge.value + lv.hedge.got - lv.hedge.paid : 0;
+  byPb.hedge = { n: ep.length, wins: ep.filter((e) => e.pnl > 0).length, pnl: Math.round((ep.reduce((a, e) => a + e.pnl, 0)) * 100) / 100, open: Math.round(open * 100) / 100 };
+}
 if (lv) for (const t of lv.trades) {
   const b = (byPb[t.pb] = byPb[t.pb] || { n: 0, wins: 0, pnl: 0, fees: 0 });
   b.n++; if (t.pnl > 0) b.wins++; b.pnl = Math.round((b.pnl + t.pnl) * 100) / 100; b.fees = Math.round((b.fees + (t.fee || 0)) * 100) / 100;
+}
+// what each of the four teams is doing: its rules (changed ones marked), its latest corrections, and its own view
+function teamsView(lv) {
+  const P = lv.params, own = (team) => Object.keys(E.TEAM_OF).filter((k) => E.TEAM_OF[k] === team)
+    .map((k) => ({ key: k, label: E.LABELS[k], unit: E.UNITS[k], value: P[k], start: E.DEFAULTS[k], changed: P[k] !== E.DEFAULTS[k] }));
+  const logs = (team) => lv.changes.filter((c) => c.kind !== 'start' && (c.teams || []).includes(team)).slice(-8).reverse()
+    .map((c) => ({ date: c.date, kind: c.kind, title: c.title, body: c.body, changes: c.changes }));
+  const day = res.D.last;
+  return {
+    select: { name: E.TEAMS.select, rules: own('select'), log: logs('select'), watch: lv.watch || [] },
+    entry: { name: E.TEAMS.entry, rules: own('entry'), log: logs('entry'), mults: lv.mults, dtPaused: lv.dtPaused,
+      buysToday: lv.trades.filter((t) => t.entryDate === day).length + lv.open.filter((p) => p.entryDate === day).length },
+    exit: { name: E.TEAMS.exit, rules: own('exit'), log: logs('exit'), sellsToday: lv.trades.filter((t) => t.exitDate === day).length,
+      watching: lv.open.length, nearest: lv.open.length ? lv.open.map((p) => ({ sym: p.sym, gap: p.price > 0 ? p.price / p.stop - 1 : null })).sort((a, b) => a.gap - b.gap)[0] : null },
+    risk: { name: E.TEAMS.risk, rules: own('risk'), log: logs('risk'), gate: res.gate, regime: res.regime, hedge: lv.hedge, risk: lv.risk },
+  };
 }
 const state = {
   v: 2, built: new Date().toISOString(),
   asOf: { date: res.D.last, time: res.D.lastTime, prov: !!res.D.prov },
   regime: res.regime, gate: res.gate, capital: res.capital, liveStart: res.liveStart,
-  account: lv ? { equity: lv.equity, intraday: lv.intraday, open: lv.open, stats: fin(lv.stats), mults: lv.mults, dtPaused: lv.dtPaused, risk: lv.risk } : null,
+  account: lv ? { equity: lv.equity, intraday: lv.intraday, open: lv.open, stats: fin(lv.stats), mults: lv.mults, dtPaused: lv.dtPaused, risk: lv.risk,
+    hedge: lv.hedge, hedgeFees: Math.round((lv.hedgeFills || []).reduce((a, h) => a + (h.fee || 0), 0) * 100) / 100 } : null,
+  teams: lv ? teamsView(lv) : null,
   orders, daily, byPb,
   data: { liveBuilt: live.built || null, sources: readJSON('data/source.json', null) },
 };
