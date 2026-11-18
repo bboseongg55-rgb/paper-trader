@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'session | collect-now | nightly | rebuild | probe'
+        description: 'session | collect-now | nightly | rebuild | probe | probe-assets'
         required: true
         default: session
 permissions:
@@ -40,6 +40,9 @@ jobs:
       - name: Probe price sources
         if: steps.mode.outputs.mode == 'probe'
         run: node tools/probe.mjs
+      - name: Probe sources for bonds, currencies, futures, options and crypto
+        if: steps.mode.outputs.mode == 'probe-assets'
+        run: node tools/probe_assets.mjs
       - name: Collect once now
         if: steps.mode.outputs.mode == 'collect-now'
         run: node tools/collect.mjs --force
@@ -53,10 +56,10 @@ jobs:
           python3 tools/feed_live.py /tmp/uss /tmp/letf /tmp/feed.json $SINCE $AFTER
           node tools/merge_feed.mjs /tmp/feed.json
       - name: Run the engine and save
-        if: steps.mode.outputs.mode != 'session' && steps.mode.outputs.mode != 'probe'
+        if: steps.mode.outputs.mode != 'session' && steps.mode.outputs.mode != 'probe' && steps.mode.outputs.mode != 'probe-assets'
         run: |
           node tools/run.mjs
           bash tools/save.sh "${{ steps.mode.outputs.mode }}"
       - name: Save probe
-        if: steps.mode.outputs.mode == 'probe'
+        if: steps.mode.outputs.mode == 'probe' || steps.mode.outputs.mode == 'probe-assets'
         run: bash tools/save.sh probe
