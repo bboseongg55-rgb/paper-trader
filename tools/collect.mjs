@@ -106,6 +106,10 @@ for (const [s, v] of q) {
   fresh++; freshQ.set(s, v);
 }
 log.fresh = fresh; log.stale = stale;
+{ // how old the quotes are (minutes since each stock's last trade): about 0 means real-time, about 15 means delayed
+  const ages = [...freshQ.values()].map((v) => (Date.now() - Date.parse(v.time)) / 60000).filter((a) => Number.isFinite(a)).sort((a, b) => a - b);
+  if (ages.length) log.ageMin = Math.round(ages[ages.length >> 1] * 10) / 10;
+}
 if (fresh < 50 && freshQ.size < Math.max(1, held.length)) {
   log.skip = '새 가격 없음';
   saveLog(); out({ changed: false, ...log }); process.exit(0);
