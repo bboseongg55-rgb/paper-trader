@@ -97,6 +97,19 @@ if (heldMissing.length && cfg.held) {
 }
 let idx = null;
 if (cfg.index) { try { idx = await S.indexLevel(cfg.index); } catch (e) { log.indexErr = String(e.message || e).slice(0, 200); } }
+// bonds: government bond yields, their currencies and bond ETF prices (the engine builds the bond indexes from them);
+// a failure here never stops the collection
+let bx = null;
+if (cfg.index) {
+  try {
+    const B = (await import('node:module')).createRequire(import.meta.url)('../bonds.js');
+    const syms = [...B.GOV.map((g) => g[0]), ...B.FX, ...B.ETF.map((e) => e[0])];
+    const m = await S.indexLevels(cfg.index, syms);
+    const pick = (list) => Object.fromEntries(list.map((s) => [s, m.get(s)]).filter(([, v]) => v && Number.isFinite(v.px) && (!v.time || tradeDate(v.time) === today)).map(([s, v]) => [s, v.px]));
+    bx = { y: pick(B.GOV.map((g) => g[0])), fx: pick(B.FX), etf: pick(B.ETF.map((e) => e[0])) };
+    log.bx = { y: Object.keys(bx.y).length, fx: Object.keys(bx.fx).length, etf: Object.keys(bx.etf).length };
+  } catch (e) { log.bxErr = String(e.message || e).slice(0, 200); }
+}
 // Nasdaq 100 and Dow Jones levels for the page's comparison chart; a failure here never stops the collection
 const IXS = { ndx: '.NDX', dji: '.DJI' };
 let ixNow = null, ixPrev = null;
@@ -174,6 +187,7 @@ const final = now.hm >= finalFrom && Object.keys(rows).length >= 300;   // a clo
 const idxOk = idx && idx.px > 0 && (!idx.time || tradeDate(idx.time) === today);
 const row = { date: today, spx: idxOk ? r2(idx.px) : null, rows, src: 'intraday', t: now.hm, final };
 if (ixNow) row.ix = ixNow;
+if (bx && (Object.keys(bx.y).length || Object.keys(bx.fx).length || Object.keys(bx.etf).length)) row.bx = bx;
 if (final) { upsert(row); log.final = true; } else { writeJSON('data/today.json', row); changed = true; }
 log.rows = Object.keys(rows).length;
 

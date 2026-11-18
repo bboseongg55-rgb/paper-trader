@@ -30,23 +30,25 @@
     dtMinUp: 1.0,       // day trade: up at least this % on the day
     dtRsMin: 70,        // day trade: 6-month return rank
     hedgeK: 0.5,        // hedge: inverse S&P 500 worth this share of the stocks held overnight when the S&P 500 is below its 200-day average
+    stopK_bd: 3.0,      // bonds: stop = entry − k × daily price swing, trailing from the highest close
+    lev: 1.0,           // leverage: buying power up to this many times the account value (margin interest on what is borrowed)
   };
   const BOUNDS = {
     stopK_bo: [1.5, 3.5], stopK_pb: [1.5, 3.5], trailK: [2.0, 4.5], boLookback: [20, 120], rsMin: [50, 90],
     pbRsMin: [60, 95], pbRsi: [3, 20], regimeLevel: [0, 3], maxPosW: [0.08, 0.20],
-    timeStop_bo: [10, 60], timeStop_pb: [4, 20], holdK: [0, 3], dtStopK: [0.4, 1.5], dtMinUp: [0.5, 3], dtRsMin: [50, 90], hedgeK: [0, 1],
+    timeStop_bo: [10, 60], timeStop_pb: [4, 20], holdK: [0, 3], dtStopK: [0.4, 1.5], dtMinUp: [0.5, 3], dtRsMin: [50, 90], hedgeK: [0, 1], stopK_bd: [2, 5], lev: [1, 2],
   };
   const LABELS = {
     stopK_bo: '돌파 매매 손절 폭', stopK_pb: '눌림목 매매 손절 폭', trailK: '추적 손절 폭',
     boLookback: '돌파 기준 기간', rsMin: '돌파 매매 최소 상대강도', pbRsMin: '눌림목 매매 최소 상대강도',
     pbRsi: '눌림목 과매도 기준', regimeLevel: '시장 필터 단계', maxPosW: '종목당 최대 비중',
     timeStop_bo: '돌파 매매 기다리는 기간', timeStop_pb: '눌림목 매매 최대 보유', holdK: '크게 오른 종목 추가 추적 폭',
-    dtStopK: '단타 손절 폭', dtMinUp: '단타 최소 당일 상승률', dtRsMin: '단타 최소 상대강도', hedgeK: '하락장 헷지 비율',
+    dtStopK: '단타 손절 폭', dtMinUp: '단타 최소 당일 상승률', dtRsMin: '단타 최소 상대강도', hedgeK: '하락장 헷지 비율', stopK_bd: '채권 손절 폭', lev: '최대 레버리지',
   };
   const UNITS = {
     stopK_bo: '변동폭 ×', stopK_pb: '변동폭 ×', trailK: '변동폭 ×', boLookback: '거래일', rsMin: '백분위',
     pbRsMin: '백분위', pbRsi: 'RSI(2) 미만', regimeLevel: '단계', maxPosW: '%',
-    timeStop_bo: '거래일', timeStop_pb: '거래일', holdK: '변동폭 ×', dtStopK: '하루 변동폭 ×', dtMinUp: '%', dtRsMin: '백분위', hedgeK: '× 보유 주식',
+    timeStop_bo: '거래일', timeStop_pb: '거래일', holdK: '변동폭 ×', dtStopK: '하루 변동폭 ×', dtMinUp: '%', dtRsMin: '백분위', hedgeK: '× 보유 주식', stopK_bd: '변동폭 ×', lev: '× 계좌 금액',
   };
   // Fixed risk rules (never changed by the system)
   const FIXED = {
@@ -61,16 +63,22 @@
     // close; it moves only when the target differs by more than $1,000 and 20%
     hedgeExp: 0.0089, hedgeMin: 1000, hedgeBand: 0.2,
     selectEvery: 20, selectWindow: 120, selectMinTrades: 5, selectTrialM: 0.25, selectTiers: [1, 0.5, 0.17], selectLoserM: 0.17,
+    // bonds: at most 4 at a time, bought at the close while the bond's total-return index is above its 100-day average
+    // and up over 63 trading days (ranked by that return over its volatility)
+    bdMax: 4,
+    // margin (Robinhood, checked 2026-11-18): yearly rate by amount borrowed, on the whole balance, charged per calendar
+    // day at rate / 360; under $1 borrowed is rounding and costs nothing
+    marginRates: [[50000, 0.05], [100000, 0.048], [1e9, 0.045]], marginMin: 1,
     dailyLossStop: 0.025, ddHalf: 0.08, ddStop: 0.15, ddResume: 0.10,
     cooldown: 10, cooldownGap: 30, reviewDays: 10,
     validateEvery: 20, validateWindow: 120, validateMargin: 0.03, minValue: 0.005,
   };
-  const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타' };
+  const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세' };
   // the four teams and the rules each one owns
   const TEAMS = { select: '종목선정팀', entry: '매수팀', exit: '매도팀', risk: '리스크·헷지팀' };
   const TEAM_OF = { rsMin: 'select', pbRsMin: 'select', dtRsMin: 'select', boLookback: 'select', pbRsi: 'entry', dtMinUp: 'entry',
     stopK_bo: 'exit', stopK_pb: 'exit', trailK: 'exit', holdK: 'exit', timeStop_bo: 'exit', timeStop_pb: 'exit', dtStopK: 'exit',
-    regimeLevel: 'risk', maxPosW: 'risk', hedgeK: 'risk' };
+    regimeLevel: 'risk', maxPosW: 'risk', hedgeK: 'risk', stopK_bd: 'exit', lev: 'risk' };
   function teamsOf(kind, chg) {
     const ts = [...new Set((chg || []).map((g) => TEAM_OF[g.key] || (/^m_/.test(g.key) ? 'risk' : null)).filter(Boolean))];
     if (ts.length) return ts;
@@ -88,7 +96,7 @@
   const companyKey = (n) => String(n || '').toLowerCase().replace(/\b(class [a-c]|common stock|ordinary shares?|inc\.?|corp(oration)?\.?|ltd\.?|plc|n\.?v\.?|s\.?a\.?|holdings?|co\.?|the)\b/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 3).join(' ');
   // intra: {DATE: {syms: [...], snaps: [{t: 'HH:MM', spx, p: [prices in syms order]}]}} raw prices sampled during the
   // session (also accepts the older [{t, px: {SYM: price}}] form)
-  function prepare(seed, live, intra) {
+  function prepare(seed, live, intra, extra) {
     const dates = seed.dates.slice();
     const times = [];
     const splitAdj = [];
@@ -156,6 +164,16 @@
       spx[t] = spx[t - 1] * (1 + (den ? num / den : 0));
       notes.push({ date: dates[t], spxProxy: true });
     }
+    // other instruments (bonds) on the same days: after the stocks, and outside every stock rule (eligible = 0)
+    const bond0 = S.length;
+    if (extra && typeof extra.instruments === 'function') {
+      for (const ins of extra.instruments(dates) || []) {
+        if (!ins || !ins.s || bySym.has(ins.s) || !Array.isArray(ins.c) || ins.c.length !== dates.length) continue;
+        bySym.set(ins.s, S.length);
+        S.push({ s: ins.s, n: ins.n || ins.s, sec: ins.sec || '채권', kind: ins.kind || 'bond', syn: !!ins.syn, ccy: ins.ccy || null,
+          c: ins.c.map((v) => (isNum(v) && v > 0 ? v : NaN)), e: new Array(dates.length).fill(0), yld: Array.isArray(ins.y) ? ins.y : null });
+      }
+    }
     // the last day is provisional while the market is still open (prices from the latest intraday snapshot)
     const lastDay = days[days.length - 1];
     const prov = lastDay && lastDay.src === 'intraday' && !lastDay.final && dates[dates.length - 1] === lastDay.date
@@ -186,7 +204,7 @@
       }
       for (const a of splitAdj) { const i = symIdx.get(a.sym); for (let j = 0; j < a.t; j++) if (snap[j]) for (const sm of snap[j]) { if (isNum(sm.px[i])) sm.px[i] *= a.factor; if (sm.hi && isNum(sm.hi[i])) sm.hi[i] *= a.factor; } }
     }
-    const D = { dates, spx, S, notes, liveDays: days.length, snap, times, prov, splits: splitAdj.map((a) => ({ sym: a.sym, t: a.t, date: dates[a.t], factor: a.factor })) };
+    const D = { dates, spx, S, notes, liveDays: days.length, snap, times, prov, bond0, splits: splitAdj.map((a) => ({ sym: a.sym, t: a.t, date: dates[a.t], factor: a.factor })) };
     indicators(D);
     return D;
   }
@@ -241,6 +259,11 @@
         x.rsi2[t] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
       }
       x.f = f;
+      if (x.kind === 'bond') {         // bonds: a slower trend (100 days) and three-month momentum
+        x.sma100 = sma(f, 100);
+        x.ret63 = new Float64Array(T).fill(NaN);
+        for (let t = 63; t < T; t++) if (isNum(f[t]) && isNum(f[t - 63])) x.ret63[t] = f[t] / f[t - 63] - 1;
+      }
     }
     // relative strength percentile among the day's eligible stocks
     for (const x of D.S) x.rs = new Uint8Array(T);
@@ -302,12 +325,15 @@
     const cool = new Map();                         // symbol index → first day it may be bought again
     const scores = Object.assign({ bo: 0, pb: 0, dt: 0 }, (BS ? BS.scores : opts.scores) || {});
     // share of the normal 1-trade risk each playbook may use, set by the strategy tournament
-    let M = Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM }, (BS ? BS.M : opts.mults) || {});
+    let M = Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM, bd: FIXED.selectTrialM }, (BS ? BS.M : opts.mults) || {});
     const riskMul = (k) => M[k];
     const only = opts.only || null;                               // tournament runs: one playbook alone
     let lastSelect = -1e9, dtPausedUntil = -1, dtCount = 0;
     let streak = 0, blockUntil = -1, ddStopOn = false, lastMarketLoss = -1e9, lastValidate = from, prevEq = capital;
     let riskState = { mult: 1, why: [], blocked: [] }, lastRiskKey = '1|0';
+    let mInt = 0;                                   // margin interest paid
+    const isBond = (i) => D.S[i].kind === 'bond';
+    const bpow = (eq) => Math.max(0, cash + (P.lev - 1) * eq);   // buying power: cash, plus margin when leverage is allowed
     const ev0 = BS ? BS.ev : opts.evidence;
     const ev = Object.assign({ fake: [], pb: [], gap: [], mkt: [], noise_bo: [], noise_pb: [], tbo: [], tpb: [], trail: [], hold: [], dtq: [], dtf: [], hedge: [] }, ev0 ? JSON.parse(JSON.stringify(ev0)) : {});
     ev.mkt = BS ? (BS.ev.mkt || []).map((v) => tc + v) : [];      // day indexes carry over only from a book
@@ -318,7 +344,7 @@
       cash = BS.cash; peak = BS.peak; idSeq = BS.idSeq; prevEq = BS.prevEq;
       lastSelect = at(BS.lastSelect); dtPausedUntil = at(BS.dtPausedUntil); dtCount = BS.dtCount; streak = BS.streak;
       blockUntil = at(BS.blockUntil); ddStopOn = BS.ddStopOn; lastMarketLoss = at(BS.lastMarketLoss); lastValidate = at(BS.lastValidate);
-      riskState = JSON.parse(JSON.stringify(BS.riskState)); lastRiskKey = BS.lastRiskKey;
+      riskState = JSON.parse(JSON.stringify(BS.riskState)); lastRiskKey = BS.lastRiskKey; mInt = BS.mInt || 0;
       const need = (s) => { const k = symIdx(s); if (k == null) throw new Error('book symbol missing from the price data: ' + s); return k; };
       for (const p of BS.positions) { const q = Object.assign({}, p, { i: need(p.sym), t0: at(p.t0) }); delete q.sym; positions.push(q); }
       for (const r of BS.reviews) reviews.push({ due: at(r.due), tr: r.tr, i: need(r.sym) });
@@ -367,7 +393,7 @@
     function closeTrade(p, t, px, reason, tm, k) {
       const x = D.S[p.i];
       const fill = px * (1 - FIXED.slip);
-      const fs = sellFee(p.qty, fill, D.dates[t]);
+      const fs = x.syn ? { sec: 0, taf: 0, cat: 0, total: 0 } : sellFee(p.qty, fill, D.dates[t]);
       cash += p.qty * fill - fs.total;
       const R = (fill - p.fill) / p.R1;
       const tr = {
@@ -397,7 +423,7 @@
         const dtFade = tr.pb === 'dt' && tr.R < 0 && tr.reason.indexOf('장 마감') >= 0;
         const isFake = tr.pb === 'bo' && tr.R < 0 && tr.reason.startsWith('손절') && tr.days <= 7 && tr.mfeR < 0.5;
         const isGap = tr.R <= -1.5;
-        const isMkt = tr.R <= -0.8 && tr.idx <= -0.03;
+        const isMkt = tr.pb !== 'bd' && tr.R <= -0.8 && tr.idx <= -0.03;
         if (tr.pb === 'bo') push(ev.fake, isFake, 12); else if (tr.pb === 'pb') push(ev.pb, tr.R < 0, 12);
         else { push(ev.dtq, dtQuick, 10); push(ev.dtf, dtFade, 10); }
         push(ev.gap, isGap, 20);
@@ -413,7 +439,7 @@
           if (tr.reason.startsWith('시간') && !diag.length) diag.push('기한 안에 오르지 못해 작은 손실로 정리했습니다.');
           if (!diag.length) diag.push(`손실 ${tr.R}R은 손절 계획 안에서 끝난 보통 손실입니다.`);
           cool.set(si, Math.max(cool.get(si) || 0, t + (isGap ? FIXED.cooldownGap : tr.pb === 'dt' ? FIXED.dtCooldown : FIXED.cooldown)));
-          if (tr.pb !== 'dt' && tr.reason.indexOf('손절') >= 0) reviews.push({ due: t + FIXED.reviewDays, tr, i: si });
+          if (tr.pb !== 'dt' && tr.pb !== 'bd' && tr.reason.indexOf('손절') >= 0) reviews.push({ due: t + FIXED.reviewDays, tr, i: si });
           // a stop-out after a long wait without progress counts against the waiting period
           const longWait = tr.reason.startsWith('손절') && tr.mfeR < 0.5 && (tr.pb === 'bo' ? tr.days >= Math.round(P.timeStop_bo * 0.6) : tr.pb === 'pb' && tr.days >= Math.max(3, Math.round(P.timeStop_pb * 0.6)));
           if (longWait) { diag.push(`${tr.days}거래일 동안 오르지 못하다 손절됐습니다. 기다리는 기간이 길었던 경우로 셉니다.`); timeEvidence(tr.pb, -1, chg, evid); }
@@ -483,6 +509,12 @@
       const prov = !!(D.prov && D.prov.t === t);     // market still open: today's prices are not final yet
       const closedToday = [];
       if (hedge) { hedge.prev = hedge.value; hedge.value *= (1 - (D.spx[t] / D.spx[t - 1] - 1)) * (1 - FIXED.hedgeExp / 252); }
+      if (cash < -FIXED.marginMin && t > 0) {       // margin interest for the calendar days since the last trading day
+        const owed = -cash, rate = FIXED.marginRates.find((r) => owed <= r[0])[1];
+        const days = Math.max(1, Math.round((Date.parse(D.dates[t] + 'T12:00:00Z') - Date.parse(D.dates[t - 1] + 'T12:00:00Z')) / 864e5));
+        const due = owed * rate / 360 * days;
+        cash -= due; mInt += due;
+      }
       // ── intraday: prices sampled about every 15 minutes during the session
       const snaps = D.snap && D.snap[t];
       if (snaps && snaps.length) {
@@ -547,7 +579,7 @@
                 const perShare = fill - stop;
                 const risk = prevEq * FIXED.riskPct * FIXED.dtRiskMult * riskState.mult * riskMul('dt');
                 let qty = Math.floor(risk / perShare);
-                qty = Math.min(qty, Math.floor((P.maxPosW * prevEq) / fill), Math.floor(cash / fill));
+                qty = Math.min(qty, Math.floor((P.maxPosW * prevEq) / fill), Math.floor(bpow(prevEq) / fill));
                 if (heat + qty * perShare > FIXED.heatMax * prevEq) qty = Math.floor(Math.max(0, FIXED.heatMax * prevEq - heat) / perShare);
                 if (qty < 1 || qty * fill < FIXED.minValue * prevEq) continue;
                 const feeIn = catFee(qty);
@@ -589,11 +621,13 @@
         p.maxC = Math.max(p.maxC, px);
         p.mfeR = Math.max(p.mfeR, (px - p.fill) / p.R1);
         let reason = null;
-        if (px <= p.stop) reason = p.stop > p.stop0 + 1e-9 ? (px >= p.fill ? '추적 손절(이익 보호)' : '추적 손절') : '손절';
+        if (px <= p.stop) reason = (p.pb === 'bd' ? '채권 ' : '') + (p.stop > p.stop0 + 1e-9 ? (px >= p.fill ? '추적 손절(이익 보호)' : '추적 손절') : '손절');
+        else if (p.pb === 'bd' && isNum(x.sma100[t]) && px < x.sma100[t]) reason = '채권 추세 이탈(100일 평균 아래)';
         else if (p.pb === 'pb' && px > x.sma5[t] && t > p.t0) reason = '반등 청산';
         else if (p.pb === 'pb' && t - p.t0 >= P.timeStop_pb) reason = '시간 청산';
         else if (p.pb === 'bo' && t - p.t0 >= P.timeStop_bo && p.mfeR < 0.5) reason = '시간 손절';
         if (reason) { closedToday.push(closeTrade(p, t, px, reason)); continue; }
+        if (p.pb === 'bd') p.stop = Math.max(p.stop, p.maxC - P.stopK_bd * p.atr);
         if (p.pb === 'bo') {   // trailing stop moves up only; wider once the trade has made +3R, to ride the trend
           const base = regimeNow ? P.trailK : Math.min(P.trailK, 2.0);
           const k = p.mfeR >= FIXED.holdFromR ? base + P.holdK : base;
@@ -667,7 +701,7 @@
             }
           }
           const res = {};
-          for (const k of ['bo', 'pb', 'dt']) {
+          for (const k of ['bo', 'pb', 'dt', 'bd']) {
             const r = simulate(D, { from: Math.max(210, t - FIXED.selectWindow + 1), to: t, capital: 100000, params: P, adaptive: false, only: k });
             res[k] = { ret: r.stats.ret, mdd: r.stats.mdd, n: r.stats.n };
           }
@@ -676,7 +710,7 @@
             const lvl = (m) => (m >= 0.99 ? '정상 위험' : m >= 0.45 ? '절반 위험' : m === FIXED.selectTrialM ? '1/4 위험(시험)' : '1/6 위험');
             const chg = Object.keys(M).filter((k) => Math.abs(next[k] - M[k]) >= 0.005).map((k) => ({ key: 'm_' + k, label: `${PB_NAME[k]} 1회 위험`, from: Math.round(M[k] * 100) + '%', to: Math.round(next[k] * 100) + '%' }));
             const line = (k) => (res[k].n < FIXED.selectMinTrades ? `${PB_NAME[k]} 표본 부족(${res[k].n}건)` : `${PB_NAME[k]} ${pctTxt(res[k].ret)}(최대 낙폭 ${(res[k].mdd * 100).toFixed(1)}%, ${res[k].n}건)`);
-            log(t, 'budget', '전략 선택: 위험 예산 재배분', `최근 ${FIXED.selectWindow}거래일 동안 방법별로 따로 돌려 본 결과는 ${['bo', 'pb', 'dt'].map(line).join(', ')}입니다. 수익을 최대 낙폭으로 나눈 값으로 순위를 매겨 ${['bo', 'pb', 'dt'].map((k) => `${PB_NAME[k]}은 ${lvl(next[k])}`).join(', ')}으로 매매합니다.`, chg);
+            log(t, 'budget', '전략 선택: 위험 예산 재배분', `최근 ${FIXED.selectWindow}거래일 동안 방법별로 따로 돌려 본 결과는 ${['bo', 'pb', 'dt', 'bd'].map(line).join(', ')}입니다. 수익을 최대 낙폭으로 나눈 값으로 순위를 매겨 ${['bo', 'pb', 'dt', 'bd'].map((k) => `${PB_NAME[k]}은 ${lvl(next[k])}`).join(', ')}으로 매매합니다.`, chg);
             M = next;
           }
         }
@@ -741,7 +775,7 @@
           todaySignals.push(sig);
           if (prov) { sig.why = '장 마감 무렵 다시 판단'; continue; }
           if (opened >= FIXED.maxNewPerDay) { sig.why = `하루 신규 ${FIXED.maxNewPerDay}종목 한도`; continue; }
-          if (positions.filter((p) => p.pb !== 'dt').length >= FIXED.maxPositions) { sig.why = `보유 ${FIXED.maxPositions}종목 한도`; continue; }
+          if (positions.filter((p) => p.pb === 'bo' || p.pb === 'pb').length >= FIXED.maxPositions) { sig.why = `보유 ${FIXED.maxPositions}종목 한도`; continue; }
           if (positions.filter((p) => D.S[p.i].sec === x.sec).length >= FIXED.sectorMax) { sig.why = `같은 업종 ${FIXED.sectorMax}종목 한도`; continue; }
           const atr = x.vol[t] * c;
           const fill = c * (1 + FIXED.slip);
@@ -750,15 +784,45 @@
           const perShare = fill - stop;
           const risk = eq * FIXED.riskPct * mult * riskMul(cd.pb);
           let qty = Math.floor(risk / perShare);
-          qty = Math.min(qty, Math.floor((P.maxPosW * eq) / fill), Math.floor(cash / fill));
+          qty = Math.min(qty, Math.floor((P.maxPosW * eq) / fill), Math.floor(bpow(eq) / fill));
           if (heat + qty * perShare > FIXED.heatMax * eq) qty = Math.floor(Math.max(0, FIXED.heatMax * eq - heat) / perShare);
-          if (qty < 1 || qty * fill < FIXED.minValue * eq) { sig.why = cash < fill ? '현금 부족' : '위험 한도(열린 위험 6%) 소진'; continue; }
+          if (qty < 1 || qty * fill < FIXED.minValue * eq) { sig.why = bpow(eq) < fill ? (P.lev > 1 ? '매수 여력(레버리지 포함) 부족' : '현금 부족') : '위험 한도(열린 위험 6%) 소진'; continue; }
           const feeIn = catFee(qty);
           cash -= qty * fill + feeIn;
           heat += qty * perShare;
           positions.push({ id: ++idSeq, i: cd.i, pb: cd.pb, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn });
           sig.taken = true; sig.qty = qty; sig.stop = round(stop, 2);
           opened++;
+        }
+      }
+      if (!blocked.length && !prov && (!only || only === 'bd') && D.bond0 != null && D.bond0 < D.S.length) {
+        const held = new Set(positions.map((p) => p.i));
+        let nb = positions.filter((p) => p.pb === 'bd').length;
+        if (nb < FIXED.bdMax) {
+          const cands = [];
+          for (let i = D.bond0; i < D.S.length; i++) {
+            const x = D.S[i], c = x.c[t];
+            if (held.has(i) || (cool.get(i) || 0) > t || !isNum(c) || !isNum(x.sma100[t]) || !isNum(x.ret63[t]) || !isNum(x.vol[t]) || x.vol[t] <= 0) continue;
+            if (c > x.sma100[t] && x.ret63[t] > 0) cands.push({ i, score: x.ret63[t] / (x.vol[t] * Math.sqrt(63)) });
+          }
+          cands.sort((a, b) => b.score - a.score);
+          const eq = marked(t);
+          let heat = positions.reduce((s2, p) => s2 + Math.max(0, (p.fill - p.stop)) * p.qty, 0);
+          for (const cd of cands) {
+            if (nb >= FIXED.bdMax) break;
+            const x = D.S[cd.i], c = x.c[t];
+            const atr = x.vol[t] * c, fill = c * (1 + FIXED.slip), stop = fill - P.stopK_bd * atr, perShare = fill - stop;
+            let qty = Math.floor((eq * FIXED.riskPct * riskState.mult * riskMul('bd')) / perShare);
+            qty = Math.min(qty, Math.floor((P.maxPosW * eq) / fill), Math.floor(bpow(eq) / fill));
+            if (heat + qty * perShare > FIXED.heatMax * eq) qty = Math.floor(Math.max(0, FIXED.heatMax * eq - heat) / perShare);
+            if (qty < 1 || qty * fill < FIXED.minValue * eq) continue;
+            const feeIn = x.syn ? 0 : catFee(qty);
+            cash -= qty * fill + feeIn;
+            heat += qty * perShare;
+            positions.push({ id: ++idSeq, i: cd.i, pb: 'bd', t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn });
+            if (t === to) todaySignals.push({ sym: x.s, name: x.n, pb: 'bd', rs: null, price: round(c, 2), taken: true, why: '', qty, stop: round(stop, 2) });
+            nb++;
+          }
         }
       }
       if (t === to) signals.push(...todaySignals);
@@ -771,11 +835,12 @@
         else if (isNum(s50) && s < s50) { H = P.hedgeK * 0.5; why = 'S&P 500이 50일 평균선 아래'; }
         const eqH = marked(t), ddH = 1 - eqH / Math.max(peak, eqH);
         if (H > 0 && ddH >= FIXED.ddHalf) { H = Math.min(1, H + 0.25); why += `, 계좌 낙폭 ${(ddH * 100).toFixed(1)}%`; }
-        const longVal = positions.filter((p) => p.pb !== 'dt').reduce((sum, p) => sum + p.qty * price(D.S[p.i], t), 0);
+        const longVal = positions.filter((p) => p.pb === 'bo' || p.pb === 'pb').reduce((sum, p) => sum + p.qty * price(D.S[p.i], t), 0);
         let target = H * longVal;
         if (target < FIXED.hedgeMin) target = 0;
         const cur = hedge ? hedge.value : 0;
         const tm = (D.times && D.times[t]) || null;
+        // the hedge may be bought on margin when cash runs short (it lowers the account's risk); the loan pays margin interest
         if (target > cur && target - cur > Math.max(FIXED.hedgeMin, FIXED.hedgeBand * cur)) {
           const amt = target - cur, cost = amt * (1 + FIXED.slip);
           cash -= cost;
@@ -832,7 +897,8 @@
       const x = D.S[p.i], px = price(x, lastT);
       return { id: p.id, sym: x.s, name: x.n, sec: x.sec, pb: p.pb, entryDate: D.dates[p.t0], entry: round(p.fill, 2), qty: p.qty, price: round(px, 2),
         value: round(px * p.qty, 2), pnl: round((px - p.fill) * p.qty - (p.feeIn || 0), 2), pct: round(px / p.fill - 1, 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2), feeBuy: p.feeIn || 0,
-        R: round((px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, px - p.stop) * p.qty, 2), et: p.et || null };
+        R: round((px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, px - p.stop) * p.qty, 2), et: p.et || null,
+        kind: x.kind || 'stock', yld: x.yld && isNum(x.yld[lastT]) ? round(x.yld[lastT], 3) : null };
     });
     // opts.snapshot: everything needed to continue after this day (a book's state), days kept relative to this day
     let snapshot = null;
@@ -841,7 +907,7 @@
       snapshot = {
         P: Object.assign({}, P), base: Object.assign({}, B), scores: Object.assign({}, scores), M: Object.assign({}, M),
         ev: Object.assign(JSON.parse(JSON.stringify(ev)), { mkt: ev.mkt.map(off) }),
-        cash, peak, idSeq, prevEq, dtCount, streak, ddStopOn, lastRiskKey, riskState: JSON.parse(JSON.stringify(riskState)),
+        cash, peak, idSeq, prevEq, dtCount, streak, ddStopOn, lastRiskKey, riskState: JSON.parse(JSON.stringify(riskState)), mInt,
         lastSelect: off(lastSelect), dtPausedUntil: off(dtPausedUntil), blockUntil: off(blockUntil), lastMarketLoss: off(lastMarketLoss), lastValidate: off(lastValidate),
         positions: positions.map((p) => { const q = Object.assign({}, p, { sym: nm(p.i), t0: off(p.t0) }); delete q.i; return q; }),
         reviews: reviews.filter((r) => r.due > lastT).map((r) => ({ due: off(r.due), tr: r.tr, sym: nm(r.i) })),
@@ -852,7 +918,7 @@
     }
     // a run that only reads a book back (no new day) shows the book's own last-day curve and signals
     const lastX = BK && BK.last && BK.last.date === D.dates[lastT] && from > to ? BK.last : null;
-    return { from: base0, to: lastT, capital, equity, trades, open, changes, params: P, base: B, scores, mults: M, weights: normW(M), dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState,
+    return { from: base0, to: lastT, capital, equity, trades, open, changes, params: P, base: B, scores, mults: M, weights: normW(M), marginPaid: round(mInt, 2), lev: P.lev, dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState,
       signals: lastX ? lastX.signals || [] : signals, intraday: lastX ? lastX.intraday || [] : intraday, watch, snapshot, hedge: hedge ? { value: round(hedge.value, 2), since: D.dates[hedge.t0], paid: round(hedge.paid, 2), got: round(hedge.got, 2), ratio: hedge.ratio, spx0: round(hedge.spx0, 2) } : null, hedgeFills, hedgeEpisodes, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
   }
 
@@ -875,8 +941,8 @@
   }
   function hmMin(hm) { return /^\d\d:\d\d$/.test(hm || '') ? +hm.slice(0, 2) * 60 + +hm.slice(3) : NaN; }
   function normW(w) {
-    const sum = (w.bo || 0) + (w.pb || 0) + (w.dt || 0) || 1;
-    return { bo: round((w.bo || 0) / sum, 3), pb: round((w.pb || 0) / sum, 3), dt: round((w.dt || 0) / sum, 3) };
+    const sum = (w.bo || 0) + (w.pb || 0) + (w.dt || 0) + (w.bd || 0) || 1;
+    return { bo: round((w.bo || 0) / sum, 3), pb: round((w.pb || 0) / sum, 3), dt: round((w.dt || 0) / sum, 3), bd: round((w.bd || 0) / sum, 3) };
   }
   // ranks the playbooks by return ÷ max drawdown: the best trades with the normal 1-trade risk, the second with half,
   // the third with a sixth; one that lost money gets at most a sixth; one with too few trades to judge a quarter (trial)
@@ -884,7 +950,7 @@
     const keys = Object.keys(res), M = {};
     const ranked = keys.filter((k) => res[k].n >= FIXED.selectMinTrades).map((k) => ({ k, sc: res[k].ret / Math.max(res[k].mdd, 0.02) })).sort((a, b) => b.sc - a.sc);
     keys.forEach((k) => (M[k] = FIXED.selectTrialM));
-    ranked.forEach((r, j) => { const tier = FIXED.selectTiers[j]; M[r.k] = r.sc > 0 ? tier : Math.min(tier, FIXED.selectLoserM); });
+    ranked.forEach((r, j) => { const tier = FIXED.selectTiers[Math.min(j, FIXED.selectTiers.length - 1)]; M[r.k] = r.sc > 0 ? tier : Math.min(tier, FIXED.selectLoserM); });
     return M;
   }
   function differs(P, B) { const R = B || DEFAULTS; for (const k in DEFAULTS) if (P[k] !== R[k]) return true; return false; }

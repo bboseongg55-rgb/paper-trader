@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const E = require('../engine.js');
 const Lab = require('../evolve.js');
+const Bonds = require('../bonds.js');
 const readJSON = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 
 const t0 = Date.now();
@@ -30,7 +31,9 @@ if (!book && !warm) {
   const r0 = E.runAll(seed, L, settings, intra);
   if (r0.start) { warm = Object.assign({ saved: new Date().toISOString().slice(0, 10) }, r0.start); fs.writeFileSync('data/warm.json', JSON.stringify(warm)); }
 }
-const D = E.prepare(seed, L, intra);
+// bonds: each country's government bond (from its yield and currency) and bond ETFs, on the same trading days
+const bondsHist = readJSON('data/bonds_hist.json', null);
+const D = E.prepare(seed, L, intra, bondsHist ? { instruments: (dates) => Bonds.build(bondsHist, L.days, dates) } : null);
 const T = D.dates.length;
 // days whose closing prices are final go into the book
 const adv = warm || book ? E.advanceBook(D, { book, warm, capital, liveStart, btStart: settings.btStart }) : { book: null, added: [] };
@@ -126,7 +129,8 @@ const state = {
   asOf: { date: res.D.last, time: res.D.lastTime, prov: !!res.D.prov },
   regime: res.regime, gate: res.gate, capital: res.capital, liveStart: res.liveStart,
   account: lv ? { equity: lv.equity, intraday: lv.intraday, open: lv.open, stats: fin(lv.stats), mults: lv.mults, dtPaused: lv.dtPaused, risk: lv.risk,
-    hedge: lv.hedge, hedgeFees: Math.round((lv.hedgeFills || []).reduce((a, h) => a + (h.fee || 0), 0) * 100) / 100, lockedThrough: book ? book.date : null } : null,
+    hedge: lv.hedge, hedgeFees: Math.round((lv.hedgeFills || []).reduce((a, h) => a + (h.fee || 0), 0) * 100) / 100, lockedThrough: book ? book.date : null,
+    marginPaid: lv.marginPaid || 0, lev: lv.lev || 1 } : null,
   teams: lv ? teamsView(lv) : null,
   evolution: Lab.view(E, evo),
   compare: compareView(),

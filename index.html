@@ -246,8 +246,8 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const rcls = (v) => (v >= 0.00005 ? 'up' : v <= -0.00005 ? 'down' : '');      // for returns shown by pct()
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const dLabel = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일 (${WD[new Date(d + 'T12:00:00Z').getUTCDay()]})`;
-  const PB = { bo: '돌파', pb: '눌림목', dt: '단타', hedge: '헷지' };
-  const PB_LONG = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', hedge: 'S&P 500 인버스 헷지' };
+  const PB = { bo: '돌파', pb: '눌림목', dt: '단타', bd: '채권', hedge: '헷지' };
+  const PB_LONG = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', hedge: 'S&P 500 인버스 헷지' };
   const VIEWS = ['account', 'fills', 'profit', 'team'];
   const TITLES = { account: '계좌', fills: '체결내역', profit: '수익', team: 'AI팀' };
   const HOLIDAYS = ['2026-11-26', '2026-12-25', '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24'];
@@ -525,7 +525,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const avail = IDX.filter(([k]) => hasIdx(k));
     if (avail.length) h += `<div class="cmp" role="group" aria-label="지수와 수익률 비교"><span class="cmp-label">비교</span>${avail.map(([k, nm, col, chip]) => `<button type="button" data-k="${k}" aria-pressed="${cmp.includes(k)}" aria-label="${esc(nm)}와 비교"><i class="key" style="background:${col}"></i>${esc(chip)}</button>`).join('')}</div>`;
     h += kv([
-      ['주문 가능 현금', usd(last.cash)],
+      last.cash < 0 ? ['증거금 대출', usd(-last.cash)] : ['주문 가능 현금', usd(last.cash)],
       ['투자 중', usd(invested)],
       [S.asOf.prov ? '오늘 손익' : '마지막 거래일 손익', sgnUsd(last.eq - prevClose), cls(last.eq - prevClose)],
       ['총 손익', sgnUsd(last.eq - S.capital), cls(last.eq - S.capital)],
@@ -548,9 +548,10 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         ${more([['하는 일', 'S&amp;P 500이 내리면 오르고, 오르면 내립니다'], ['시작', dLabel(hg.since)], ['시작 때 S&amp;P 500', hg.spx0.toLocaleString('en-US')], ['헷지 비율', `보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%`], ['담당', '리스크·헷지팀']])}</details></li></ul>`;
     }
     if (a.open.length) h += '<ul class="list">' + a.open.slice().sort((p, q) => q.value - p.value).map((p) => `<li><details><summary class="row">
-        <span class="l"><b>${esc(p.sym)}</b><span>${esc(p.name)} · ${p.qty.toLocaleString()}주</span></span>
+        <span class="l"><b>${esc(p.sym)}</b><span>${esc(p.name)}${p.kind === 'bond' ? (p.yld != null ? ` · 금리 ${p.yld}%` : '') : ` · ${p.qty.toLocaleString()}주`}</span></span>
         <span class="r"><b>${usd(p.value)}</b><span class="${cls(p.pnl)}">${sgnUsd(p.pnl)} (${pct(p.pct)})</span></span></summary>
-        ${more([['평균 매수가', usd(p.entry)], ['현재가', usd(p.price)], ['손절가', usd(p.stop)], ['매수', p.pb === 'dt' ? `오늘 ${esc(p.et || '')}` : `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]])}</details></li>`).join('') + '</ul>';
+        ${more(p.kind === 'bond' ? [['평가액', usd(p.value)], ['손익', `${sgnUsd(p.pnl)} (${pct(p.pct)})`], ['손절 기준', `지수 ${fmt(p.stop, 2)} (지금 ${fmt(p.price, 2)})`], ['매수', `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]]
+          : [['평균 매수가', usd(p.entry)], ['현재가', usd(p.price)], ['손절가', usd(p.stop)], ['매수', p.pb === 'dt' ? `오늘 ${esc(p.et || '')}` : `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]])}</details></li>`).join('') + '</ul>';
     // the latest fills
     const recent = (S.orders || []).slice(0, 3);
     h += `<div class="band"></div><h2>최근 체결</h2>`;
@@ -593,13 +594,13 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const when = o.time || '장 마감';
     if (o.side === 'buy') {
       return `<li><details><summary class="row"><span class="side buy">매수</span>
-        <span class="l"><b>${esc(o.sym)}</b><span>${o.qty.toLocaleString()}주 · ${usd(o.price)}</span></span>
+        <span class="l"><b>${esc(o.sym)}</b><span>${o.pb === 'bd' ? esc(o.name) : `${o.qty.toLocaleString()}주 · ${usd(o.price)}`}</span></span>
         <span class="r"><b>${usd(amt)}</b><span class="muted">${esc(when)}</span></span></summary>
         ${more([['종목', esc(o.name)], ['방법', PB_LONG[o.pb] || ''], ['체결가', usd(o.price)], ['수량', o.qty.toLocaleString() + '주'], ['체결 금액', usd(amt)], ['수수료', usd(o.fee || 0)], ['상태', o.open ? '보유 중' : '매도 완료']])}</details></li>`;
     }
     const fd = o.feeDetail || {};
     return `<li><details><summary class="row"><span class="side sell">매도</span>
-      <span class="l"><b>${esc(o.sym)}</b><span>${o.qty.toLocaleString()}주 · ${usd(o.price)}</span></span>
+      <span class="l"><b>${esc(o.sym)}</b><span>${o.pb === 'bd' ? esc(o.name) : `${o.qty.toLocaleString()}주 · ${usd(o.price)}`}</span></span>
       <span class="r"><b class="${cls(o.pnl)}">${sgnUsd(o.pnl)}</b><span class="muted">${esc(when)}</span></span></summary>
       ${more([['종목', esc(o.name)], ['방법', PB_LONG[o.pb] || ''], ['매도가 / 매수가', `${usd(o.price)} / ${usd(o.entry)}`], ['수익률', `<span class="${cls(o.pnl)}">${pct(o.pct)}</span>`], ['체결 금액', usd(amt)], ['이유', esc(o.reason)], ['보유', o.pb === 'dt' || !o.days ? '당일' : o.days + '거래일'],
         ['수수료', `${usd(o.fee || 0)}` + (o.fee ? ` (SEC ${usd(fd.sec || 0)} · FINRA ${usd(fd.taf || 0)} · CAT ${usd(fd.cat || 0)})` : '')]])}</details></li>`;
@@ -651,7 +652,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       <span class="r"><b class="${cls(d.pnl)}">${sgnUsd(d.pnl)}</b><span class="${cls(d.pnl)}">${pct(d.pct)}</span></span></div></li>`).join('') + '</ul>';
     // by method, with the share of risk the strategy tournament gives each
     const bp = S.byPb || {}, mm = a.mults || {};
-    h += `<div class="band"></div><h2>방법별 수익</h2><ul class="mix">` + ['dt', 'bo', 'pb'].map((k) => {
+    h += `<div class="band"></div><h2>방법별 수익</h2><ul class="mix">` + ['dt', 'bo', 'pb', 'bd'].map((k) => {
       const b = bp[k] || { n: 0, wins: 0, pnl: 0 };
       return `<li><span class="name">${PB_LONG[k]}</span><span class="pnl ${cls(b.pnl)}">${sgnUsd(b.pnl)}</span>
         <span class="stat">매도 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''} · AI 위험 배분 ${Math.round((mm[k] == null ? 0 : mm[k]) * 100)}%${k === 'dt' && a.dtPaused ? ' · 쉬는 중' : ''}</span></li>`;
@@ -664,13 +665,14 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       ['평균 이익', wins.length ? sgnUsd(avg(wins)) : '-', wins.length ? 'up' : ''],
       ['평균 손실', losses.length ? sgnUsd(avg(losses)) : '-', losses.length ? cls(avg(losses)) : ''],
     ]);
-    h += `<footer>가상 계좌입니다. 실제 돈이 아니며 투자 권유가 아닙니다. 체결은 받은 가격에서 0.1% 불리하게 잡았고, 수수료는 로빈후드 기준입니다: 위탁 수수료 없음, 매도 때 SEC 수수료(100만 달러당 $20.60, $500 이하 매도는 면제)와 FINRA 수수료(주당 $0.000195, 최대 $9.79, 50주 이하는 면제, 2026년 10~12월은 일시 중단), 매수·매도 때 CAT 수수료(주당 $0.000003, 1센트 미만은 면제). 배당과 세금은 넣지 않았습니다. 시세: CNBC 공개 시세(약 5분 간격).</footer>`;
+    h += `<footer>가상 계좌입니다. 실제 돈이 아니며 투자 권유가 아닙니다. 체결은 받은 가격에서 0.1% 불리하게 잡았고, 수수료는 로빈후드 기준입니다: 위탁 수수료 없음, 매도 때 SEC 수수료(100만 달러당 $20.60, $500 이하 매도는 면제)와 FINRA 수수료(주당 $0.000195, 최대 $9.79, 50주 이하는 면제, 2026년 10~12월은 일시 중단), 매수·매도 때 CAT 수수료(주당 $0.000003, 1센트 미만은 면제). 배당과 세금은 넣지 않았습니다. 채권: 각국 국채는 그 나라 국채 금리와 환율로 계산한 합성 지수(이자 + 금리 변화 × 듀레이션 + 환율, 달러 기준, 실제 상품 아님)이고, 회사채·신흥국·해외 채권은 미국 상장 채권 ETF(분배금 포함 총수익)입니다. 증거금(레버리지)을 쓰면 로빈후드 기준 이자(빌린 금액 5만 달러까지 연 5%, 10만 달러까지 4.8%, 그 이상 4.5%, 하루 단위)를 냅니다. 시세: CNBC 공개 시세(약 5분 간격).</footer>`;
     $('v-profit').innerHTML = h;
   }
 
   const ruleVal = (r) => {
     const v = r.value;
     if (r.key === 'maxPosW') return Math.round(v * 100) + '%';
+    if (r.key === 'lev') return v + '배';
     if (r.unit === '백분위') return `상위 ${100 - v}%`;
     if (r.unit === '%') return v + '%';
     if (r.unit === '거래일') return v + '거래일';
@@ -729,7 +731,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         <span class="r"><b class="${cls(x.ret6m)}">${pct(x.ret6m, 1)}</b><span class="muted">6개월 · 상위 ${Math.max(1, 100 - x.rs)}%</span></span></div></li>`).join('') : '<li><p class="empty-row">상승 추세인 후보가 없습니다.</p></li>') + '</ul>');
     const mm = T.entry.mults || {};
     h += teamBlock(T.entry, '후보 중 매수 신호가 난 종목을 사고, 1회 위험에 맞춰 수량을 정합니다. 방법별 위험은 20거래일마다 성적순으로 다시 나눕니다.',
-      `<ul class="mix" style="padding-top:10px"><li><span class="name">오늘 매수</span><span class="pnl">${T.entry.buysToday}건</span></li>${['dt', 'bo', 'pb'].map((k) => `<li><span class="name">${PB_LONG[k]}</span><span class="pnl">${Math.round((mm[k] == null ? 0 : mm[k]) * 100)}%</span><span class="stat">정상 1회 위험 대비${k === 'dt' && T.entry.dtPaused ? ' · 쉬는 중' : ''}</span></li>`).join('')}</ul>`);
+      `<ul class="mix" style="padding-top:10px"><li><span class="name">오늘 매수</span><span class="pnl">${T.entry.buysToday}건</span></li>${['dt', 'bo', 'pb', 'bd'].map((k) => `<li><span class="name">${PB_LONG[k]}</span><span class="pnl">${Math.round((mm[k] == null ? 0 : mm[k]) * 100)}%</span><span class="stat">정상 1회 위험 대비${k === 'dt' && T.entry.dtPaused ? ' · 쉬는 중' : ''}</span></li>`).join('')}</ul>`);
     const nr = T.exit.nearest;
     h += teamBlock(T.exit, '보유 종목마다 손절가·추적 손절·기한·목표가를 지키고, 단타는 장 마감 전에 모두 팝니다.',
       `<ul class="mix" style="padding-top:10px"><li><span class="name">오늘 매도</span><span class="pnl">${T.exit.sellsToday}건</span></li><li><span class="name">지키는 종목</span><span class="pnl">${T.exit.watching}개</span>${nr && nr.gap != null ? `<span class="stat">손절가에 가장 가까운 종목: ${esc(nr.sym)} (손절가까지 ${pct(-nr.gap, 1).replace('−', '')})</span>` : ''}</li></ul>`);

@@ -21,17 +21,16 @@
     ['SE10Y-SE', 'SE10Y', '스웨덴 10년 국채', 'SEK=', 'per', 10], ['CA10Y-CA', 'CA10Y', '캐나다 10년 국채', 'CAD=', 'per', 10],
     ['AU10Y-AU', 'AU10Y', '호주 10년 국채', 'AUD=', 'usd', 10], ['NZ10Y-NZ', 'NZ10Y', '뉴질랜드 10년 국채', 'NZD=', 'usd', 10],
     ['KR10Y-KR', 'KR10Y', '한국 10년 국채', 'KRW=', 'per', 10], ['CN10Y-CN', 'CN10Y', '중국 10년 국채', 'CNY=', 'per', 10],
-    ['IN10Y-IN', 'IN10Y', '인도 10년 국채', 'INR=', 'per', 10], ['BR10Y-BR', 'BR10Y', '브라질 10년 국채', 'BRL=', 'per', 10],
+    ['BR10Y-BR', 'BR10Y', '브라질 10년 국채', 'BRL=', 'per', 10],
     ['MX10Y-MX', 'MX10Y', '멕시코 10년 국채', 'MXN=', 'per', 10], ['ZA10Y-ZA', 'ZA10Y', '남아공 10년 국채', 'ZAR=', 'per', 10],
-    ['SG10Y-SG', 'SG10Y', '싱가포르 10년 국채', 'SGD=', 'per', 10], ['HK10Y-HK', 'HK10Y', '홍콩 10년 국채', 'HKD=', 'per', 10],
+    ['SG10Y-SG', 'SG10Y', '싱가포르 10년 국채', 'SGD=', 'per', 10],
     ['ID10Y-ID', 'ID10Y', '인도네시아 10년 국채', 'IDR=', 'per', 10], ['TR10Y-TR', 'TR10Y', '튀르키예 10년 국채', 'TRY=', 'per', 10],
   ];
+  // only funds whose distributions the history source gives (2026-11-18: Nasdaq had none for LQD, HYG, JNK, USHY, EMLC,
+  // PCY, BWX, TIP, MUB, FLOT, so their total return could not be built and they are left out)
   const ETF = [
-    ['LQD', '미국 투자등급 회사채 ETF'], ['VCIT', '미국 중기 회사채 ETF'], ['VCSH', '미국 단기 회사채 ETF'], ['IGIB', '미국 중기 회사채 ETF(iShares)'],
-    ['HYG', '미국 하이일드 회사채 ETF'], ['JNK', '미국 하이일드 회사채 ETF(SPDR)'], ['USHY', '미국 하이일드 회사채 ETF(광범위)'],
-    ['EMB', '신흥국 달러 국채 ETF'], ['EMLC', '신흥국 현지통화 국채 ETF'], ['PCY', '신흥국 국채 ETF(Invesco)'],
-    ['BNDX', '해외 투자등급 채권 ETF(환헤지)'], ['BWX', '해외 국채 ETF'], ['IGOV', '해외 선진국 국채 ETF'],
-    ['TIP', '미국 물가연동국채 ETF'], ['MUB', '미국 지방채 ETF'], ['FLOT', '미국 변동금리 회사채 ETF'],
+    ['VCIT', '미국 중기 회사채 ETF'], ['VCSH', '미국 단기 회사채 ETF'], ['IGIB', '미국 중기 회사채 ETF(iShares)'],
+    ['EMB', '신흥국 달러 국채 ETF'], ['BNDX', '해외 투자등급 채권 ETF(환헤지)'], ['IGOV', '해외 선진국 국채 ETF'],
   ];
   const FX = [...new Set(GOV.map((g) => g[3]).filter(Boolean))];
   const isNum = (v) => typeof v === 'number' && isFinite(v);

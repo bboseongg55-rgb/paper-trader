@@ -23,7 +23,7 @@
   };
   // one step of change for each rule
   const STEP = { stopK_bo: 0.25, stopK_pb: 0.25, trailK: 0.25, boLookback: 10, rsMin: 5, pbRsMin: 3, pbRsi: 2, regimeLevel: 1, maxPosW: 0.02,
-    timeStop_bo: 5, timeStop_pb: 2, holdK: 0.5, dtStopK: 0.1, dtMinUp: 0.25, dtRsMin: 5, hedgeK: 0.1 };
+    timeStop_bo: 5, timeStop_pb: 2, holdK: 0.5, dtStopK: 0.1, dtMinUp: 0.25, dtRsMin: 5, hedgeK: 0.1, stopK_bd: 0.25, lev: 0.25 };
   const DT_KEYS = ['dtStopK', 'dtMinUp', 'dtRsMin'];
   const PAST_KEYS = Object.keys(STEP).filter((k) => !DT_KEYS.includes(k));
   const INT = new Set(['boLookback', 'regimeLevel', 'rsMin', 'pbRsMin', 'pbRsi', 'timeStop_bo', 'timeStop_pb', 'dtRsMin']);
