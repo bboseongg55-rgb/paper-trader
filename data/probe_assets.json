@@ -1,0 +1,1166 @@
+{
+ "at": "2026-11-18T20:56:00.011Z",
+ "results": {
+  "cnbc:yields": {
+   "ok": true,
+   "ms": 308,
+   "sample": {
+    "asked": 33,
+    "got": 33,
+    "missing": [],
+    "quotes": {
+     "US1M": {
+      "px": 3.973,
+      "prev": 3.989,
+      "time": "2026-11-18T14:14:18.000-0500"
+     },
+     "US3M": {
+      "px": 4.26,
+      "prev": 4.25,
+      "time": "2026-11-18T15:25:01.000-0500"
+     },
+     "US2Y": {
+      "px": 4.8,
+      "prev": 4.789,
+      "time": "2026-11-18T15:55:04.000-0500"
+     },
+     "US5Y": {
+      "px": 4.881,
+      "prev": 4.902,
+      "time": "2026-11-18T15:55:03.000-0500"
+     },
+     "US10Y": {
+      "px": 5.064,
+      "prev": 5.103,
+      "time": "2026-11-18T15:55:59.000-0500"
+     },
+     "US30Y": {
+      "px": 5.409,
+      "prev": 5.459,
+      "time": "2026-11-18T15:55:57.000-0500"
+     },
+     "DE2Y-DE": {
+      "px": 3.142,
+      "prev": 3.126,
+      "time": "2026-11-18T21:55:18.000+0100"
+     },
+     "DE10Y-DE": {
+      "px": 3.3722,
+      "prev": 3.377,
+      "time": "2026-11-18T21:55:58.000+0100"
+     },
+     "GB10Y-GB": {
+      "px": 5.3035,
+      "prev": 5.2902,
+      "time": "2026-11-18T17:15:01.000+0000"
+     },
+     "JP10Y-JP": {
+      "px": 2.867,
+      "prev": 2.876,
+      "time": "2026-11-19T03:25:58.000+0900"
+     },
+     "FR10Y-FR": {
+      "px": 4.8681,
+      "prev": 4.8722,
+      "time": "2026-11-18T21:55:58.000+0100"
+     },
+     "IT10Y-IT": {
+      "px": 4.4578,
+      "prev": 4.4526,
+      "time": "2026-11-18T21:55:24.000+0100"
+     },
+     "ES10Y-ES": {
+      "px": 3.9482,
+      "prev": 3.9549,
+      "time": "2026-11-18T17:54:05.000+0000"
+     },
+     "PT10Y-PT": {
+      "px": 3.8192,
+      "prev": 3.841,
+      "time": "2026-11-18T12:00:32.000-0500"
+     },
+     "GR10Y-GR": {
+      "px": 4.2818,
+      "prev": 4.2905,
+      "time": "2026-11-18T15:26:13.000-0500"
+     },
+     "NL10Y-NL": {
+      "px": 3.4517,
+      "prev": 3.4585,
+      "time": "2026-11-18T15:55:58.000-0500"
+     },
+     "CH10Y-CH": {
+      "px": 0.584,
+      "prev": 0.5808,
+      "time": "2026-11-18T15:30:43.000-0500"
+     },
+     "SE10Y-SE": {
+      "px": 3.085,
+      "prev": 3.09,
+      "time": "2026-11-18T15:55:24.000-0500"
+     },
+     "NO10Y-NO": {
+      "px": null,
+      "prev": null,
+      "time": null
+     },
+     "CA10Y-CA": {
+      "px": 3.797,
+      "prev": 3.82,
+      "time": "2026-11-18T15:55:59.000-0500"
+     },
+     "AU10Y-AU": {
+      "px": 5.087,
+      "prev": 5.098,
+      "time": "2026-11-19T06:50:06.000+1000"
+     },
+     "NZ10Y-NZ": {
+      "px": 4.873,
+      "prev": 4.888,
+      "time": "2026-11-18T19:46:14.000+0000"
+     },
+     "KR10Y-KR": {
+      "px": 3.963,
+      "prev": 3.963,
+      "time": "2026-11-18T07:05:43.000+0000"
+     },
+     "CN10Y-CN": {
+      "px": 1.643,
+      "prev": 1.643,
+      "time": "2026-11-18T05:31:00.000-0500"
+     },
+     "IN10Y-IN": {
+      "px": 7.286,
+      "prev": 7.286,
+      "time": "2026-11-18T06:29:10.000-0500"
+     },
+     "BR10Y-BR": {
+      "px": 15.395,
+      "prev": 15.34,
+      "time": "2026-11-18T15:41:57.000-0500"
+     },
+     "MX10Y-MX": {
+      "px": 9.292,
+      "prev": 9.298,
+      "time": "2026-11-18T15:22:17.000-0500"
+     },
+     "ZA10Y-ZA": {
+      "px": 8.855,
+      "prev": 8.855,
+      "time": "2026-11-18T14:52:22.000+0000"
+     },
+     "SG10Y-SG": {
+      "px": 0.67,
+      "prev": 0.67,
+      "time": "2026-11-18T17:15:00.000+0100"
+     },
+     "HK10Y-HK": {
+      "px": 3.972,
+      "prev": 3.972,
+      "time": "2026-11-18T13:04:02.000+0000"
+     },
+     "ID10Y-ID": {
+      "px": 7.607,
+      "prev": 7.607,
+      "time": "2026-11-17T20:31:04.000-0500"
+     },
+     "TR10Y-TR": {
+      "px": 33.95,
+      "prev": 33.95,
+      "time": "2026-11-18T09:23:00.000-0500"
+     },
+     "PL10Y-PL": {
+      "px": null,
+      "prev": null,
+      "time": null
+     }
+    }
+   }
+  },
+  "cnbc:fx": {
+   "ok": true,
+   "ms": 163,
+   "sample": {
+    "asked": 20,
+    "got": 20,
+    "missing": [],
+    "quotes": {
+     "EUR=": {
+      "px": 1.0976,
+      "prev": 1.0997,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "GBP=": {
+      "px": 1.3149,
+      "prev": 1.3208,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "JPY=": {
+      "px": 159.29,
+      "prev": 159.35,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "CHF=": {
+      "px": 0.843,
+      "prev": 0.8406,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "CAD=": {
+      "px": 1.4324,
+      "prev": 1.4297,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "AUD=": {
+      "px": 0.6715,
+      "prev": 0.6731,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "NZD=": {
+      "px": 0.5492,
+      "prev": 0.5492,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "SEK=": {
+      "px": 10.1607,
+      "prev": 10.1125,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "NOK=": {
+      "px": 9.6967,
+      "prev": 9.6166,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "KRW=": {
+      "px": 1332.71,
+      "prev": 1335,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "CNY=": {
+      "px": 6.6676,
+      "prev": 6.6659,
+      "time": "2026-11-18T10:58:00.000-0500"
+     },
+     "INR=": {
+      "px": 93.45,
+      "prev": 93.47,
+      "time": "2026-11-18T13:31:00.000-0500"
+     },
+     "BRL=": {
+      "px": 5.8774,
+      "prev": 5.7792,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "MXN=": {
+      "px": 18.8945,
+      "prev": 18.412,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "ZAR=": {
+      "px": 17.2817,
+      "prev": 16.9211,
+      "time": "2026-11-18T15:56:00.000-0500"
+     },
+     "SGD=": {
+      "px": 1.2893,
+      "prev": 1.2879,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "HKD=": {
+      "px": 7.8457,
+      "prev": 7.8462,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "IDR=": {
+      "px": 18220,
+      "prev": 18240,
+      "time": "2026-11-18T02:54:00.000-0500"
+     },
+     "TRY=": {
+      "px": 50.4261,
+      "prev": 50.409,
+      "time": "2026-11-18T15:55:00.000-0500"
+     },
+     "PLN=": {
+      "px": 4.0198,
+      "prev": 3.9981,
+      "time": "2026-11-18T15:55:00.000-0500"
+     }
+    }
+   }
+  },
+  "cnbc:futures": {
+   "ok": true,
+   "ms": 135,
+   "sample": {
+    "asked": 19,
+    "got": 19,
+    "missing": [],
+    "quotes": {
+     "@SP.1": {
+      "px": 7345.75,
+      "prev": 7359,
+      "time": "2026-11-18T15:45:58.000-0500"
+     },
+     "@ND.1": {
+      "px": 27179.25,
+      "prev": 27075.5,
+      "time": "2026-11-18T15:45:59.000-0500"
+     },
+     "@DJ.1": {
+      "px": 50290,
+      "prev": 50815,
+      "time": "2026-11-18T15:45:56.000-0500"
+     },
+     "@TFS.1": {
+      "px": 2722.5,
+      "prev": 2711.2,
+      "time": "2026-11-18T15:45:57.000-0500"
+     },
+     "@MES.1": {
+      "px": null,
+      "prev": null,
+      "time": null
+     },
+     "@MNQ.1": {
+      "px": null,
+      "prev": null,
+      "time": null
+     },
+     "@TU.1": {
+      "px": 101.8984,
+      "prev": 101.918,
+      "time": "2026-11-18T15:45:54.000-0500"
+     },
+     "@FV.1": {
+      "px": 104.2422,
+      "prev": 104.1719,
+      "time": "2026-11-18T15:45:58.000-0500"
+     },
+     "@TY.1": {
+      "px": 105.7813,
+      "prev": 105.6094,
+      "time": "2026-11-18T15:45:54.000-0500"
+     },
+     "@US.1": {
+      "px": 106.25,
+      "prev": 105.625,
+      "time": "2026-11-18T15:44:56.000-0500"
+     },
+     "@CL.1": {
+      "px": 82.97,
+      "prev": 86.01,
+      "time": "2026-11-18T15:45:04.000-0500"
+     },
+     "@GC.1": {
+      "px": 3734.3,
+      "prev": 3864.2,
+      "time": "2026-11-18T15:45:57.000-0500"
+     },
+     "@SI.1": {
+      "px": 45.06,
+      "prev": 47.357,
+      "time": "2026-11-18T15:45:54.000-0500"
+     },
+     "@HG.1": {
+      "px": 5.669,
+      "prev": 5.986,
+      "time": "2026-11-18T15:45:39.000-0500"
+     },
+     "@NG.1": {
+      "px": 3.41,
+      "prev": 3.208,
+      "time": "2026-11-18T15:45:34.000-0500"
+     },
+     "@BTC.1": {
+      "px": 62490,
+      "prev": 63955,
+      "time": "2026-11-18T15:45:55.000-0500"
+     },
+     "@ETH.1": {
+      "px": 1748.5,
+      "prev": 1798.5,
+      "time": "2026-11-18T15:45:58.000-0500"
+     },
+     "@EU.1": {
+      "px": null,
+      "prev": null,
+      "time": null
+     },
+     "@JY.1": {
+      "px": 0.0063,
+      "prev": 0.0063,
+      "time": "2026-11-18T15:45:42.000-0500"
+     }
+    }
+   }
+  },
+  "cnbc:index": {
+   "ok": true,
+   "ms": 113,
+   "sample": {
+    "asked": 6,
+    "got": 6,
+    "missing": [],
+    "quotes": {
+     ".VIX": {
+      "px": 24.39,
+      "prev": 25.46,
+      "time": "2026-11-18T15:55:46.000-0500"
+     },
+     ".SPX": {
+      "px": 7328.23,
+      "prev": 7340.53,
+      "time": "2026-11-18T15:56:00.000-0500"
+     },
+     ".NDX": {
+      "px": 27124.327,
+      "prev": 27001.784,
+      "time": "2026-11-18T15:56:00.000-0500"
+     },
+     ".DJI": {
+      "px": 50232.43,
+      "prev": 50759.42,
+      "time": "2026-11-18T15:56:00.000-0500"
+     },
+     ".RUT": {
+      "px": 2716.358,
+      "prev": 2701.871,
+      "time": "2026-11-18T15:40:00.000-0500"
+     },
+     ".MOVE": {
+      "px": 98.15,
+      "prev": 101.88,
+      "time": "2026-11-18T15:47:00.000-0500"
+     }
+    }
+   }
+  },
+  "cnbc:bondEtf": {
+   "ok": true,
+   "ms": 134,
+   "sample": {
+    "asked": 28,
+    "got": 28,
+    "missing": [],
+    "quotes": {
+     "BIL": {
+      "px": 91.56,
+      "prev": 91.55,
+      "time": "2026-11-18T15:56:00.718-0500"
+     },
+     "SHV": {
+      "px": 110.22,
+      "prev": 110.2,
+      "time": "2026-11-18T15:55:54.653-0500"
+     },
+     "SHY": {
+      "px": 81.33,
+      "prev": 81.32,
+      "time": "2026-11-18T15:55:49.630-0500"
+     },
+     "IEI": {
+      "px": 114.34,
+      "prev": 114.21,
+      "time": "2026-11-18T15:55:54.060-0500"
+     },
+     "IEF": {
+      "px": 90.69,
+      "prev": 90.41,
+      "time": "2026-11-18T15:55:57.588-0500"
+     },
+     "TLH": {
+      "px": 94.43,
+      "prev": 93.87,
+      "time": "2026-11-18T15:55:56.497-0500"
+     },
+     "TLT": {
+      "px": 80.23,
+      "prev": 79.55,
+      "time": "2026-11-18T15:56:00.758-0500"
+     },
+     "GOVT": {
+      "px": 22.1,
+      "prev": 22.05,
+      "time": "2026-11-18T15:55:57.150-0500"
+     },
+     "TIP": {
+      "px": 104.92,
+      "prev": 104.83,
+      "time": "2026-11-18T15:55:57.789-0500"
+     },
+     "AGG": {
+      "px": 95.53,
+      "prev": 95.26,
+      "time": "2026-11-18T15:55:58.058-0500"
+     },
+     "BND": {
+      "px": 70.88,
+      "prev": 70.71,
+      "time": "2026-11-18T15:55:58.570-0500"
+     },
+     "LQD": {
+      "px": 103.16,
+      "prev": 102.74,
+      "time": "2026-11-18T15:56:00.079-0500"
+     },
+     "VCIT": {
+      "px": 78.87,
+      "prev": 78.68,
+      "time": "2026-11-18T15:55:54.621-0500"
+     },
+     "VCSH": {
+      "px": 77.4,
+      "prev": 77.34,
+      "time": "2026-11-18T15:55:57.561-0500"
+     },
+     "IGIB": {
+      "px": 50.73,
+      "prev": 50.6,
+      "time": "2026-11-18T15:55:57.376-0500"
+     },
+     "HYG": {
+      "px": 76.66,
+      "prev": 76.63,
+      "time": "2026-11-18T15:56:00.783-0500"
+     },
+     "JNK": {
+      "px": 91.97,
+      "prev": 91.93,
+      "time": "2026-11-18T15:56:00.793-0500"
+     },
+     "USHY": {
+      "px": 35.38,
+      "prev": 35.37,
+      "time": "2026-11-18T15:55:54.256-0500"
+     },
+     "EMB": {
+      "px": 90.8,
+      "prev": 90.72,
+      "time": "2026-11-18T15:55:59.055-0500"
+     },
+     "EMLC": {
+      "px": 24.14,
+      "prev": 24.32,
+      "time": "2026-11-18T15:55:08.655-0500"
+     },
+     "PCY": {
+      "px": 20.07,
+      "prev": 20.05,
+      "time": "2026-11-18T15:54:10.908-0500"
+     },
+     "BWX": {
+      "px": 21.06,
+      "prev": 21.11,
+      "time": "2026-11-18T15:55:58.078-0500"
+     },
+     "IGOV": {
+      "px": 39.48,
+      "prev": 39.59,
+      "time": "2026-11-18T15:55:00.589-0500"
+     },
+     "BNDX": {
+      "px": 47.26,
+      "prev": 47.31,
+      "time": "2026-11-18T15:55:57.325-0500"
+     },
+     "MUB": {
+      "px": 103.16,
+      "prev": 103.01,
+      "time": "2026-11-18T15:55:43.874-0500"
+     },
+     "FLOT": {
+      "px": 50.94,
+      "prev": 50.92,
+      "time": "2026-11-18T15:55:52.419-0500"
+     },
+     "EDV": {
+      "px": 57.81,
+      "prev": 57.04,
+      "time": "2026-11-18T15:55:55.449-0500"
+     },
+     "ZROZ": {
+      "px": 57.07,
+      "prev": 56.16,
+      "time": "2026-11-18T15:55:58.597-0500"
+     }
+    }
+   }
+  },
+  "cnbc:crypto": {
+   "ok": true,
+   "ms": 157,
+   "sample": {
+    "asked": 4,
+    "got": 4,
+    "missing": [],
+    "quotes": {
+     "BTC.CM=": {
+      "px": 62450.7,
+      "prev": 63877.04,
+      "time": "2026-11-18T15:55:56.000-0500"
+     },
+     "ETH.CM=": {
+      "px": 1750.36,
+      "prev": 1795.81,
+      "time": "2026-11-18T15:55:56.000-0500"
+     },
+     "BTC.CB=": {
+      "px": 62450.75,
+      "prev": 63901.75,
+      "time": "2026-11-18T15:55:58.000-0500"
+     },
+     "ETH.CB=": {
+      "px": 1749.98,
+      "prev": 1798.33,
+      "time": "2026-11-18T15:55:52.000-0500"
+     }
+    }
+   }
+  },
+  "cnbc:raw": {
+   "ok": true,
+   "ms": 57,
+   "sample": [
+    {
+     "symbol": "US10Y",
+     "name": "U.S. 10 Year Treasury",
+     "type": "BOND",
+     "last": "5.064%",
+     "change": "-0.039",
+     "previous_day_closing": "5.103%",
+     "last_time": "2026-11-18T15:55:59.000-0500",
+     "bond_last_price": "99.50",
+     "coupon": "5.00%",
+     "maturity": "2036-11-15"
+    },
+    {
+     "symbol": "EUR=",
+     "name": "EUR/USD",
+     "type": "CURRENCY",
+     "last": "1.0976",
+     "change": "-0.0021",
+     "previous_day_closing": "1.0997",
+     "last_time": "2026-11-18T15:56:00.000-0500"
+    },
+    {
+     "symbol": "@SP.1",
+     "name": "S&P 500 Fut (Dec'26)",
+     "type": "DERIVATIVE",
+     "last": "7,345.75",
+     "change": "-13.25",
+     "previous_day_closing": "7,359.00",
+     "last_time": "2026-11-18T15:45:58.000-0500"
+    },
+    {
+     "symbol": "DE10Y-DE",
+     "name": "German 10 Year Bond",
+     "type": "BOND",
+     "last": "3.3722%",
+     "change": "-0.0048",
+     "previous_day_closing": "3.377%",
+     "last_time": "2026-11-18T21:55:58.000+0100",
+     "bond_last_price": "96.938",
+     "coupon": "3.00%",
+     "maturity": "2036-08-15"
+    }
+   ]
+  },
+  "hist:cnbc-bars-US10Y": {
+   "ok": true,
+   "ms": 472,
+   "sample": {
+    "bytes": 66102,
+    "head": "{\"barData\":{\"priceBars\":[{\"open\":\"4.5700\",\"high\":\"4.6000\",\"low\":\"4.5200\",\"close\":\"4.5800\",\"volume\":0,\"tradeTime\":\"20250102000000\",\"tradeTimeinMills\":1735794000000},{\"open\":\"4.5500\",\"high\":\"4.6000\",\"low\":\"4.5400\",\"close\":\"4.6000\",\"volume\":0,\"tradeTime\":\"20250103000000\",\"tradeTimeinMills\":1735880400000},{\"open\":\"4.6200\",\"high\":\"4.6400\",\"low\":\"4.5800\",\"close\":\"4.6200\",\"volume\":0,\"tradeTime\":\"20250106"
+   }
+  },
+  "hist:cnbc-bars-DE10Y": {
+   "ok": true,
+   "ms": 150,
+   "sample": {
+    "bytes": 82644,
+    "head": "{\"barData\":{\"priceBars\":[{\"open\":\"2.3640\",\"high\":\"2.3690\",\"low\":\"2.3640\",\"close\":\"2.3690\",\"volume\":0,\"tradeTime\":\"20250101000000\",\"tradeTimeinMills\":1735707600000},{\"open\":\"2.3690\",\"high\":\"2.3750\",\"low\":\"2.3100\",\"close\":\"2.3670\",\"volume\":0,\"tradeTime\":\"20250102000000\",\"tradeTimeinMills\":173579400000"
+   }
+  },
+  "hist:cnbc-bars-EUR": {
+   "ok": true,
+   "ms": 113,
+   "sample": {
+    "bytes": 73127,
+    "head": "{\"barData\":{\"priceBars\":[{\"open\":\"1.0352\",\"high\":\"1.0359\",\"low\":\"1.0349\",\"close\":\"1.0355\",\"volume\":0,\"tradeTime\":\"20250101000000\",\"tradeTimeinMills\":1735707600000},{\"open\":\"1.0352\",\"high\":\"1.0374\",\"low\":\"1.0223\",\"close\":\"1.0265\",\"volume\":0,\"tradeTime\":\"20250102000000\",\"tradeTimeinMills\":173579400000"
+   }
+  },
+  "hist:cnbc-bars-TLT": {
+   "ok": true,
+   "ms": 123,
+   "sample": {
+    "bytes": 108701,
+    "head": "{\"barData\":{\"priceBars\":[{\"open\":\"98.2293\",\"high\":\"98.6500\",\"low\":\"98.0000\",\"close\":\"98.3100\",\"volume\":47797425,\"tradeTime\":\"20240102000000\",\"tradeTimeinMills\":1704171600000},{\"open\":\"97.3800\",\"high\":\"98.8500\",\"low\":\"97.1500\",\"close\":\"98.7200\",\"volume\":58159496,\"tradeTime\":\"20240103000000\",\"tradeTim"
+   }
+  },
+  "hist:cnbc-bars-ES": {
+   "ok": true,
+   "ms": 142,
+   "sample": {
+    "bytes": 74074,
+    "head": "{\"barData\":{\"priceBars\":[{\"open\":\"5949.2500\",\"high\":\"5995.2500\",\"low\":\"5874.7500\",\"close\":\"5916.5000\",\"volume\":1826031,\"tradeTime\":\"20250102000000\",\"tradeTimeinMills\":1735794000000},{\"open\":\"5921.0000\",\"high\":\"5996.7500\",\"low\":\"5911.2500\",\"close\":\"5989.5000\",\"volume\":1206570,\"tradeTime\":\"20250103000"
+   }
+  },
+  "hist:cnbc-bars-1min-SPY": {
+   "ok": true,
+   "ms": 44,
+   "sample": {
+    "bytes": 58414,
+    "head": "{\"barData\":{\"priceBars\":[{\"open\":\"733.3500\",\"high\":\"734.7000\",\"low\":\"732.8500\",\"close\":\"734.6600\",\"volume\":481490,\"tradeTime\":\"20261118093000\",\"tradeTimeinMills\":1795012200000},{\"open\":\"734.6900\",\"high\":\"734.7400\",\"low\":\"733.8300\",\"close\":\"734.3800\",\"volume\":126496,\"tradeTime\":\"20261118093100\",\"trad"
+   }
+  },
+  "hist:fred-DGS10": {
+   "ok": true,
+   "ms": 141,
+   "sample": {
+    "rows": 16926,
+    "first": "1962-01-02,4.06",
+    "last": "2026-11-16,5.12"
+   }
+  },
+  "hist:fred-DGS2": {
+   "ok": true,
+   "ms": 114,
+   "sample": {
+    "rows": 13166,
+    "first": "1976-06-01,7.26",
+    "last": "2026-11-16,4.83"
+   }
+  },
+  "hist:fred-DTB3": {
+   "ok": true,
+   "ms": 68,
+   "sample": {
+    "rows": 19012,
+    "first": "1954-01-04,1.33",
+    "last": "2026-11-16,4.16"
+   }
+  },
+  "hist:fred-BAMLC0A0CM": {
+   "ok": true,
+   "ms": 22,
+   "sample": {
+    "rows": 794,
+    "first": "2023-11-20,1.18",
+    "last": "2026-11-17,0.92"
+   }
+  },
+  "hist:fred-BAMLH0A0HYM2": {
+   "ok": true,
+   "ms": 22,
+   "sample": {
+    "rows": 794,
+    "first": "2023-11-20,3.92",
+    "last": "2026-11-17,3.43"
+   }
+  },
+  "hist:fred-DEXJPUS": {
+   "ok": true,
+   "ms": 230,
+   "sample": {
+    "rows": 14576,
+    "first": "1971-01-04,357.73",
+    "last": "2026-11-13,159.93"
+   }
+  },
+  "hist:fred-DEXKOUS": {
+   "ok": true,
+   "ms": 1443,
+   "sample": {
+    "rows": 11896,
+    "first": "1981-04-13,675.40",
+    "last": "2026-11-13,1336.58"
+   }
+  },
+  "hist:fred-IRLTLT01DEM156N": {
+   "ok": true,
+   "ms": 25,
+   "sample": {
+    "rows": 847,
+    "first": "1956-05-01,6.400000000000000",
+    "last": "2026-10-01,3.415909090900000"
+   }
+  },
+  "hist:nasdaq-TLT": {
+   "ok": true,
+   "ms": 130,
+   "sample": {
+    "rows": 512,
+    "first": {
+     "date": "11/17/2026",
+     "close": "79.55",
+     "volume": "34,859,620",
+     "open": "79.30",
+     "high": "79.77",
+     "low": "79.235"
+    },
+    "last": {
+     "date": "11/01/2024",
+     "close": "90.84",
+     "volume": "80,401,980",
+     "open": "92.26",
+     "high": "92.515",
+     "low": "90.80"
+    }
+   }
+  },
+  "hist:stooq-tlt": {
+   "ok": false,
+   "ms": 434,
+   "err": "HTTP 403: "
+  },
+  "hist:cboe-vix": {
+   "ok": true,
+   "ms": 178,
+   "sample": {
+    "rows": 9319,
+    "head": "DATE,OPEN,HIGH,LOW,CLOSE",
+    "last": "11/17/2026,23.110000,27.730000,22.360000,25.460000"
+   }
+  },
+  "opt:cboe-SPY": {
+   "ok": true,
+   "ms": 118,
+   "sample": {
+    "bytes": 5561046,
+    "timestamp": "2026-11-18 20:55:27",
+    "price": 730.8705,
+    "n": 12446,
+    "first": {
+     "option": "B1SPY261120C00710000",
+     "bid": 0.9,
+     "bid_size": 250,
+     "ask": 0.94,
+     "ask_size": 250,
+     "iv": 0.2796,
+     "open_interest": 0,
+     "volume": 0,
+     "delta": 0.0091,
+     "gamma": -0.001,
+     "vega": -0.0075,
+     "theta": 0.0499,
+     "rho": 0.0006,
+     "theo": 0.9318,
+     "change": 0,
+     "open": 0,
+     "high": 0,
+     "low": 0,
+     "tick": "no_change",
+     "last_trade_price": 0,
+     "last_trade_time": null,
+     "percent_change": 0,
+     "prev_day_close": 0.875
+    },
+    "mid": {
+     "option": "SPY270129P00746000",
+     "bid": 29.06,
+     "bid_size": 45,
+     "ask": 31.14,
+     "ask_size": 490,
+     "iv": 0.1816,
+     "open_interest": 81,
+     "volume": 10,
+     "delta": -0.5798,
+     "gamma": 0.0074,
+     "vega": 1.2533,
+     "theta": -0.1605,
+     "rho": -0.6402,
+     "theo": 29.1678,
+     "change": -2.33,
+     "open": 27.28,
+     "high": 27.28,
+     "low": 27.28,
+     "tick": "down",
+     "last_trade_price": 27.28,
+     "last_trade_time": "2026-11-18T10:00:06",
+     "percent_change": -7.86897,
+     "prev_day_close": 29.6100006103516
+    }
+   }
+  },
+  "opt:cboe-AAPL": {
+   "ok": true,
+   "ms": 44,
+   "sample": {
+    "bytes": 1519047,
+    "n": 3398,
+    "timestamp": "2026-11-18 20:55:28"
+   }
+  },
+  "opt:nasdaq-SPY": {
+   "ok": true,
+   "ms": 1636,
+   "sample": "{\"data\":{\"totalRecord\":1419,\"lastTrade\":\"LAST TRADE: $731.36 (AS OF NOV 18, 2026 3:56 PM ET)\",\"table\":{\"asOf\":null,\"headers\":{\"expiryDate\":\"Exp. Date\",\"c_Last\":\"Last\",\"c_Change\":\"Change\",\"c_Bid\":\"Bid\",\"c_Ask\":\"Ask\",\"c_Volume\":\"Volume\",\"c_Openinterest\":\"Open Int.\",\"strike\":\"Strike\",\"p_Last\":\"Last\",\"p_Change\":\"Change\",\"p_Bid\":\"Bid\",\"p_Ask\":\"Ask\",\"p_Volume\":\"Volume\",\"p_Openinterest\":\"Open Int.\"},\"rows\":[{\"expirygroup\":\"November 18, 2026\",\"expiryDate\":null,\"c_Last\":null,\"c_Change\":null,\"c_Bid\":null,…"
+  },
+  "opt:deribit-BTC": {
+   "ok": true,
+   "ms": 169,
+   "sample": {
+    "n": 950,
+    "first": {
+     "high": 0.0295,
+     "low": 0.01,
+     "last": 0.028,
+     "instrument_name": "BTC-20NOV26-64000-P",
+     "bid_price": 0.0275,
+     "ask_price": 0.0295,
+     "open_interest": 995.9,
+     "mark_price": 0.02866992,
+     "interest_rate": 0,
+     "creation_timestamp": 1795035366015,
+     "estimated_delivery_price": 62477,
+     "price_change": 86.6667,
+     "volume": 41.3,
+     "mark_iv": 51.47,
+     "underlying_price": 62488.59,
+     "underlying_index": "BTC-20NOV26",
+     "base_currency": "BTC",
+     "quote_currency": "BTC",
+     "volume_delayed": 0,
+     "volume_realtime": 41.3,
+     "volume_delayed_usd": 0,
+     "volume_realtime_usd": 37276.33,
+     "volume_usd": 37276.33,
+     "mid_price": 0.0285
+    }
+   }
+  },
+  "fut:deribit-BTC": {
+   "ok": true,
+   "ms": 104,
+   "sample": {
+    "n": 12,
+    "first": {
+     "high": 65890,
+     "low": 62875,
+     "last": 63127.5,
+     "instrument_name": "BTC-29JAN27",
+     "bid_price": 63137.5,
+     "ask_price": 63152.5,
+     "open_interest": 9242690,
+     "mark_price": 63137.63,
+     "creation_timestamp": 1795035366012,
+     "estimated_delivery_price": 62477,
+     "price_change": -2.1431,
+     "volume": 40.25386406,
+     "base_currency": "BTC",
+     "quote_currency": "USD",
+     "volume_delayed": 0,
+     "volume_realtime": 40.25386406,
+     "volume_delayed_usd": 0,
+     "volume_realtime_usd": 2589540,
+     "volume_usd": 2589540,
+     "volume_delayed_notional": 0,
+     "volume_notional": 2589540,
+     "volume_realtime_notional": 2589540,
+     "mid_price": 63145
+    }
+   }
+  },
+  "crypto:coinbase": {
+   "ok": true,
+   "ms": 46,
+   "sample": {
+    "bid": [
+     "62471.13",
+     "0.00016074",
+     1
+    ],
+    "ask": [
+     "62471.14",
+     "0.01824899",
+     1
+    ]
+   }
+  },
+  "crypto:bitstamp": {
+   "ok": true,
+   "ms": 107,
+   "sample": {
+    "bid": "62464.90",
+    "ask": "62464.91",
+    "ts": "1795035365"
+   }
+  },
+  "crypto:kraken": {
+   "ok": true,
+   "ms": 111,
+   "sample": {
+    "bid": [
+     "62471.40000",
+     "1",
+     "1.000"
+    ],
+    "ask": [
+     "62471.50000",
+     "2",
+     "2.000"
+    ]
+   }
+  },
+  "crypto:gemini": {
+   "ok": true,
+   "ms": 250,
+   "sample": {
+    "bid": "62468.96000",
+    "ask": "62474.29000"
+   }
+  },
+  "crypto:binance": {
+   "ok": false,
+   "ms": 340,
+   "err": "HTTP 451: { \"code\": 0, \"msg\": \"Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact custom"
+  },
+  "crypto:bybit": {
+   "ok": false,
+   "ms": 429,
+   "err": "HTTP 403: { error:The Amazon CloudFront distribution is configured to block access from your country }"
+  },
+  "crypto:bitfinex": {
+   "ok": true,
+   "ms": 467,
+   "sample": {
+    "bid": 62528,
+    "bidSize": 3.58178565,
+    "ask": 62542,
+    "askSize": 3.66330473
+   }
+  },
+  "crypto:okx": {
+   "ok": true,
+   "ms": 481,
+   "sample": {
+    "bid": "62567.3",
+    "ask": "62567.4"
+   }
+  },
+  "crypto:kucoin": {
+   "ok": true,
+   "ms": 620,
+   "sample": {
+    "time": 1795035366938,
+    "sequence": "40727242610",
+    "price": "62554.9",
+    "size": "0.00013818",
+    "bestBid": "62554.9",
+    "bestBidSize": "0.54586105",
+    "bestAsk": "62555",
+    "bestAskSize": "0.65864337"
+   }
+  },
+  "crypto:cryptocom": {
+   "ok": true,
+   "ms": 663,
+   "sample": {
+    "bid": "62488.78",
+    "ask": "62488.79"
+   }
+  },
+  "crypto:binanceus": {
+   "ok": true,
+   "ms": 695,
+   "sample": {
+    "symbol": "BTCUSDT",
+    "bidPrice": "62564.00000000",
+    "bidQty": "0.00396000",
+    "askPrice": "62564.28000000",
+    "askQty": "0.00198000"
+   }
+  },
+  "crypto:mexc": {
+   "ok": true,
+   "ms": 835,
+   "sample": {
+    "symbol": "BTCUSDT",
+    "bidPrice": "62572.28",
+    "bidQty": "2.25390060",
+    "askPrice": "62572.97",
+    "askQty": "0.73545920"
+   }
+  },
+  "crypto:htx": {
+   "ok": true,
+   "ms": 858,
+   "sample": {
+    "bid": [
+     62568.58,
+     0.016217
+    ],
+    "ask": [
+     62570.63,
+     0.027164
+    ]
+   }
+  },
+  "crypto:bitget": {
+   "ok": true,
+   "ms": 1015,
+   "sample": {
+    "bid": "62570.66",
+    "ask": "62570.67"
+   }
+  },
+  "crypto:gateio": {
+   "ok": true,
+   "ms": 1371,
+   "sample": {
+    "bid": "62561",
+    "ask": "62561.1"
+   }
+  },
+  "crypto:bithumb": {
+   "ok": true,
+   "ms": 1413,
+   "sample": {
+    "bid": {
+     "price": "85119000",
+     "quantity": "0.0050"
+    },
+    "ask": {
+     "price": "85135000",
+     "quantity": "0.0237"
+    }
+   }
+  },
+  "crypto:upbit": {
+   "ok": true,
+   "ms": 1420,
+   "sample": {
+    "bid": 85148000,
+    "ask": 85160000
+   }
+  },
+  "crypto:coinbase-candles": {
+   "ok": true,
+   "ms": 15,
+   "sample": {
+    "n": 350,
+    "first": [
+     1794960000,
+     62202.64,
+     64933.39,
+     64873.18,
+     62480,
+     10262.49738556
+    ],
+    "last": [
+     1764806400,
+     90904.73,
+     94087.05,
+     93452.02,
+     92093.54,
+     6198.20707297
+    ]
+   }
+  },
+  "crypto:coinbase-fees-public": {
+   "ok": true,
+   "ms": 20,
+   "sample": "{\"id\":\"BTC-USD\",\"base_currency\":\"BTC\",\"quote_currency\":\"USD\",\"quote_increment\":\"0.01\",\"base_increment\":\"0.00000001\",\"display_name\":\"BTC-USD\",\"min_market_funds\":\"1\",\"margin_enabled\":false,\"post_only\":false,\"limit_only\":false,\"cancel_only\":false,\"status\":\"online\",\"status_message\":\"\",\"trading_disabled\":false,\"fx_stablecoin\":false,\"max_slippage_percentage\":\"0.02000000\",\"auction_mode\":false,\"high_bid_l…"
+  }
+ }
+}
