@@ -37,6 +37,8 @@
   --warn: #b25000;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Pretendard Sub", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* chart series: indexes and portfolio parts (categorical order, never by rank of value) */
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s-other: #8b95a1; --s-cash: #d1d6db;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -44,12 +46,14 @@
     --bg: #121214; --band: #1c1c20; --ink: #f2f3f5; --sub: #c3c9d0; --muted: #8b95a1; --line: #2a2a30;
     --up: #ff5c62; --down: #5b9bff; --up-soft: rgba(255, 92, 98, 0.16); --down-soft: rgba(91, 155, 255, 0.16);
     --ok: #3ccf7c; --warn: #ffb340; color-scheme: dark;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s-other: #6b7684; --s-cash: #3a3f46;
   }
 }
 :root[data-theme="dark"] {
   --bg: #121214; --band: #1c1c20; --ink: #f2f3f5; --sub: #c3c9d0; --muted: #8b95a1; --line: #2a2a30;
   --up: #ff5c62; --down: #5b9bff; --up-soft: rgba(255, 92, 98, 0.16); --down-soft: rgba(91, 155, 255, 0.16);
   --ok: #3ccf7c; --warn: #ffb340; color-scheme: dark;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s-other: #6b7684; --s-cash: #3a3f46;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: clip; }
@@ -90,6 +94,36 @@ section.view.on { display: block; }
 .periods button { flex: 1; min-height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--sub); font-size: 15px; font-weight: 600; cursor: pointer; transition: transform 120ms var(--ease-out), background-color 150ms var(--ease-out); }
 .periods button[aria-pressed="true"] { background: var(--band); color: var(--ink); }
 .periods button:active { transform: scale(0.97); }
+/* index comparison: chips turn index lines on, the chart then shows % change from the same start */
+.cmp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px 20px 0; }
+.cmp-label { font-size: 15px; font-weight: 600; color: var(--muted); margin-right: 2px; }
+.cmp button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: 20px; border: 1px solid var(--line); background: var(--bg); font-size: 15px; font-weight: 600; color: var(--sub); cursor: pointer; white-space: nowrap; transition: transform 120ms var(--ease-out), background-color 150ms var(--ease-out); }
+.cmp button[aria-pressed="true"] { background: var(--band); border-color: var(--band); color: var(--ink); }
+.cmp button[aria-pressed="false"] .key { opacity: 0.4; }
+.cmp button:active { transform: scale(0.97); }
+.key { flex: none; display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
+.legend { list-style: none; margin: 8px 20px 0; padding: 0; display: grid; gap: 4px; }
+.legend[hidden] { display: none; }
+.legend li { display: flex; align-items: center; gap: 10px; font-size: 16px; min-height: 26px; }
+.legend li span { flex: 1; min-width: 0; color: var(--sub); }
+.legend li b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.legend .when { color: var(--muted); font-size: 14px; }
+/* portfolio ring */
+.alloc { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 16px; align-items: center; padding: 8px 20px 0; }
+.donut { position: relative; width: 168px; height: 168px; }
+.donut svg { display: block; width: 100%; height: 100%; }
+.donut path { cursor: pointer; transition: opacity 150ms var(--ease-out); }
+.donut svg.sel path:not(.on) { opacity: 0.3; }
+.donut .c { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; text-align: center; pointer-events: none; padding: 0 34px; line-height: 1.3; }
+.donut .c span { font-size: 13px; color: var(--muted); max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.donut .c b { font-size: 17px; font-weight: 700; }
+.alloc ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; min-width: 0; }
+.alloc li button { width: 100%; display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 36px; padding: 2px 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; }
+.alloc li button[aria-pressed="true"] { background: var(--band); }
+.alloc .sw { width: 12px; height: 12px; border-radius: 3px; }
+.alloc .nm { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alloc .sh { font-size: 15px; font-variant-numeric: tabular-nums; color: var(--sub); }
+@media (max-width: 370px) { .alloc { grid-template-columns: minmax(0, 1fr); justify-items: center; } .alloc ul { width: 100%; } }
 
 /* key numbers in two columns */
 .kv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px 16px; padding: 20px 20px 0; }
@@ -171,7 +205,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
 .loading { padding: 80px 20px; text-align: center; color: var(--muted); }
 @media (min-width: 700px) { .tabbar { max-width: 640px; margin: 0 auto; border-left: 1px solid var(--line); border-right: 1px solid var(--line); } }
 @media (max-width: 350px) { .hero-value { font-size: 34px; } .kv { grid-template-columns: minmax(0, 1fr); } }
-@media (prefers-reduced-motion: reduce) { .periods button, .filters button { transition: none; } .periods button:active, .filters button:active, .tabbar a:active { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .periods button, .filters button, .cmp button, .donut path { transition: none; } .periods button:active, .filters button:active, .cmp button:active, .tabbar a:active { transform: none; } }
 </style>
 </head>
 <body>
@@ -204,6 +238,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const sgnUsd = (v, d = 2) => (v >= 0.005 ? '+$' : v <= -0.005 ? '−$' : '$') + fmt(v, d);
   const pct = (v, d = 2) => (v >= 0.00005 ? '+' : v <= -0.00005 ? '−' : '') + fmt(v * 100, d) + '%';
   const cls = (v) => (v >= 0.005 ? 'up' : v <= -0.005 ? 'down' : '');
+  const rcls = (v) => (v >= 0.00005 ? 'up' : v <= -0.00005 ? 'down' : '');      // for returns shown by pct()
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const dLabel = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일 (${WD[new Date(d + 'T12:00:00Z').getUTCDay()]})`;
   const PB = { bo: '돌파', pb: '눌림목', dt: '단타', hedge: '헷지' };
@@ -260,9 +295,88 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const d = v - base;
     return `<span class="${cls(d)}">${sgnUsd(d)} (${pct(base ? d / base : 0)})</span><span class="when">${esc(when)}</span>`;
   }
+  // ── index comparison, like TradingView's compare: the account and each chosen index as % change from the same start
+  const IDX = [['spx', 'S&P 500', 'var(--s1)', 'S&P 500'], ['ndx', '나스닥 100', 'var(--s2)', '나스닥 100'], ['dji', '다우존스', 'var(--s3)', '다우']];
+  let cmp = (() => { try { const v = JSON.parse(localStorage.getItem('cmp') || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } })();
+  const saveCmp = () => { try { localStorage.setItem('cmp', JSON.stringify(cmp)); } catch (e) { /* storage off: keep it for this visit */ } };
+  const hasIdx = (k) => { const C = S && S.compare; return !!C && ((C.daily || []).some((r) => r[k] != null) || (C.intraday || []).some((r) => r[k] != null)); };
+  function cmpSeries(keys) {
+    const a = S.account, C = S.compare || {}, eqs = a.equity;
+    const pick = (row, k) => (row && row[k] != null ? row[k] : null);
+    if (period === 'day') {
+      const rows = a.intraday || [];
+      if (rows.length >= 2) {
+        const byT = new Map((C.intraday || []).map((r) => [r.t, r]));
+        const daily = C.daily || [], prevRow = daily.length > 1 ? daily[daily.length - 2] : null;
+        const base = { acct: eqs.length > 1 ? eqs[eqs.length - 2].eq : S.capital };
+        keys.forEach((k) => { base[k] = pick(C.prev, k) || pick(prevRow, k); });
+        const pts = rows.map((r) => { const o = { label: `${dLabel(S.asOf.date)} ${r.t}`, acct: r.eq }; keys.forEach((k) => { o[k] = pick(byT.get(r.t), k); }); return o; });
+        return { pts, base, name: S.asOf.prov ? '오늘' : '최근 거래일' };
+      }
+    }
+    const n = period === 'week' ? 5 : period === 'month' ? 21 : 100000;
+    const byD = new Map((C.daily || []).map((r) => [r.date, r]));
+    const pts = eqs.slice(-Math.min(eqs.length, n)).map((e) => { const o = { label: e.prov ? `${dLabel(e.date)} ${e.time} 기준` : dLabel(e.date), acct: e.eq }; keys.forEach((k) => { o[k] = pick(byD.get(e.date), k); }); return o; });
+    const base = { acct: pts.length ? pts[0].acct : S.capital };
+    keys.forEach((k) => { const f = pts.find((p) => p[k] != null); base[k] = f ? f[k] : null; });
+    return { pts, base, name: { day: '최근 거래일', week: '1주', month: '1개월', all: '시작 후' }[period] };
+  }
+  function drawCompare(el, keys) {
+    const sr = cmpSeries(keys), pts = sr.pts, lg = $('cmpLegend');
+    const W = Math.floor(el.clientWidth), H = Math.floor(el.clientHeight);
+    if (!W || !H || !pts.length) return;
+    const lines = [{ k: 'acct', name: '내 계좌', col: 'var(--ink)', w: 2.4 }].concat(keys.map((k) => { const d = IDX.find((x) => x[0] === k); return { k, name: d[1], col: d[2], w: 2 }; }));
+    const ret = (p, k) => (p && p[k] != null && sr.base[k] ? p[k] / sr.base[k] - 1 : null);
+    const lastAt = (k, upto) => { for (let i = upto; i >= 0; i--) if (ret(pts[i], k) != null) return i; return -1; };
+    const legend = (i, when) => {
+      lg.hidden = false;
+      lg.innerHTML = lines.map((l) => { const j = lastAt(l.k, i), v = j < 0 ? null : ret(pts[j], l.k);
+        return `<li><i class="key" style="background:${l.col}"></i><span>${esc(l.name)}</span><b class="${v == null ? '' : rcls(v)}">${v == null ? '-' : pct(v)}</b></li>`; }).join('') + `<li class="when">${esc(when)} · 같은 출발점 대비 수익률</li>`;
+    };
+    const end = pts.length - 1;
+    $('heroValue').textContent = usd(pts[end].acct);
+    $('heroChange').innerHTML = heroChange(pts[end].acct, sr.base.acct, sr.name);
+    legend(end, sr.name);
+    if (pts.length < 2) { el.innerHTML = '<div class="empty">비교할 기록이 아직 부족합니다</div>'; return; }
+    let lo = 0, hi = 0;
+    for (const p of pts) for (const l of lines) { const v = ret(p, l.k); if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
+    const padV = (hi - lo) * 0.12 || 0.001; lo -= padV; hi += padV;
+    const L = 20, R = 20, T = 12, B = 12;
+    const x = (i) => L + (i / (pts.length - 1)) * (W - L - R);
+    const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+    const path = (k) => { let d = '', pen = false; pts.forEach((p, i) => { const v = ret(p, k); if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); pen = true; }); return d; };
+    const order = lines.slice(1).concat(lines[0]);           // the account is drawn last, on top
+    const y0 = y(0).toFixed(1);
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true" focusable="false">
+      <line x1="${L}" x2="${W - R}" y1="${y0}" y2="${y0}" stroke-width="1" style="stroke:var(--line)"/>
+      ${order.map((l) => `<path d="${path(l.k)}" fill="none" stroke-width="${l.w}" stroke-linejoin="round" stroke-linecap="round" style="stroke:${l.col}"/>`).join('')}
+      <line class="cur" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke-width="1" style="stroke:var(--muted);display:none"/>
+      ${order.map((l) => { const i = lastAt(l.k, end); return i < 0 ? '' : `<circle class="dot" data-k="${l.k}" cx="${x(i).toFixed(1)}" cy="${y(ret(pts[i], l.k)).toFixed(1)}" r="4" stroke-width="2" style="fill:${l.col};stroke:var(--bg)"/>`; }).join('')}</svg>`;
+    el.setAttribute('role', 'img');
+    el.setAttribute('aria-label', `${sr.name} 수익률 비교: ` + lines.map((l) => { const j = lastAt(l.k, end); return `${l.name} ${j < 0 ? '기록 없음' : pct(ret(pts[j], l.k))}`; }).join(', '));
+    const svg = el.querySelector('svg'), cur = svg.querySelector('.cur'), dots = svg.querySelectorAll('.dot');
+    const at = (clientX) => {
+      const r = svg.getBoundingClientRect();
+      const i = Math.max(0, Math.min(end, Math.round(((clientX - r.left) / r.width * W - L) / (W - L - R) * end)));
+      cur.setAttribute('x1', x(i)); cur.setAttribute('x2', x(i)); cur.style.display = '';
+      dots.forEach((d) => { const v = ret(pts[i], d.dataset.k); d.style.display = v == null ? 'none' : ''; if (v != null) { d.setAttribute('cx', x(i)); d.setAttribute('cy', y(v)); } });
+      $('heroValue').textContent = usd(pts[i].acct);
+      $('heroChange').innerHTML = heroChange(pts[i].acct, sr.base.acct, pts[i].label);
+      legend(i, pts[i].label);
+    };
+    const reset = () => drawChart();
+    el.onpointerdown = (e) => at(e.clientX);
+    el.onpointermove = (e) => { if (e.pointerType === 'mouse' || e.buttons) at(e.clientX); };
+    el.onpointerleave = reset;
+    el.onpointerup = (e) => { if (e.pointerType !== 'mouse') reset(); };
+    el.onpointercancel = reset;
+  }
   function drawChart() {
     const el = document.querySelector('#v-account .chart');
     if (!el || !S || !S.account) return;
+    const keys = cmp.filter(hasIdx);
+    if (keys.length) return drawCompare(el, keys);
+    if ($('cmpLegend')) $('cmpLegend').hidden = true;
     const sr = series(), pts = sr.pts;
     const W = Math.floor(el.clientWidth), H = Math.floor(el.clientHeight);
     if (!W || !H) return;
@@ -310,6 +424,58 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const kv = (rows) => '<div class="kv">' + rows.map(([k, v, c]) => `<div><span>${k}</span><b class="${c || ''}">${v}</b></div>`).join('') + '</div>';
   const more = (rows) => '<div class="more">' + rows.filter(Boolean).map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('') + '</div>';
 
+  // ── portfolio ring: up to five stocks by value (colours in fixed order), the rest as one, then cash, then the hedge
+  function allocation() {
+    const a = S.account, last = a.equity[a.equity.length - 1];
+    const st = a.open.map((p) => ({ name: p.sym, sub: p.name, v: p.value })).sort((p, q) => q.v - p.v);
+    const top = st.slice(0, 5), rest = st.slice(5), segs = [];
+    top.forEach((x, i) => segs.push({ name: x.name, sub: x.sub, v: x.v, col: `var(--s${i + 1})` }));
+    if (rest.length) segs.push({ name: `기타 ${rest.length}종목`, sub: rest.map((x) => x.name).join(', '), v: rest.reduce((t, x) => t + x.v, 0), col: 'var(--s-other)' });
+    if (last.cash > 0.5) segs.push({ name: '현금', sub: '주문 가능 현금', v: last.cash, col: 'var(--s-cash)' });
+    if (a.hedge && a.hedge.value > 0) segs.push({ name: 'SH', sub: 'S&P 500 인버스 헷지', v: a.hedge.value, col: 'var(--s6)' });
+    const total = segs.reduce((t, x) => t + x.v, 0);
+    segs.forEach((x) => { x.share = total > 0 ? x.v / total : 0; });
+    return { segs, total };
+  }
+  function arcPath(c, r0, r1, a0, a1) {
+    const p = (r, a) => `${(c + r * Math.sin(a)).toFixed(2)} ${(c - r * Math.cos(a)).toFixed(2)}`;
+    const big = a1 - a0 > Math.PI ? 1 : 0;
+    return `M${p(r1, a0)}A${r1} ${r1} 0 ${big} 1 ${p(r1, a1)}L${p(r0, a1)}A${r0} ${r0} 0 ${big} 0 ${p(r0, a0)}Z`;
+  }
+  const allocCenter = (x, total) => (x ? `<span>${esc(x.name)}</span><b>${usd(x.v, 0)}</b><span>${fmt(x.share * 100, 1)}%</span>` : `<span>총 자산</span><b>${usd(total, 0)}</b>`);
+  function allocHTML() {
+    const { segs, total } = allocation();
+    if (!segs.length || total <= 0) return '<p class="empty-row">보유 자산이 없습니다.</p>';
+    const C = 84, R1 = 82, R0 = 56, gap = 2 / ((R0 + R1) / 2), TAU = Math.PI * 2;
+    let a0 = 0;
+    const paths = segs.map((x, i) => {
+      const span = x.share * TAU, a1 = a0 + span;
+      let d;
+      if (span >= TAU - 1e-6) d = arcPath(C, R0, R1, 0, Math.PI) + arcPath(C, R0, R1, Math.PI, TAU);
+      else { const g = Math.min(gap, span * 0.4); d = arcPath(C, R0, R1, a0 + g / 2, a1 - g / 2); }
+      a0 = a1;
+      return `<path data-i="${i}" d="${d}" style="fill:${x.col}"><title>${esc(x.name)} ${fmt(x.share * 100, 1)}%</title></path>`;
+    }).join('');
+    return `<div class="alloc"><div class="donut"><svg viewBox="0 0 168 168" role="img" aria-label="포트폴리오 구성: ${esc(segs.map((x) => `${x.name} ${fmt(x.share * 100, 1)}%`).join(', '))}">${paths}</svg><div class="c">${allocCenter(null, total)}</div></div>
+      <ul>${segs.map((x, i) => `<li><button type="button" data-i="${i}" aria-pressed="false" aria-label="${esc(`${x.name} ${usd(x.v, 0)}, ${fmt(x.share * 100, 1)}%`)}"><i class="sw" style="background:${x.col}"></i><span class="nm">${esc(x.name)}</span><span class="sh">${fmt(x.share * 100, 1)}%</span></button></li>`).join('')}</ul></div>`;
+  }
+  function wireAlloc() {
+    const box = document.querySelector('#v-account .alloc');
+    if (!box) return;
+    const { segs, total } = allocation();
+    const svg = box.querySelector('svg'), c = box.querySelector('.c');
+    let sel = -1;
+    const pickSeg = (i) => {
+      sel = sel === i ? -1 : i;
+      svg.classList.toggle('sel', sel >= 0);
+      svg.querySelectorAll('path').forEach((p) => p.classList.toggle('on', +p.dataset.i === sel));
+      box.querySelectorAll('li button').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.i === sel)));
+      c.innerHTML = allocCenter(segs[sel] || null, total);
+    };
+    svg.querySelectorAll('path').forEach((p) => p.addEventListener('click', () => pickSeg(+p.dataset.i)));
+    box.querySelectorAll('li button').forEach((b) => b.addEventListener('click', () => pickSeg(+b.dataset.i)));
+  }
+
   function renderAccount() {
     const a = S.account;
     if (!a) { $('v-account').innerHTML = '<p class="empty-row">연습 계좌가 아직 시작되지 않았습니다.</p>'; return; }
@@ -317,8 +483,10 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const prevClose = eqs.length > 1 ? eqs[eqs.length - 2].eq : S.capital;
     const invested = last.eq - last.cash;
     let h = `<div class="hero"><div class="hero-label">총 자산</div><div class="hero-value num" id="heroValue">${usd(last.eq)}</div><div class="hero-change num" id="heroChange"></div></div>
-      <div class="chart"></div>
+      <div class="chart"></div><ul class="legend" id="cmpLegend" hidden></ul>
       <div class="periods" role="group" aria-label="기간">${[['day', '1일'], ['week', '1주'], ['month', '1개월'], ['all', '전체']].map(([k, t]) => `<button type="button" data-p="${k}" aria-pressed="${period === k}">${t}</button>`).join('')}</div>`;
+    const avail = IDX.filter(([k]) => hasIdx(k));
+    if (avail.length) h += `<div class="cmp" role="group" aria-label="지수와 수익률 비교"><span class="cmp-label">비교</span>${avail.map(([k, nm, col, chip]) => `<button type="button" data-k="${k}" aria-pressed="${cmp.includes(k)}" aria-label="${esc(nm)}와 비교"><i class="key" style="background:${col}"></i>${esc(chip)}</button>`).join('')}</div>`;
     h += kv([
       ['주문 가능 현금', usd(last.cash)],
       ['투자 중', usd(invested)],
@@ -332,6 +500,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     if (a.risk && a.risk.blocked && a.risk.blocked.length) notes.push(a.risk.blocked.join(' '));
     else if (a.risk && a.risk.mult < 1) notes.push(`손실 관리: ${a.risk.why.join(' ')}`);
     h += notes.map((n) => `<p class="note"><i aria-hidden="true"></i><span>${esc(n)}</span></p>`).join('');
+    h += `<div class="band"></div><h2>포트폴리오 구성</h2>` + allocHTML();
     const hg = a.hedge;
     h += `<div class="band"></div><h2>보유 종목 <span class="count num">${a.open.length + (hg ? 1 : 0)}</span></h2>`;
     if (!a.open.length && !hg) h += '<p class="empty-row">보유 종목이 없습니다. 전부 현금입니다.</p>';
@@ -355,6 +524,14 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       $('v-account').querySelectorAll('.periods button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
       drawChart();
     }));
+    $('v-account').querySelectorAll('.cmp button').forEach((b) => b.addEventListener('click', () => {
+      const k = b.dataset.k;
+      cmp = cmp.includes(k) ? cmp.filter((x) => x !== k) : cmp.concat(k);
+      saveCmp();
+      b.setAttribute('aria-pressed', String(cmp.includes(k)));
+      drawChart();
+    }));
+    wireAlloc();
   }
 
   function fillRow(o) {

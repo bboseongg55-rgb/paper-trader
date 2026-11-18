@@ -1,6 +1,7 @@
 // Intraday collector. GitHub Actions runs it about every 15 minutes; it does nothing outside the US session.
 // 1. once a day: the list of large US stocks (name, sector, market cap) from the Nasdaq screener -> data/universe.json
-// 2. live prices for that list and for the stocks held, and the S&P 500 level (sources in data/source.json)
+// 2. live prices for that list and for the stocks held, and the S&P 500 level (sources in data/source.json); the Nasdaq
+//    100 and Dow Jones levels too, for the page's comparison chart only
 // 3. yesterday's official closes if they are missing (from the previous-close field of the same quotes)
 // 4. today's row: provisional while the market is open (data/today.json, not committed), final from 15:40 New York time
 //    (written into data/live.json); every run's prices of the whole list are also kept in data/intraday/DATE.json,
@@ -96,6 +97,21 @@ if (heldMissing.length && cfg.held) {
 }
 let idx = null;
 if (cfg.index) { try { idx = await S.indexLevel(cfg.index); } catch (e) { log.indexErr = String(e.message || e).slice(0, 200); } }
+// Nasdaq 100 and Dow Jones levels for the page's comparison chart; a failure here never stops the collection
+const IXS = { ndx: '.NDX', dji: '.DJI' };
+let ixNow = null, ixPrev = null;
+if (cfg.index) {
+  try {
+    const m = await S.indexLevels(cfg.index, Object.values(IXS));
+    for (const k in IXS) {
+      const v = m.get(IXS[k]);
+      if (!v) continue;
+      if (v.px > 0 && (!v.time || tradeDate(v.time) === today)) (ixNow = ixNow || {})[k] = r2(v.px);
+      if (v.prev > 0) (ixPrev = ixPrev || {})[k] = r2(v.prev);
+    }
+    log.ix = ixNow;
+  } catch (e) { log.ixErr = String(e.message || e).slice(0, 200); }
+}
 
 let fresh = 0, stale = 0;
 const freshQ = new Map();
@@ -131,8 +147,17 @@ if (prevDay > (settings.seedLast || '') && (!prevRow || !prevRow.final)) {
   const rows = {};
   for (const s of want) { const v = q.get(s); if (v && v.prev > 0 && capOf(s) != null) rows[s] = [r2(v.prev), null, capOf(s)]; }
   if (Object.keys(rows).length >= 300) {
-    upsert({ date: prevDay, spx: idx && idx.prev > 0 ? r2(idx.prev) : (prevRow && prevRow.spx) || null, rows, src: 'ref', final: true });
+    upsert(Object.assign({ date: prevDay, spx: idx && idx.prev > 0 ? r2(idx.prev) : (prevRow && prevRow.spx) || null, rows, src: 'ref', final: true }, ixPrev ? { ix: ixPrev } : {}));
     log.prevFilled = prevDay;
+  }
+}
+// the previous day's Nasdaq 100 and Dow closes, when that day has none yet
+{
+  const pr = live.days.find((d) => d.date === prevDay);
+  if (pr && ixPrev) {
+    const add = {};
+    for (const k in ixPrev) if (!(pr.ix && pr.ix[k] > 0)) add[k] = ixPrev[k];
+    if (Object.keys(add).length) { pr.ix = Object.assign({}, pr.ix || {}, add); changed = true; log.ixPrevFilled = prevDay; }
   }
 }
 
@@ -148,6 +173,7 @@ for (const s of want) {
 const final = now.hm >= finalFrom && Object.keys(rows).length >= 300;   // a closing row needs the whole list, else retry next run
 const idxOk = idx && idx.px > 0 && (!idx.time || tradeDate(idx.time) === today);
 const row = { date: today, spx: idxOk ? r2(idx.px) : null, rows, src: 'intraday', t: now.hm, final };
+if (ixNow) row.ix = ixNow;
 if (final) { upsert(row); log.final = true; } else { writeJSON('data/today.json', row); changed = true; }
 log.rows = Object.keys(rows).length;
 
@@ -164,7 +190,12 @@ log.rows = Object.keys(rows).length;
     if (v.hi > 0) h[index.get(s)] = r2(v.hi);          // the day's high so far, from the source
   }
   doc.snaps = doc.snaps.filter((x) => x.t !== now.hm);
-  doc.snaps.push(h.some((x) => x != null) ? { t: now.hm, spx: idxOk ? r2(idx.px) : null, p, h } : { t: now.hm, spx: idxOk ? r2(idx.px) : null, p });
+  const snap = h.some((x) => x != null) ? { t: now.hm, spx: idxOk ? r2(idx.px) : null, p, h } : { t: now.hm, spx: idxOk ? r2(idx.px) : null, p };
+  if (ixNow) snap.ix = ixNow;
+  doc.snaps.push(snap);
+  // the indexes' previous closes, the base of the page's one-day comparison
+  const pv = Object.assign({}, doc.prev || {}, idx && idx.prev > 0 ? { spx: r2(idx.prev) } : {}, ixPrev || {});
+  if (Object.keys(pv).length) doc.prev = pv;
   fs.mkdirSync('data/intraday', { recursive: true });
   writeJSON(file, doc);
   log.snap = { t: now.hm, n: freshQ.size, held: held.filter((s) => freshQ.has(s)).length };

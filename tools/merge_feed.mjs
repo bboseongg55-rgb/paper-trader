@@ -13,7 +13,7 @@ for (const d of feed.days) {
   const row = { date: d.date, spx: d.spx, rows: d.rows, src: 'feed', final: true };
   if (i < 0) { live.days.push(row); added++; continue; }
   const cur = live.days[i];
-  if (!cur.final || !cur.src || cur.src === 'feed' || cur.src === 'ref') { live.days[i] = Object.assign(row, { spx: d.spx != null ? d.spx : cur.spx }); replaced++; }
+  if (!cur.final || !cur.src || cur.src === 'feed' || cur.src === 'ref') { live.days[i] = Object.assign(row, { spx: d.spx != null ? d.spx : cur.spx }, cur.ix ? { ix: cur.ix } : {}); replaced++; }
   else if (cur.spx == null && d.spx != null) { cur.spx = d.spx; spx++; }
 }
 for (const s in feed.meta || {}) if (!live.meta[s]) live.meta[s] = feed.meta[s];

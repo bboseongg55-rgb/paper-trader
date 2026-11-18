@@ -59,6 +59,21 @@ const mv = E.marketView(D, lv ? lv.params : null);
 const res = { D: { last: D.dates[T - 1], lastTime: D.times[T - 1] || null, prov: D.prov ? { date: D.dates[D.prov.t], time: D.prov.time } : null },
   regime: mv.regime, gate: mv.gate, capital, liveStart, live: lv };
 const fin = (st) => Object.fromEntries(Object.entries(st || {}).map(([k, v]) => [k, typeof v === 'number' && !Number.isFinite(v) ? null : v]));
+// index levels for the page's comparison chart: closes from the account's first day, and the last day's samples with
+// the indexes' previous closes (S&P 500 from the price files; Nasdaq 100 and Dow Jones as the collector saved them)
+function compareView() {
+  const r2 = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 100) / 100 : null);
+  const byDate = new Map(L.days.map((d) => [d.date, d]));
+  const li = D.dates.findIndex((d) => d >= liveStart);
+  const daily = [];
+  if (li >= 0) for (let t = li; t < T; t++) {
+    const ix = (byDate.get(D.dates[t]) || {}).ix || {};
+    daily.push({ date: D.dates[t], spx: r2(D.spx[t]), ndx: r2(ix.ndx), dji: r2(ix.dji) });
+  }
+  const doc = intra[D.dates[T - 1]];
+  const intraday = doc && Array.isArray(doc.snaps) ? doc.snaps.map((s) => ({ t: s.t, spx: r2(s.spx), ndx: r2(s.ix && s.ix.ndx), dji: r2(s.ix && s.ix.dji) })).sort((a, b) => (a.t < b.t ? -1 : 1)) : [];
+  return { names: { spx: 'S&P 500', ndx: '나스닥 100', dji: '다우존스' }, daily, intraday, prev: (doc && doc.prev) || null };
+}
 // fills: every buy and sell, newest first (a trade still open has only its buy)
 const orders = [];
 if (lv) {
@@ -114,6 +129,7 @@ const state = {
     hedge: lv.hedge, hedgeFees: Math.round((lv.hedgeFills || []).reduce((a, h) => a + (h.fee || 0), 0) * 100) / 100, lockedThrough: book ? book.date : null } : null,
   teams: lv ? teamsView(lv) : null,
   evolution: Lab.view(E, evo),
+  compare: compareView(),
   orders, daily, byPb,
   data: { liveBuilt: live.built || null, sources: readJSON('data/source.json', null) },
 };

@@ -155,6 +155,13 @@ export async function quotes(source, syms) {
   throw new Error('unknown source ' + source);
 }
 
+// other index levels by CNBC symbol (.NDX Nasdaq 100, .DJI Dow Jones), for the page's comparison chart
+export async function indexLevels(source, syms) {
+  if (source === 'fixture') { const j = JSON.parse((await import('node:fs')).readFileSync(process.env.FIXTURE, 'utf8')); return new Map(syms.filter((s) => j[s]).map((s) => [s, j[s]])); }   // local tests only
+  if (source === 'cnbc') return cnbc(syms);
+  return new Map();
+}
+
 // S&P 500 index level
 export async function indexLevel(source) {
   if (source === 'fixture') { const j = JSON.parse((await import('node:fs')).readFileSync(process.env.FIXTURE, 'utf8')); return j['^GSPC'] || null; }
