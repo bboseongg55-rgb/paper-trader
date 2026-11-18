@@ -138,7 +138,7 @@ const rows = {};
 for (const s of want) {
   const v = freshQ.get(s);
   if (!v || capOf(s) == null && !held.includes(s)) continue;
-  const pc = v.prev > 0 ? v.prev : lastClose(s);
+  const lc = lastClose(s), pc = lc > 0 ? lc : v.prev;   // our own last close first: some sources roll 'previous close' after the bell
   rows[s] = [r2(v.px), pc > 0 ? Math.round((v.px / pc - 1) * 10000) / 100 : null, capOf(s)];
 }
 const final = now.hm >= finalFrom && Object.keys(rows).length >= 300;   // a closing row needs the whole list, else retry next run

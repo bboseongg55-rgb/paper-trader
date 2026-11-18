@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'collect | nightly | rebuild | probe'
+        description: 'collect | collect-now | nightly | rebuild | probe'
         required: true
         default: rebuild
 permissions:
@@ -43,8 +43,8 @@ jobs:
         run: node tools/probe.mjs
       - name: Intraday prices
         id: collect
-        if: steps.mode.outputs.mode == 'collect'
-        run: node tools/collect.mjs
+        if: steps.mode.outputs.mode == 'collect' || steps.mode.outputs.mode == 'collect-now'
+        run: node tools/collect.mjs ${{ steps.mode.outputs.mode == 'collect-now' && '--force' || '' }}
       - name: Evening closes from public snapshots
         if: steps.mode.outputs.mode == 'nightly'
         run: |
