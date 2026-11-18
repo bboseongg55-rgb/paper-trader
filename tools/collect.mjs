@@ -3,8 +3,8 @@
 // 2. live prices for that list and for the stocks held, and the S&P 500 level (sources in data/source.json)
 // 3. yesterday's official closes if they are missing (from the previous-close field of the same quotes)
 // 4. today's row: provisional while the market is open (data/today.json, not committed), final from 15:40 New York time
-//    (written into data/live.json); the prices of the stocks held are also kept per run in data/intraday/DATE.json,
-//    which is what the engine uses to act on stops during the day
+//    (written into data/live.json); every run's prices of the whole list are also kept in data/intraday/DATE.json,
+//    which is what the engine uses for day trades and for stops during the day
 import fs from 'node:fs';
 import * as S from './sources.mjs';
 
@@ -147,20 +147,23 @@ const row = { date: today, spx: idxOk ? r2(idx.px) : null, rows, src: 'intraday'
 if (final) { upsert(row); log.final = true; } else { writeJSON('data/today.json', row); changed = true; }
 log.rows = Object.keys(rows).length;
 
-// held stocks' prices for intraday stops
-if (held.length) {
+// every run keeps the prices of the whole list (compact arrays): the engine replays day trades and intraday stops from them
+{
   const file = `data/intraday/${today}.json`;
-  const doc = readJSON(file, { date: today, snaps: [] });
-  const px = {};
-  for (const s of held) { const v = freshQ.get(s); if (v) px[s] = r2(v.px); }
-  if (Object.keys(px).length) {
-    doc.snaps = doc.snaps.filter((x) => x.t !== now.hm);
-    doc.snaps.push({ t: now.hm, px });
-    fs.mkdirSync('data/intraday', { recursive: true });
-    writeJSON(file, doc);
-    log.heldPx = Object.keys(px).length;
-    changed = true;
+  let doc = readJSON(file, null);
+  if (!doc || !Array.isArray(doc.syms)) doc = { date: today, syms: [], snaps: [] };
+  const index = new Map(doc.syms.map((s, j) => [s, j]));
+  const p = new Array(doc.syms.length).fill(null);
+  for (const [s, v] of freshQ) {
+    if (!index.has(s)) { index.set(s, doc.syms.length); doc.syms.push(s); p.push(null); }
+    p[index.get(s)] = r2(v.px);
   }
+  doc.snaps = doc.snaps.filter((x) => x.t !== now.hm);
+  doc.snaps.push({ t: now.hm, spx: idxOk ? r2(idx.px) : null, p });
+  fs.mkdirSync('data/intraday', { recursive: true });
+  writeJSON(file, doc);
+  log.snap = { t: now.hm, n: freshQ.size, held: held.filter((s) => freshQ.has(s)).length };
+  changed = true;
 }
 if (changed) { live.built = new Date().toISOString(); writeJSON('data/live.json', live); }
 log.ms = Date.now() - t0;

@@ -16,11 +16,11 @@ if (today && today.date && !days.some((d) => d.date === today.date) && (!days.le
 const intra = {};
 if (fs.existsSync('data/intraday')) for (const f of fs.readdirSync('data/intraday')) {
   const m = /^(\d{4}-\d{2}-\d{2})\.json$/.exec(f);
-  if (m && m[1] >= (settings.liveStart || '')) intra[m[1]] = (readJSON(`data/intraday/${f}`, {}).snaps) || [];
+  if (m && m[1] >= (settings.liveStart || '')) intra[m[1]] = readJSON(`data/intraday/${f}`, null);
 }
 const res = E.runAll(seed, Object.assign({}, live, { days }), settings, intra);
 const fin = (st) => Object.fromEntries(Object.entries(st || {}).map(([k, v]) => [k, typeof v === 'number' && !Number.isFinite(v) ? null : v]));
-const sim = (s) => s && { from: s.from, to: s.to, equity: s.equity, trades: s.trades, open: s.open, changes: s.changes, params: s.params, risk: s.risk, signals: s.signals, prov: s.prov, share: s.share, stats: fin(s.stats) };
+const sim = (s) => s && { from: s.from, to: s.to, equity: s.equity, trades: s.trades, open: s.open, changes: s.changes, params: s.params, risk: s.risk, signals: s.signals, prov: s.prov, mults: s.mults, weights: s.weights, dtPaused: s.dtPaused, scores: s.scores, stats: fin(s.stats) };
 const state = {
   v: 1, built: new Date().toISOString(),
   asOf: { date: res.D.last, time: res.D.lastTime, prov: !!res.D.prov },

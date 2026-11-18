@@ -1,9 +1,11 @@
-/* 자동매매 연습장 엔진 v2
+/* 자동매매 연습장 엔진 v3
    Paper-trading engine with risk management and a self-correction module.
    Pure functions over daily closes plus intraday price samples: the same input always gives the same trades, so the
    whole account can be rebuilt from the price files at any time. v2 adds intraday stop checks (prices sampled about
    every 15 minutes during the session) and a provisional "today" while the market is open: stops act at once, a loss
-   is reviewed as soon as it happens, and new buys wait for the closing prices. Runs in node and in the browser. */
+   is reviewed as soon as it happens, and new buys wait for the closing prices. v3 lets the holding period follow the
+   results: a day-trading playbook bought and sold within the session, wider trailing stops for big winners, and
+   waiting periods that lengthen or shorten after each exit is reviewed. Runs in node and in the browser. */
 (function (root) {
   'use strict';
 
@@ -18,29 +20,45 @@
     pbRsi: 10,          // pullback: 2-day RSI below this
     regimeLevel: 1,     // market filter: 0 none · 1 S&P > 200d · 2 also > 50d · 3 also calm volatility
     maxPosW: 0.15,      // one position at most this share of the account
+    timeStop_bo: 25,    // breakout: sell if it has not reached +0.5R after this many trading days
+    timeStop_pb: 8,     // pullback: longest holding
+    holdK: 1.0,         // breakout trades that reached +3R: trailing stop this much wider, to ride the trend longer
+    dtStopK: 0.6,       // day trade: stop = entry − k × daily price swing
+    dtMinUp: 1.0,       // day trade: up at least this % on the day
+    dtRsMin: 70,        // day trade: 6-month return rank
   };
   const BOUNDS = {
     stopK_bo: [1.5, 3.5], stopK_pb: [1.5, 3.5], trailK: [2.0, 4.5], boLookback: [20, 120], rsMin: [50, 90],
     pbRsMin: [60, 95], pbRsi: [3, 20], regimeLevel: [0, 3], maxPosW: [0.08, 0.20],
+    timeStop_bo: [10, 60], timeStop_pb: [4, 20], holdK: [0, 3], dtStopK: [0.4, 1.5], dtMinUp: [0.5, 3], dtRsMin: [50, 90],
   };
   const LABELS = {
     stopK_bo: '돌파 매매 손절 폭', stopK_pb: '눌림목 매매 손절 폭', trailK: '추적 손절 폭',
     boLookback: '돌파 기준 기간', rsMin: '돌파 매매 최소 상대강도', pbRsMin: '눌림목 매매 최소 상대강도',
     pbRsi: '눌림목 과매도 기준', regimeLevel: '시장 필터 단계', maxPosW: '종목당 최대 비중',
+    timeStop_bo: '돌파 매매 기다리는 기간', timeStop_pb: '눌림목 매매 최대 보유', holdK: '크게 오른 종목 추가 추적 폭',
+    dtStopK: '단타 손절 폭', dtMinUp: '단타 최소 당일 상승률', dtRsMin: '단타 최소 상대강도',
   };
   const UNITS = {
     stopK_bo: '변동폭 ×', stopK_pb: '변동폭 ×', trailK: '변동폭 ×', boLookback: '거래일', rsMin: '백분위',
     pbRsMin: '백분위', pbRsi: 'RSI(2) 미만', regimeLevel: '단계', maxPosW: '%',
+    timeStop_bo: '거래일', timeStop_pb: '거래일', holdK: '변동폭 ×', dtStopK: '하루 변동폭 ×', dtMinUp: '%', dtRsMin: '백분위',
   };
   // Fixed risk rules (never changed by the system)
   const FIXED = {
     riskPct: 0.0075, maxPositions: 10, heatMax: 0.06, sectorMax: 3, maxNewPerDay: 3,
-    timeStop_bo: 25, timeStop_pb: 8, slip: 0.001,
+    slip: 0.001, holdFromR: 3,
+    // day trades: entries between 10:00 and 14:30 New York time on a new high of the day, half the usual risk,
+    // at most 3 open and 4 new per day, sold at +2R, at the stop, or at the close at the latest
+    dtFrom: '10:00', dtUntil: '14:30', dtRiskMult: 0.5, dtMax: 3, dtNewPerDay: 4, dtTargetR: 2, dtMaxUp: 0.08,
+    dtRel: 0.01, dtMktMin: -0.003, dtCooldown: 3, dtPauseScore: -0.3, dtPauseMin: 8, dtPauseDays: 10,
+    // strategy tournament: every 20 trading days each playbook runs alone over the last 120 trading days
+    selectEvery: 20, selectWindow: 120, selectMinTrades: 5, selectTrialM: 0.25, selectTiers: [1, 0.5, 0.17], selectLoserM: 0.17,
     dailyLossStop: 0.025, ddHalf: 0.08, ddStop: 0.15, ddResume: 0.10,
     cooldown: 10, cooldownGap: 30, reviewDays: 10,
     validateEvery: 20, validateWindow: 120, validateMargin: 0.03, minValue: 0.005,
   };
-  const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목' };
+  const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타' };
 
   const SPLITS = [2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 40, 50, 1 / 2, 1 / 3, 1 / 4, 1 / 5, 1 / 6, 1 / 7, 1 / 8, 1 / 10, 1 / 12, 1 / 15, 1 / 20, 1 / 25, 1 / 30, 1 / 40, 1 / 50, 2 / 3, 3 / 2];
   const nearestSplit = (v) => SPLITS.reduce((b, c) => (Math.abs(v / c - 1) < Math.abs(v / b - 1) ? c : b), SPLITS[0]);
@@ -51,7 +69,8 @@
   // ── 1. Data: merge the static history with the daily snapshots collected since ─────────────────────────
   // seed: {dates, spx, syms:[{s,n,sec,c,e}], excl?};  live: {meta:{SYM:[name, sector]}, days:[{date, spx, rows:{SYM:[close, pct, capB]}}]}
   const companyKey = (n) => String(n || '').toLowerCase().replace(/\b(class [a-c]|common stock|ordinary shares?|inc\.?|corp(oration)?\.?|ltd\.?|plc|n\.?v\.?|s\.?a\.?|holdings?|co\.?|the)\b/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 3).join(' ');
-  // intra: {DATE: [{t: 'HH:MM', px: {SYM: price}}]} raw prices of the stocks held, sampled during the session
+  // intra: {DATE: {syms: [...], snaps: [{t: 'HH:MM', spx, p: [prices in syms order]}]}} raw prices sampled during the
+  // session (also accepts the older [{t, px: {SYM: price}}] form)
   function prepare(seed, live, intra) {
     const dates = seed.dates.slice();
     const times = [];
@@ -124,17 +143,28 @@
     const lastDay = days[days.length - 1];
     const prov = lastDay && lastDay.src === 'intraday' && !lastDay.final && dates[dates.length - 1] === lastDay.date
       ? { t: dates.length - 1, time: lastDay.t || null } : null;
-    // intraday samples aligned to day indexes, put on the same split-adjusted scale as the closes
-    const intraArr = new Array(dates.length).fill(null);
+    // intraday snapshots aligned to day indexes as price arrays by symbol, on the same split-adjusted scale as the closes
+    const snap = new Array(dates.length).fill(null);
+    const symIdx = new Map(S.map((x, i) => [x.s, i]));
+    const blank = () => new Float64Array(S.length).fill(NaN);
     if (intra) {
       for (const dt in intra) {
-        const t = dates.indexOf(dt);
-        if (t < 0 || !Array.isArray(intra[dt])) continue;
-        intraArr[t] = intra[dt].filter((s) => s && s.px && s.t).map((s) => ({ t: s.t, px: Object.assign({}, s.px) })).sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0));
+        const t = dates.indexOf(dt), doc = intra[dt];
+        if (t < 0 || !doc) continue;
+        let list = [];
+        if (Array.isArray(doc)) {
+          list = doc.filter((s) => s && s.t && s.px).map((s) => { const a = blank(); for (const k in s.px) { const i = symIdx.get(k); if (i != null && isNum(s.px[k]) && s.px[k] > 0) a[i] = s.px[k]; } return { t: s.t, spx: NaN, px: a }; });
+        } else if (Array.isArray(doc.snaps)) {
+          const syms = doc.syms || [];
+          const map = syms.map((k) => symIdx.get(k));
+          list = doc.snaps.filter((s) => s && s.t && Array.isArray(s.p)).map((s) => { const a = blank(); s.p.forEach((v, j) => { const i = map[j]; if (i != null && isNum(v) && v > 0) a[i] = v; }); return { t: s.t, spx: isNum(s.spx) ? s.spx : NaN, px: a }; });
+        }
+        list.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0));
+        if (list.length) snap[t] = list;
       }
-      for (const a of splitAdj) for (let j = 0; j < a.t; j++) { const sm = intraArr[j]; if (sm) for (const s of sm) if (isNum(s.px[a.sym])) s.px[a.sym] *= a.factor; }
+      for (const a of splitAdj) { const i = symIdx.get(a.sym); for (let j = 0; j < a.t; j++) if (snap[j]) for (const sm of snap[j]) if (isNum(sm.px[i])) sm.px[i] *= a.factor; }
     }
-    const D = { dates, spx, S, notes, liveDays: days.length, intra: intraArr, times, prov };
+    const D = { dates, spx, S, notes, liveDays: days.length, snap, times, prov };
     indicators(D);
     return D;
   }
@@ -235,13 +265,17 @@
     const adaptive = !!opts.adaptive;
     const capital = opts.capital;
     let cash = capital, peak = capital, idSeq = 0;
-    const positions = [], trades = [], equity = [], changes = [], reviews = [], signals = [];
+    const positions = [], trades = [], equity = [], changes = [], reviews = [], holdReviews = [], signals = [];
     const cool = new Map();                         // symbol index → first day it may be bought again
-    const scores = Object.assign({ bo: 0, pb: 0 }, opts.scores || {});
-    let share = shareOf(scores), loggedShare = share;
+    const scores = Object.assign({ bo: 0, pb: 0, dt: 0 }, opts.scores || {});
+    // share of the normal 1-trade risk each playbook may use, set by the strategy tournament
+    let M = Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM }, opts.mults || {});
+    const riskMul = (k) => M[k];
+    const only = opts.only || null;                               // tournament runs: one playbook alone
+    let lastSelect = -1e9, dtPausedUntil = -1, dtCount = 0;
     let streak = 0, blockUntil = -1, ddStopOn = false, lastMarketLoss = -1e9, lastValidate = from, prevEq = capital;
     let riskState = { mult: 1, why: [], blocked: [] }, lastRiskKey = '1|0';
-    const ev = Object.assign({ fake: [], pb: [], gap: [], mkt: [], noise_bo: [], noise_pb: [] }, opts.evidence ? JSON.parse(JSON.stringify(opts.evidence)) : {});
+    const ev = Object.assign({ fake: [], pb: [], gap: [], mkt: [], noise_bo: [], noise_pb: [], tbo: [], tpb: [], trail: [], hold: [], dtq: [], dtf: [] }, opts.evidence ? JSON.parse(JSON.stringify(opts.evidence)) : {});
     ev.mkt = [];                                    // day indexes do not carry over between runs
     const push = (arr, v, n) => { arr.push(v); while (arr.length > n) arr.shift(); };
     const count = (arr) => arr.filter(Boolean).length;
@@ -254,7 +288,7 @@
     }
     function setParam(key, val, list) {
       const [lo, hi] = BOUNDS[key];
-      const v = key === 'maxPosW' ? round(clamp(val, lo, hi), 3) : key === 'boLookback' || key === 'regimeLevel' || key === 'rsMin' || key === 'pbRsMin' || key === 'pbRsi' ? Math.round(clamp(val, lo, hi)) : round(clamp(val, lo, hi), 2);
+      const v = key === 'maxPosW' ? round(clamp(val, lo, hi), 3) : key === 'boLookback' || key === 'regimeLevel' || key === 'rsMin' || key === 'pbRsMin' || key === 'pbRsi' || key === 'timeStop_bo' || key === 'timeStop_pb' || key === 'dtRsMin' ? Math.round(clamp(val, lo, hi)) : round(clamp(val, lo, hi), 2);
       if (v !== P[key]) { list.push({ key, label: LABELS[key], from: P[key], to: v }); P[key] = v; }
     }
     function toward(key, step, list) {      // move one step back toward the starting value, never past it
@@ -268,7 +302,7 @@
       for (const p of positions) v += p.qty * price(D.S[p.i], t);
       return v;
     }
-    function closeTrade(p, t, px, reason) {
+    function closeTrade(p, t, px, reason, tm, k) {
       const x = D.S[p.i];
       const fill = px * (1 - FIXED.slip);
       cash += p.qty * fill;
@@ -279,78 +313,48 @@
         pnl: round(p.qty * (fill - p.fill), 2), pct: round(fill / p.fill - 1, 4), R: round(R, 2), days: t - p.t0,
         reason, mfeR: round(p.mfeR, 2), idx: round(D.spx[t] / D.spx[p.t0] - 1, 4),
       };
+      if (p.pb === 'dt') { tr.et = p.et; tr.xt = tm || '장 마감'; tr.k0 = p.k0; tr.k1 = k == null ? 1e9 : k; }
       trades.push(tr);
       positions.splice(positions.indexOf(p), 1);
       return tr;
     }
 
-    for (let t = from; t <= to; t++) {
-      const regimeNow = regimeOk(D, t, 1);
-      const prov = !!(D.prov && D.prov.t === t);     // market still open: today's prices are not final yet
-      const closedToday = [];
-      // ── intraday stops: prices sampled during the session; a stop acts at the first sample at or below it
-      const samples = D.intra && D.intra[t];
-      if (samples && samples.length) {
-        for (const sm of samples) {
-          for (const p of positions.slice()) {
-            if (p.t0 >= t) continue;
-            const v = sm.px[D.S[p.i].s];
-            if (!isNum(v) || v <= 0 || v > p.stop) continue;
-            const kind = p.stop > p.stop0 + 1e-9 ? (v >= p.fill ? '추적 손절(이익 보호)' : '추적 손절') : '손절';
-            closedToday.push(closeTrade(p, t, v, `${kind}, 장중 ${sm.t}`));
-          }
-        }
-      }
-      // ── exits at today's close (they wait while the market is open)
-      if (!prov) for (const p of positions.slice()) {
-        const x = D.S[p.i];
-        if (!isNum(x.c[t])) {
-          p.miss++;
-          if (p.miss >= 3) closedToday.push(closeTrade(p, t, price(x, t), '시세 끊김(인수·상장폐지 추정)'));
-          continue;
-        }
-        p.miss = 0;
-        const px = x.c[t];
-        p.maxC = Math.max(p.maxC, px);
-        p.mfeR = Math.max(p.mfeR, (px - p.fill) / p.R1);
-        let reason = null;
-        if (px <= p.stop) reason = p.stop > p.stop0 + 1e-9 ? (px >= p.fill ? '추적 손절(이익 보호)' : '추적 손절') : '손절';
-        else if (p.pb === 'pb' && px > x.sma5[t] && t > p.t0) reason = '반등 청산';
-        else if (p.pb === 'pb' && t - p.t0 >= FIXED.timeStop_pb) reason = '시간 청산';
-        else if (p.pb === 'bo' && t - p.t0 >= FIXED.timeStop_bo && p.mfeR < 0.5) reason = '시간 손절';
-        if (reason) { closedToday.push(closeTrade(p, t, px, reason)); continue; }
-        if (p.pb === 'bo') {   // trailing stop moves up only
-          const k = regimeNow ? P.trailK : Math.min(P.trailK, 2.0);
-          p.stop = Math.max(p.stop, p.maxC - k * p.atr);
-        }
-      }
-
-      // ── learn from today's closed trades
-      // Every loss is diagnosed and counted as evidence. A rule changes when the same cause keeps repeating in the
-      // recent trades (one loss is often just luck); protective risk cuts (losing streak, drawdown) act at once.
-      for (const tr of closedToday) {
+    // ── learn from a closed trade
+    // Every loss is diagnosed and counted as evidence. A rule changes when the same cause keeps repeating in the
+    // recent trades (one loss is often just luck); protective risk cuts (losing streak, drawdown) act at once.
+    function learn(tr, t) {
         const pbKey = tr.pb;
         scores[pbKey] = scores[pbKey] * 0.85 + clamp(tr.R, -3, 5) * 0.15;
         streak = tr.R < 0 ? streak + 1 : 0;
-        if (!adaptive) continue;
+        if (!adaptive) return;
+        const si = D.S.findIndex((x) => x.s === tr.sym);
+        const dtQuick = tr.pb === 'dt' && tr.R < 0 && tr.reason.indexOf('손절') >= 0 && tr.k1 - tr.k0 <= 2;
+        const dtFade = tr.pb === 'dt' && tr.R < 0 && tr.reason.indexOf('장 마감') >= 0;
         const isFake = tr.pb === 'bo' && tr.R < 0 && tr.reason.startsWith('손절') && tr.days <= 7 && tr.mfeR < 0.5;
         const isGap = tr.R <= -1.5;
         const isMkt = tr.R <= -0.8 && tr.idx <= -0.03;
-        if (tr.pb === 'bo') push(ev.fake, isFake, 12); else push(ev.pb, tr.R < 0, 12);
+        if (tr.pb === 'bo') push(ev.fake, isFake, 12); else if (tr.pb === 'pb') push(ev.pb, tr.R < 0, 12);
+        else { push(ev.dtq, dtQuick, 10); push(ev.dtf, dtFade, 10); }
         push(ev.gap, isGap, 20);
         if (isMkt) ev.mkt.push(t);
         const diag = [], chg = [], evid = [];
         if (tr.R < 0) {
-          const si = D.S.findIndex((x) => x.s === tr.sym);
           if (isMkt) diag.push(`보유 기간에 S&P 500이 ${(tr.idx * 100).toFixed(1)}% 빠졌습니다. 시장 전체에 끌려 내려간 손실입니다.`);
-          if (isGap) diag.push(`손절선보다 훨씬 아래에서 끝났습니다(${tr.R}R). 하루 사이에 크게 빠진 경우라 이 종목은 ${FIXED.cooldownGap}거래일 쉽니다.`);
+          if (isGap) diag.push(tr.pb === 'dt' ? `손절선보다 훨씬 아래에서 팔렸습니다(${tr.R}R). 15분 사이에 크게 빠진 경우라 이 종목은 ${FIXED.cooldownGap}거래일 쉽니다.` : `손절선보다 훨씬 아래에서 끝났습니다(${tr.R}R). 하루 사이에 크게 빠진 경우라 이 종목은 ${FIXED.cooldownGap}거래일 쉽니다.`);
           if (isFake) diag.push(`돌파 후 ${tr.days}거래일 만에 손절됐고 +0.5R에 한 번도 닿지 못한 가짜 돌파입니다.`);
           if (tr.pb === 'pb') diag.push('눌림목에서 샀지만 반등하지 못했습니다.');
+          if (dtQuick) diag.push('산 뒤 30분 안에 손절됐습니다. 장중 흔들림에 털린 단타입니다.');
+          if (dtFade) diag.push('당일 고점을 뚫을 때 샀지만 힘이 빠져 장 마감에 손실로 정리했습니다.');
           if (tr.reason.startsWith('시간') && !diag.length) diag.push('기한 안에 오르지 못해 작은 손실로 정리했습니다.');
           if (!diag.length) diag.push(`손실 ${tr.R}R은 손절 계획 안에서 끝난 보통 손실입니다.`);
-          cool.set(si, Math.max(cool.get(si) || 0, t + (isGap ? FIXED.cooldownGap : FIXED.cooldown)));
-          if (tr.reason.indexOf('손절') >= 0) reviews.push({ due: t + FIXED.reviewDays, tr, i: si });
+          cool.set(si, Math.max(cool.get(si) || 0, t + (isGap ? FIXED.cooldownGap : tr.pb === 'dt' ? FIXED.dtCooldown : FIXED.cooldown)));
+          if (tr.pb !== 'dt' && tr.reason.indexOf('손절') >= 0) reviews.push({ due: t + FIXED.reviewDays, tr, i: si });
+          // a stop-out after a long wait without progress counts against the waiting period
+          const longWait = tr.reason.startsWith('손절') && tr.mfeR < 0.5 && (tr.pb === 'bo' ? tr.days >= Math.round(P.timeStop_bo * 0.6) : tr.pb === 'pb' && tr.days >= Math.max(3, Math.round(P.timeStop_pb * 0.6)));
+          if (longWait) { diag.push(`${tr.days}거래일 동안 오르지 못하다 손절됐습니다. 기다리는 기간이 길었던 경우로 셉니다.`); timeEvidence(tr.pb, -1, chg, evid); }
         }
+        // exits made by the clock or by a trailing stop are checked again 10 days later: did the price run on?
+        if (tr.reason === '시간 손절' || tr.reason === '시간 청산' || tr.reason.startsWith('추적 손절(이익 보호)')) holdReviews.push({ due: t + FIXED.reviewDays, tr, i: si });
         // evidence checks (tighten when a cause repeats, relax when it has gone away)
         const fk = rate(ev.fake), pbl = rate(ev.pb), gp = count(ev.gap);
         if (tr.pb === 'bo' && ev.fake.length >= 8) {
@@ -374,13 +378,152 @@
           if (ev.mkt.length >= 2) { setParam('regimeLevel', P.regimeLevel + 1, chg); ev.mkt = []; lastMarketLoss = t; evid.push('2건 이상이라 시장 필터를 한 단계 올립니다.'); }
           else lastMarketLoss = t;
         }
+        if (tr.pb === 'dt') {
+          if (ev.dtq.length >= 6) {
+            const r = rate(ev.dtq);
+            evid.push(`산 뒤 30분 안에 손절된 단타는 최근 ${ev.dtq.length}건 중 ${count(ev.dtq)}건입니다.`);
+            if (r >= 0.5) { setParam('dtStopK', P.dtStopK + 0.1, chg); ev.dtq = []; evid.push('절반 이상이라 단타 손절 폭을 넓힙니다. 넓힌 만큼 수량을 줄여 1회 위험은 같습니다.'); }
+            else if (r <= 0.2 && P.dtStopK > DEFAULTS.dtStopK) { toward('dtStopK', 0.1, chg); ev.dtq = []; evid.push('20% 이하로 줄어 넓혀 둔 단타 손절 폭을 한 단계 되돌립니다.'); }
+          }
+          if (ev.dtf.length >= 6) {
+            const r = rate(ev.dtf);
+            evid.push(`장 마감에 손실로 끝난 단타는 최근 ${ev.dtf.length}건 중 ${count(ev.dtf)}건입니다.`);
+            if (r >= 0.5) { setParam('dtMinUp', P.dtMinUp + 0.25, chg); setParam('dtRsMin', P.dtRsMin + 5, chg); ev.dtf = []; evid.push('절반 이상이라 더 강하게 오르는 종목만 사도록 단타 조건을 조입니다.'); }
+            else if (r <= 0.2 && (P.dtMinUp > DEFAULTS.dtMinUp || P.dtRsMin > DEFAULTS.dtRsMin)) { toward('dtMinUp', 0.25, chg); toward('dtRsMin', 5, chg); ev.dtf = []; evid.push('20% 이하로 줄어 조였던 단타 조건을 한 단계 풉니다.'); }
+          }
+          dtCount++;
+          if (dtCount >= FIXED.dtPauseMin && scores.dt <= FIXED.dtPauseScore && t > dtPausedUntil) {
+            dtPausedUntil = t + FIXED.dtPauseDays; dtCount = 0; scores.dt = 0;
+            log(t, 'risk', '단타 일시 중지', `최근 단타 성과(평균 R, 최근 매매에 더 큰 가중)가 기준 ${FIXED.dtPauseScore}R보다 나빠 ${FIXED.dtPauseDays}거래일 동안 단타를 쉬고, 그 뒤 다시 시작합니다.`, []);
+          }
+        }
         if (tr.R < 0) {
           const tail = chg.length ? '' : (evid.length ? ' 아직 기준에 못 미쳐 규칙은 그대로 둡니다.' : ' 규칙은 그대로 둡니다.');
           log(t, 'loss', `${tr.sym} 손실 복기`, diag.join(' ') + (evid.length ? ' ' + evid.join(' ') : '') + tail, chg, { trade: tr });
         } else if (chg.length) {
           log(t, 'relax', `${tr.sym} ${tr.R >= 0 ? '+' : ''}${tr.R}R로 마감 · 조건 완화`, evid.join(' '), chg, { trade: tr });
         }
+    }
+    function timeEvidence(pbKey, v, chg, evid) {   // +1 sold too early by the clock, −1 waited too long, 0 right
+      if (pbKey !== 'bo' && pbKey !== 'pb') return;
+      const key = pbKey === 'bo' ? 'timeStop_bo' : 'timeStop_pb', w = pbKey === 'bo' ? ev.tbo : ev.tpb, step = pbKey === 'bo' ? 5 : 2;
+      push(w, v, 8);
+      const sum = w.reduce((a, b) => a + b, 0);
+      if (w.length >= 6 && sum >= 3) { setParam(key, P[key] + step, chg); w.length = 0; evid.push(`너무 일찍 판 경우가 많아 기다리는 기간을 ${step}거래일 늘립니다.`); }
+      else if (w.length >= 6 && sum <= -3) { setParam(key, P[key] - step, chg); w.length = 0; evid.push(`오래 기다리다 손절된 경우가 많아 기다리는 기간을 ${step}거래일 줄입니다.`); }
+    }
+
+    for (let t = from; t <= to; t++) {
+      const regimeNow = regimeOk(D, t, 1);
+      const prov = !!(D.prov && D.prov.t === t);     // market still open: today's prices are not final yet
+      const closedToday = [];
+      // ── intraday: prices sampled about every 15 minutes during the session
+      const snaps = D.snap && D.snap[t];
+      if (snaps && snaps.length) {
+        const nS = D.S.length;
+        const runHi = new Float64Array(nS).fill(-Infinity);
+        const spPrev = D.spx[t - 1];
+        let dtOpened = 0;
+        const dtDone = new Set();                       // one day trade per stock per day
+        const dtOn = (!only || only === 'dt') && t > dtPausedUntil && blockUntil < t && !ddStopOn && isNum(spPrev) && spPrev > 0;
+        for (let k = 0; k < snaps.length; k++) {
+          const sm = snaps[k], px = sm.px, tm = sm.t;
+          // a) stops, and day-trade targets, for positions already in the market at this time
+          for (const p of positions.slice()) {
+            if (p.pb === 'dt' ? p.k0 >= k : p.t0 >= t) continue;
+            const v = px[p.i];
+            if (!isNum(v) || v <= 0) continue;
+            p.lastPx = v;
+            if (v <= p.stop) {
+              const kind = p.pb === 'dt' ? (p.stop >= p.fill ? '단타 본전 손절' : '단타 손절') : p.stop > p.stop0 + 1e-9 ? (v >= p.fill ? '추적 손절(이익 보호)' : '추적 손절') : '손절';
+              learn(closeTrade(p, t, v, `${kind}, 장중 ${tm}`, tm, k), t);
+              continue;
+            }
+            if (p.pb === 'dt') {
+              p.mfeR = Math.max(p.mfeR, (v - p.fill) / p.R1);
+              if (v >= p.fill + FIXED.dtTargetR * p.R1) { learn(closeTrade(p, t, v, `단타 목표가(+${FIXED.dtTargetR}R), 장중 ${tm}`, tm, k), t); continue; }
+              if (v >= p.fill + p.R1) p.stop = Math.max(p.stop, p.fill);     // after +1R the stop moves up to the entry
+            }
+          }
+          // b) day-trade entries: a strong stock making a new high of the day while the market holds up
+          if (dtOn && k >= 2 && tm >= FIXED.dtFrom && tm <= FIXED.dtUntil && dtOpened < FIXED.dtNewPerDay) {
+            let spDay = isNum(sm.spx) ? sm.spx / spPrev - 1 : NaN;
+            if (!isNum(spDay)) {          // no index level in this snapshot: median move of the list
+              const mv = [];
+              for (let i = 0; i < nS; i++) { const v = px[i], pc = D.S[i].c[t - 1]; if (isNum(v) && isNum(pc) && pc > 0 && D.S[i].e[t - 1]) mv.push(v / pc - 1); }
+              mv.sort((a, b) => a - b);
+              spDay = mv.length >= 50 ? mv[mv.length >> 1] : NaN;
+            }
+            if (isNum(spDay) && spDay >= FIXED.dtMktMin && positions.filter((p) => p.pb === 'dt').length < FIXED.dtMax) {
+              const held = new Set(positions.map((p) => p.i));
+              const cands = [];
+              for (let i = 0; i < nS; i++) {
+                const x = D.S[i], v = px[i], pc = x.c[t - 1];
+                if (!isNum(v) || !isFinite(runHi[i]) || !(v > runHi[i]) || !isNum(pc) || pc <= 0) continue;
+                if (!x.e[t - 1] || held.has(i) || dtDone.has(i) || (cool.get(i) || 0) > t) continue;
+                const up = v / pc - 1;
+                if (up < P.dtMinUp / 100 || up > FIXED.dtMaxUp || up - spDay < FIXED.dtRel) continue;
+                if (!(x.rs[t - 1] >= P.dtRsMin) || !(pc > x.sma50[t - 1]) || !isNum(x.vol[t - 1]) || x.vol[t - 1] <= 0) continue;
+                cands.push({ i, score: up - spDay });
+              }
+              cands.sort((a, b) => b.score - a.score);
+              let heat = positions.reduce((sum, p) => sum + Math.max(0, p.fill - p.stop) * p.qty, 0);
+              for (const cd of cands) {
+                if (dtOpened >= FIXED.dtNewPerDay || positions.filter((p) => p.pb === 'dt').length >= FIXED.dtMax) break;
+                const x = D.S[cd.i], v = px[cd.i];
+                if (positions.filter((p) => p.pb === 'dt' && D.S[p.i].sec === x.sec).length >= 2) continue;
+                const fill = v * (1 + FIXED.slip);
+                const stop = fill * (1 - P.dtStopK * x.vol[t - 1]);
+                const perShare = fill - stop;
+                const risk = prevEq * FIXED.riskPct * FIXED.dtRiskMult * riskState.mult * riskMul('dt');
+                let qty = Math.floor(risk / perShare);
+                qty = Math.min(qty, Math.floor((P.maxPosW * prevEq) / fill), Math.floor(cash / fill));
+                if (heat + qty * perShare > FIXED.heatMax * prevEq) qty = Math.floor(Math.max(0, FIXED.heatMax * prevEq - heat) / perShare);
+                if (qty < 1 || qty * fill < FIXED.minValue * prevEq) continue;
+                cash -= qty * fill;
+                heat += qty * perShare;
+                positions.push({ id: ++idSeq, i: cd.i, pb: 'dt', t0: t, k0: k, et: tm, fill, qty, stop, stop0: stop, R1: perShare, atr: x.vol[t - 1] * v, maxC: v, mfeR: 0, miss: 0, lastPx: v });
+                held.add(cd.i);
+                dtDone.add(cd.i);
+                dtOpened++;
+              }
+            }
+          }
+          // c) running highs of today's samples
+          for (let i = 0; i < nS; i++) { const v = px[i]; if (isNum(v) && v > runHi[i]) runHi[i] = v; }
+        }
       }
+      // ── exits at today's close (they wait while the market is open)
+      if (!prov) for (const p of positions.slice()) {
+        const x = D.S[p.i];
+        if (p.pb === 'dt') {
+          const v = isNum(x.c[t]) ? x.c[t] : isNum(p.lastPx) ? p.lastPx : price(x, t);
+          closedToday.push(closeTrade(p, t, v, '단타 장 마감 청산', null, null));
+          continue;
+        }
+        if (!isNum(x.c[t])) {
+          p.miss++;
+          if (p.miss >= 3) closedToday.push(closeTrade(p, t, price(x, t), '시세 끊김(인수·상장폐지 추정)'));
+          continue;
+        }
+        p.miss = 0;
+        const px = x.c[t];
+        p.maxC = Math.max(p.maxC, px);
+        p.mfeR = Math.max(p.mfeR, (px - p.fill) / p.R1);
+        let reason = null;
+        if (px <= p.stop) reason = p.stop > p.stop0 + 1e-9 ? (px >= p.fill ? '추적 손절(이익 보호)' : '추적 손절') : '손절';
+        else if (p.pb === 'pb' && px > x.sma5[t] && t > p.t0) reason = '반등 청산';
+        else if (p.pb === 'pb' && t - p.t0 >= P.timeStop_pb) reason = '시간 청산';
+        else if (p.pb === 'bo' && t - p.t0 >= P.timeStop_bo && p.mfeR < 0.5) reason = '시간 손절';
+        if (reason) { closedToday.push(closeTrade(p, t, px, reason)); continue; }
+        if (p.pb === 'bo') {   // trailing stop moves up only; wider once the trade has made +3R, to ride the trend
+          const base = regimeNow ? P.trailK : Math.min(P.trailK, 2.0);
+          const k = p.mfeR >= FIXED.holdFromR ? base + P.holdK : base;
+          p.stop = Math.max(p.stop, p.maxC - k * p.atr);
+        }
+      }
+
+      for (const tr of closedToday) learn(tr, t);
       if (adaptive && !prov) {
         // follow-up 10 days after a stop-out: did the price come back above the entry (stop too tight)?
         for (const rv of reviews.filter((r) => r.due === t)) {
@@ -399,22 +542,59 @@
           else if (w.length >= 6 && nr <= 0.2 && P[key] > DEFAULTS[key]) { toward(key, 0.25, chg); w.length = 0; body += ' 20% 이하로 줄어 넓혀 둔 손절 폭을 한 단계 되돌립니다.'; }
           if (noise || right || chg.length) log(t, 'review', `${tr.sym} 손절 ${FIXED.reviewDays}일 뒤 점검`, body, chg, { trade: tr });
         }
+        // follow-up 10 days after an exit by the clock or by a trailing stop: did the price run on (sold too early)?
+        for (const rv of holdReviews.filter((r) => r.due === t)) {
+          const x = D.S[rv.i], tr = rv.tr, t1 = D.dates.indexOf(tr.exitDate);
+          let hi = -Infinity;
+          for (let j = t1 + 1; j <= t; j++) if (isNum(x.c[j])) hi = Math.max(hi, x.c[j]);
+          if (!isFinite(hi)) continue;
+          const oneR = tr.entry - tr.stop0, early = hi >= tr.exit + oneR, chg = [], evid = [];
+          let title, body;
+          if (tr.reason.startsWith('추적')) {
+            const big = tr.mfeR >= FIXED.holdFromR, key = big ? 'holdK' : 'trailK', w = big ? ev.hold : ev.trail, step = big ? 0.5 : 0.25;
+            push(w, early, 8);
+            body = early ? `이익을 지키며 판 뒤 ${FIXED.reviewDays}거래일 안에 1R 넘게 더 올랐습니다(최고 ${round(hi, 2)}). 너무 일찍 판 경우입니다.` : '판 뒤 1R 넘게 더 오르지 않았습니다. 판 시점이 적절했습니다.';
+            body += ` ${big ? '크게 오른 종목을' : '추적 손절로'} 너무 일찍 판 비율은 최근 ${w.length}건 중 ${count(w)}건입니다.`;
+            if (w.length >= 6 && rate(w) >= 0.5) { setParam(key, P[key] + step, chg); w.length = 0; body += big ? ' 절반 이상이라 크게 오른 종목은 추적 손절을 더 넓혀 더 오래 들고 갑니다.' : ' 절반 이상이라 추적 손절 폭을 넓힙니다.'; }
+            else if (w.length >= 6 && rate(w) <= 0.2 && P[key] !== DEFAULTS[key]) { toward(key, step, chg); w.length = 0; body += ' 20% 이하로 줄어 넓혀 둔 폭을 한 단계 되돌립니다.'; }
+            title = `${tr.sym} 이익 실현 ${FIXED.reviewDays}일 뒤 점검`;
+          } else {
+            body = early ? `기한이 차서 판 뒤 ${FIXED.reviewDays}거래일 안에 1R 넘게 올랐습니다(최고 ${round(hi, 2)}). 기다리는 기간이 짧았던 경우로 셉니다.` : '기한이 차서 판 뒤 1R 넘게 오르지 않았습니다. 정리한 판단이 맞았습니다.';
+            timeEvidence(tr.pb, early ? 1 : 0, chg, evid);
+            if (evid.length) body += ' ' + evid.join(' ');
+            title = `${tr.sym} 기한 매도 ${FIXED.reviewDays}일 뒤 점검`;
+          }
+          if (early || chg.length) log(t, 'review', title, body, chg, { trade: tr });
+        }
         // market filter relaxes after 40 calm days
         if (P.regimeLevel > DEFAULTS.regimeLevel && t - lastMarketLoss >= 40 && D.spx[t] > D.spx50[t]) {
           const chg = []; setParam('regimeLevel', P.regimeLevel - 1, chg); lastMarketLoss = t;
           log(t, 'relax', '시장 필터 완화', '시장 때문에 생긴 손실 없이 40거래일이 지났고 S&P 500이 50일선 위에 있어 시장 필터를 한 단계 낮춥니다.', chg);
         }
-        // risk budget between the two playbooks follows their recent results
-        share = shareOf(scores);
-        if (Math.abs(share - loggedShare) >= 0.1) {
-          log(t, 'budget', '전략별 위험 배분 조정', `최근 성과(평균 R, 최근 매매에 더 큰 가중): 돌파 ${round(scores.bo, 2)} · 눌림목 ${round(scores.pb, 2)}. 위험 예산을 돌파 ${Math.round(share * 100)}% · 눌림목 ${Math.round((1 - share) * 100)}%로 나눕니다.`, [{ key: 'share', label: '돌파 매매 위험 배분', from: Math.round(loggedShare * 100) + '%', to: Math.round(share * 100) + '%' }]);
-          loggedShare = share;
+        // strategy tournament: every 20 trading days each playbook runs alone over the last 120 trading days with the
+        // current rules; the one with the best return per unit of drawdown gets the biggest risk budget. A playbook
+        // with too few trades to judge keeps a small trial budget.
+        if (!only && t - lastSelect >= FIXED.selectEvery) {
+          lastSelect = t;
+          const res = {};
+          for (const k of ['bo', 'pb', 'dt']) {
+            const r = simulate(D, { from: Math.max(210, t - FIXED.selectWindow + 1), to: t, capital: 100000, params: P, adaptive: false, only: k });
+            res[k] = { ret: r.stats.ret, mdd: r.stats.mdd, n: r.stats.n };
+          }
+          const next = pickMults(res);
+          if (Object.keys(M).some((k) => Math.abs(next[k] - M[k]) >= 0.05)) {
+            const lvl = (m) => (m >= 0.99 ? '정상 위험' : m >= 0.45 ? '절반 위험' : m === FIXED.selectTrialM ? '1/4 위험(시험)' : '1/6 위험');
+            const chg = Object.keys(M).filter((k) => Math.abs(next[k] - M[k]) >= 0.005).map((k) => ({ key: 'm_' + k, label: `${PB_NAME[k]} 1회 위험`, from: Math.round(M[k] * 100) + '%', to: Math.round(next[k] * 100) + '%' }));
+            const line = (k) => (res[k].n < FIXED.selectMinTrades ? `${PB_NAME[k]} 표본 부족(${res[k].n}건)` : `${PB_NAME[k]} ${pctTxt(res[k].ret)}(최대 낙폭 ${(res[k].mdd * 100).toFixed(1)}%, ${res[k].n}건)`);
+            log(t, 'budget', '전략 선택: 위험 예산 재배분', `최근 ${FIXED.selectWindow}거래일 동안 방법별로 따로 돌려 본 결과는 ${['bo', 'pb', 'dt'].map(line).join(', ')}입니다. 수익을 최대 낙폭으로 나눈 값으로 순위를 매겨 ${['bo', 'pb', 'dt'].map((k) => `${PB_NAME[k]}은 ${lvl(next[k])}`).join(', ')}으로 매매합니다.`, chg);
+            M = next;
+          }
         }
         // guard against over-fitting: every 20 days compare the adapted rules with the starting rules
         if (t - lastValidate >= FIXED.validateEvery && t - from >= FIXED.validateWindow && differs(P)) {
           lastValidate = t;
-          const a = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: P, adaptive: false });
-          const b = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: DEFAULTS, adaptive: false });
+          const a = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: P, adaptive: false, mults: M });
+          const b = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: DEFAULTS, adaptive: false, mults: M });
           const ra = a.stats.ret, rb = b.stats.ret;
           if (ra < rb - FIXED.validateMargin) {
             const chg = [];
@@ -458,8 +638,8 @@
           const c = x.c[t];
           if (!isNum(c) || !isNum(x.sma200[t]) || !isNum(x.vol[t]) || x.vol[t] <= 0) continue;
           const trend = c > x.sma50[t] && x.sma50[t] > x.sma200[t];
-          if (trend && x.dom[t] >= P.boLookback && x.rs[t] >= P.rsMin) cands.push({ i, pb: 'bo', score: x.rs[t] + 0.5 });
-          else if (c > x.sma200[t] && x.sma50[t] > x.sma200[t] && x.rs[t] >= P.pbRsMin && x.rsi2[t] < P.pbRsi) cands.push({ i, pb: 'pb', score: x.rs[t] });
+          if (trend && x.dom[t] >= P.boLookback && x.rs[t] >= P.rsMin) { if (!only || only === 'bo') cands.push({ i, pb: 'bo', score: x.rs[t] + 0.5 }); }
+          else if (c > x.sma200[t] && x.sma50[t] > x.sma200[t] && x.rs[t] >= P.pbRsMin && x.rsi2[t] < P.pbRsi) { if (!only || only === 'pb') cands.push({ i, pb: 'pb', score: x.rs[t] }); }
         }
         cands.sort((a, b) => b.score - a.score);
         let opened = 0;
@@ -471,15 +651,14 @@
           todaySignals.push(sig);
           if (prov) { sig.why = '장 마감 무렵 다시 판단'; continue; }
           if (opened >= FIXED.maxNewPerDay) { sig.why = `하루 신규 ${FIXED.maxNewPerDay}종목 한도`; continue; }
-          if (positions.length >= FIXED.maxPositions) { sig.why = `보유 ${FIXED.maxPositions}종목 한도`; continue; }
+          if (positions.filter((p) => p.pb !== 'dt').length >= FIXED.maxPositions) { sig.why = `보유 ${FIXED.maxPositions}종목 한도`; continue; }
           if (positions.filter((p) => D.S[p.i].sec === x.sec).length >= FIXED.sectorMax) { sig.why = `같은 업종 ${FIXED.sectorMax}종목 한도`; continue; }
           const atr = x.vol[t] * c;
           const fill = c * (1 + FIXED.slip);
           const k = cd.pb === 'bo' ? P.stopK_bo : P.stopK_pb;
           const stop = fill - k * atr;
           const perShare = fill - stop;
-          const pbShare = cd.pb === 'bo' ? share : 1 - share;
-          const risk = eq * FIXED.riskPct * mult * 2 * pbShare;
+          const risk = eq * FIXED.riskPct * mult * riskMul(cd.pb);
           let qty = Math.floor(risk / perShare);
           qty = Math.min(qty, Math.floor((P.maxPosW * eq) / fill), Math.floor(cash / fill));
           if (heat + qty * perShare > FIXED.heatMax * eq) qty = Math.floor(Math.max(0, FIXED.heatMax * eq - heat) / perShare);
@@ -506,12 +685,24 @@
       const x = D.S[p.i], px = price(x, lastT);
       return { id: p.id, sym: x.s, name: x.n, sec: x.sec, pb: p.pb, entryDate: D.dates[p.t0], entry: round(p.fill, 2), qty: p.qty, price: round(px, 2),
         value: round(px * p.qty, 2), pnl: round((px - p.fill) * p.qty, 2), pct: round(px / p.fill - 1, 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2),
-        R: round((px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, px - p.stop) * p.qty, 2) };
+        R: round((px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, px - p.stop) * p.qty, 2), et: p.et || null };
     });
-    return { from, to: lastT, capital, equity, trades, open, changes, params: P, scores, share, evidence: ev, risk: riskState, signals, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
+    return { from, to: lastT, capital, equity, trades, open, changes, params: P, scores, mults: M, weights: normW(M), dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState, signals, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
   }
 
-  function shareOf(sc) { return round(clamp(0.5 + 0.25 * (sc.bo - sc.pb), 0.25, 0.75), 2); }
+  function normW(w) {
+    const sum = (w.bo || 0) + (w.pb || 0) + (w.dt || 0) || 1;
+    return { bo: round((w.bo || 0) / sum, 3), pb: round((w.pb || 0) / sum, 3), dt: round((w.dt || 0) / sum, 3) };
+  }
+  // ranks the playbooks by return ÷ max drawdown: the best trades with the normal 1-trade risk, the second with half,
+  // the third with a sixth; one that lost money gets at most a sixth; one with too few trades to judge a quarter (trial)
+  function pickMults(res) {
+    const keys = Object.keys(res), M = {};
+    const ranked = keys.filter((k) => res[k].n >= FIXED.selectMinTrades).map((k) => ({ k, sc: res[k].ret / Math.max(res[k].mdd, 0.02) })).sort((a, b) => b.sc - a.sc);
+    keys.forEach((k) => (M[k] = FIXED.selectTrialM));
+    ranked.forEach((r, j) => { const tier = FIXED.selectTiers[j]; M[r.k] = r.sc > 0 ? tier : Math.min(tier, FIXED.selectLoserM); });
+    return M;
+  }
   function differs(P) { for (const k in DEFAULTS) if (P[k] !== DEFAULTS[k]) return true; return false; }
   function pctTxt(v) { return (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%'; }
 
@@ -547,7 +738,7 @@
     const warm = Object.assign({}, bt.params);
     let lv = null;
     if (liveReady) {
-      lv = simulate(D, { from: li, to: T - 1, capital, params: warm, scores: bt.scores, evidence: bt.evidence, adaptive: true, log: true });
+      lv = simulate(D, { from: li, to: T - 1, capital, params: warm, scores: bt.scores, mults: bt.mults, evidence: bt.evidence, adaptive: true, log: true });
       lv.changes.unshift({ date: D.dates[li], t: li, kind: 'start', title: '연습 계좌 시작', body: `시작 자금 $${capital.toLocaleString('en-US')}. 과거 검증(${D.dates[bi]}~${D.dates[li - 1]}) 동안 스스로 고친 규칙에서 출발합니다.`, changes: Object.keys(DEFAULTS).filter((k) => warm[k] !== DEFAULTS[k]).map((k) => ({ key: k, label: LABELS[k], from: DEFAULTS[k], to: warm[k] })) });
     }
     return {
