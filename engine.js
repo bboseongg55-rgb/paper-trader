@@ -5,7 +5,10 @@
    every 15 minutes during the session) and a provisional "today" while the market is open: stops act at once, a loss
    is reviewed as soon as it happens, and new buys wait for the closing prices. v3 lets the holding period follow the
    results: a day-trading playbook bought and sold within the session, wider trailing stops for big winners, and
-   waiting periods that lengthen or shorten after each exit is reviewed. Runs in node and in the browser. */
+   waiting periods that lengthen or shorten after each exit is reviewed. v4 keeps the live account as a book: a day
+   whose closing prices are final is saved with everything the account holds and has learned, and later runs continue
+   from there, so fills that happened never change; the evolution lab (evolve.js) may change the rules from the next
+   day on. Runs in node and in the browser. */
 (function (root) {
   'use strict';
 
@@ -183,7 +186,7 @@
       }
       for (const a of splitAdj) { const i = symIdx.get(a.sym); for (let j = 0; j < a.t; j++) if (snap[j]) for (const sm of snap[j]) { if (isNum(sm.px[i])) sm.px[i] *= a.factor; if (sm.hi && isNum(sm.hi[i])) sm.hi[i] *= a.factor; } }
     }
-    const D = { dates, spx, S, notes, liveDays: days.length, snap, times, prov };
+    const D = { dates, spx, S, notes, liveDays: days.length, snap, times, prov, splits: splitAdj.map((a) => ({ sym: a.sym, t: a.t, date: dates[a.t], factor: a.factor })) };
     indicators(D);
     return D;
   }
@@ -279,25 +282,62 @@
   // opts: {from, to, capital, params, adaptive, scores, label}
   function simulate(D, opts) {
     const T = D.dates.length;
-    const from = Math.max(opts.from, 210), to = Math.min(opts.to, T - 1);
-    const P = Object.assign({}, DEFAULTS, opts.params || {});
+    // opts.resume: a book ({date, from0, capital, state, hist}). The run starts the day after the book's last day with
+    // everything the account held and had learned, and the book's history is carried over as it is.
+    const BK = opts.resume || null, BS = BK ? BK.state : null;
+    const tc = BK ? D.dates.indexOf(BK.date) : -1;
+    if (BK && tc < 0) throw new Error('book day missing from the price data: ' + BK.date);
+    const from = BK ? tc + 1 : Math.max(opts.from, 210), to = Math.min(opts.to, T - 1);
+    const base0 = BK ? Math.max(0, D.dates.indexOf(BK.from0)) : from;     // the account's first day
+    const P = Object.assign({}, DEFAULTS, (BS ? BS.P : opts.params) || {});
+    // the rules a correction steps back toward and the regular check compares with: the starting rules, or the rules
+    // the evolution lab promoted last
+    const B = Object.assign({}, DEFAULTS, (BS ? BS.base : opts.base) || {});
     const adaptive = !!opts.adaptive;
-    const capital = opts.capital;
+    const capital = BK ? BK.capital : opts.capital;
     let cash = capital, peak = capital, idSeq = 0;
     const positions = [], trades = [], equity = [], changes = [], reviews = [], holdReviews = [], signals = [], intraday = [];
     let hedge = null;                               // inverse S&P 500 position held by the risk & hedge team
     const hedgeFills = [], hedgeEpisodes = [];
     const cool = new Map();                         // symbol index → first day it may be bought again
-    const scores = Object.assign({ bo: 0, pb: 0, dt: 0 }, opts.scores || {});
+    const scores = Object.assign({ bo: 0, pb: 0, dt: 0 }, (BS ? BS.scores : opts.scores) || {});
     // share of the normal 1-trade risk each playbook may use, set by the strategy tournament
-    let M = Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM }, opts.mults || {});
+    let M = Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM }, (BS ? BS.M : opts.mults) || {});
     const riskMul = (k) => M[k];
     const only = opts.only || null;                               // tournament runs: one playbook alone
     let lastSelect = -1e9, dtPausedUntil = -1, dtCount = 0;
     let streak = 0, blockUntil = -1, ddStopOn = false, lastMarketLoss = -1e9, lastValidate = from, prevEq = capital;
     let riskState = { mult: 1, why: [], blocked: [] }, lastRiskKey = '1|0';
-    const ev = Object.assign({ fake: [], pb: [], gap: [], mkt: [], noise_bo: [], noise_pb: [], tbo: [], tpb: [], trail: [], hold: [], dtq: [], dtf: [], hedge: [] }, opts.evidence ? JSON.parse(JSON.stringify(opts.evidence)) : {});
-    ev.mkt = [];                                    // day indexes do not carry over between runs
+    const ev0 = BS ? BS.ev : opts.evidence;
+    const ev = Object.assign({ fake: [], pb: [], gap: [], mkt: [], noise_bo: [], noise_pb: [], tbo: [], tpb: [], trail: [], hold: [], dtq: [], dtf: [], hedge: [] }, ev0 ? JSON.parse(JSON.stringify(ev0)) : {});
+    ev.mkt = BS ? (BS.ev.mkt || []).map((v) => tc + v) : [];      // day indexes carry over only from a book
+    let symMap = null;
+    const symIdx = (s) => (symMap || (symMap = new Map(D.S.map((x, k) => [x.s, k])))).get(s);
+    if (BS) {
+      const at = (v) => tc + v;                     // the book keeps days as trading days after its last day
+      cash = BS.cash; peak = BS.peak; idSeq = BS.idSeq; prevEq = BS.prevEq;
+      lastSelect = at(BS.lastSelect); dtPausedUntil = at(BS.dtPausedUntil); dtCount = BS.dtCount; streak = BS.streak;
+      blockUntil = at(BS.blockUntil); ddStopOn = BS.ddStopOn; lastMarketLoss = at(BS.lastMarketLoss); lastValidate = at(BS.lastValidate);
+      riskState = JSON.parse(JSON.stringify(BS.riskState)); lastRiskKey = BS.lastRiskKey;
+      const need = (s) => { const k = symIdx(s); if (k == null) throw new Error('book symbol missing from the price data: ' + s); return k; };
+      for (const p of BS.positions) { const q = Object.assign({}, p, { i: need(p.sym), t0: at(p.t0) }); delete q.sym; positions.push(q); }
+      for (const r of BS.reviews) reviews.push({ due: at(r.due), tr: r.tr, i: need(r.sym) });
+      for (const r of BS.holdReviews) holdReviews.push({ due: at(r.due), tr: r.tr, i: need(r.sym) });
+      for (const [s, d] of BS.cool) { const k = symIdx(s); if (k != null) cool.set(k, at(d)); }
+      hedge = BS.hedge ? Object.assign({}, BS.hedge, { t0: at(BS.hedge.t0) }) : null;
+      // a split found after the book's last day: the saved prices of a held stock move to the new scale, its shares the other way
+      for (const sp of D.splits || []) {
+        if (sp.t <= tc) continue;
+        for (const p of positions) if (D.S[p.i].s === sp.sym) {
+          for (const k of ['fill', 'stop', 'stop0', 'R1', 'atr', 'maxC', 'lastPx']) if (isNum(p[k])) p[k] *= sp.factor;
+          p.qty = Math.round(p.qty / sp.factor);
+        }
+        for (const r of reviews.concat(holdReviews)) if (r.tr.sym === sp.sym) r.tr = Object.assign({}, r.tr, { entry: r.tr.entry * sp.factor, exit: r.tr.exit * sp.factor, stop0: r.tr.stop0 * sp.factor });
+      }
+      const h = BK.hist || {};
+      equity.push(...(h.equity || [])); trades.push(...(h.trades || [])); hedgeFills.push(...(h.hedgeFills || [])); hedgeEpisodes.push(...(h.hedgeEpisodes || []));
+      if (opts.log) changes.push(...(h.changes || []));
+    }
     const push = (arr, v, n) => { arr.push(v); while (arr.length > n) arr.shift(); };
     const count = (arr) => arr.filter(Boolean).length;
     const rate = (arr) => (arr.length ? count(arr) / arr.length : 0);
@@ -313,7 +353,7 @@
       if (v !== P[key]) { list.push({ key, label: LABELS[key], from: P[key], to: v }); P[key] = v; }
     }
     function toward(key, step, list) {      // move one step back toward the starting value, never past it
-      const d = DEFAULTS[key], v = P[key];
+      const d = B[key], v = P[key];
       if (v === d) return;
       setParam(key, v > d ? Math.max(d, v - step) : Math.min(d, v + step), list);
     }
@@ -385,14 +425,14 @@
         if (tr.pb === 'bo' && ev.fake.length >= 8) {
           evid.push(`가짜 돌파 비율은 최근 돌파 매매 ${ev.fake.length}건 중 ${count(ev.fake)}건(${Math.round(fk * 100)}%)입니다.`);
           if (fk >= 0.5) { setParam('boLookback', P.boLookback + 10, chg); setParam('rsMin', P.rsMin + 5, chg); ev.fake = []; evid.push('50% 이상이라 돌파 조건을 조입니다.'); }
-          else if (fk <= 0.2 && (P.boLookback > DEFAULTS.boLookback || P.rsMin > DEFAULTS.rsMin)) { toward('boLookback', 10, chg); toward('rsMin', 5, chg); ev.fake = []; evid.push('20% 이하로 줄어 조였던 돌파 조건을 한 단계 풉니다.'); }
+          else if (fk <= 0.2 && (P.boLookback > B.boLookback || P.rsMin > B.rsMin)) { toward('boLookback', 10, chg); toward('rsMin', 5, chg); ev.fake = []; evid.push('20% 이하로 줄어 조였던 돌파 조건을 한 단계 풉니다.'); }
         }
         if (tr.pb === 'pb' && ev.pb.length >= 8) {
           evid.push(`눌림목 손실 비율은 최근 ${ev.pb.length}건 중 ${count(ev.pb)}건(${Math.round(pbl * 100)}%)입니다.`);
           if (pbl >= 0.6) { setParam('pbRsi', P.pbRsi - 2, chg); setParam('pbRsMin', P.pbRsMin + 3, chg); ev.pb = []; evid.push('60%를 넘어 더 깊게 눌린 강한 종목만 사도록 바꿉니다.'); }
-          else if (pbl <= 0.35 && (P.pbRsi < DEFAULTS.pbRsi || P.pbRsMin > DEFAULTS.pbRsMin)) { toward('pbRsi', 2, chg); toward('pbRsMin', 3, chg); ev.pb = []; evid.push('35% 이하로 줄어 눌림목 조건을 한 단계 풉니다.'); }
+          else if (pbl <= 0.35 && (P.pbRsi < B.pbRsi || P.pbRsMin > B.pbRsMin)) { toward('pbRsi', 2, chg); toward('pbRsMin', 3, chg); ev.pb = []; evid.push('35% 이하로 줄어 눌림목 조건을 한 단계 풉니다.'); }
         }
-        if (isGap || (ev.gap.length >= 20 && gp === 0 && P.maxPosW < DEFAULTS.maxPosW)) {
+        if (isGap || (ev.gap.length >= 20 && gp === 0 && P.maxPosW < B.maxPosW)) {
           evid.push(`−1.5R보다 크게 잃은 매매는 최근 ${ev.gap.length}건 중 ${gp}건입니다.`);
           if (gp >= 3) { setParam('maxPosW', P.maxPosW - 0.02, chg); ev.gap = []; evid.push('3건 이상이라 종목당 최대 비중을 낮춥니다.'); }
           else if (gp === 0) { toward('maxPosW', 0.02, chg); ev.gap = []; evid.push('20건 동안 없어 종목당 최대 비중을 한 단계 되돌립니다.'); }
@@ -408,13 +448,13 @@
             const r = rate(ev.dtq);
             evid.push(`산 뒤 30분 안에 손절된 단타는 최근 ${ev.dtq.length}건 중 ${count(ev.dtq)}건입니다.`);
             if (r >= 0.5) { setParam('dtStopK', P.dtStopK + 0.1, chg); ev.dtq = []; evid.push('절반 이상이라 단타 손절 폭을 넓힙니다. 넓힌 만큼 수량을 줄여 1회 위험은 같습니다.'); }
-            else if (r <= 0.2 && P.dtStopK > DEFAULTS.dtStopK) { toward('dtStopK', 0.1, chg); ev.dtq = []; evid.push('20% 이하로 줄어 넓혀 둔 단타 손절 폭을 한 단계 되돌립니다.'); }
+            else if (r <= 0.2 && P.dtStopK > B.dtStopK) { toward('dtStopK', 0.1, chg); ev.dtq = []; evid.push('20% 이하로 줄어 넓혀 둔 단타 손절 폭을 한 단계 되돌립니다.'); }
           }
           if (ev.dtf.length >= 6) {
             const r = rate(ev.dtf);
             evid.push(`장 마감에 손실로 끝난 단타는 최근 ${ev.dtf.length}건 중 ${count(ev.dtf)}건입니다.`);
             if (r >= 0.5) { setParam('dtMinUp', P.dtMinUp + 0.25, chg); setParam('dtRsMin', P.dtRsMin + 5, chg); ev.dtf = []; evid.push('절반 이상이라 더 강하게 오르는 종목만 사도록 단타 조건을 조입니다.'); }
-            else if (r <= 0.2 && (P.dtMinUp > DEFAULTS.dtMinUp || P.dtRsMin > DEFAULTS.dtRsMin)) { toward('dtMinUp', 0.25, chg); toward('dtRsMin', 5, chg); ev.dtf = []; evid.push('20% 이하로 줄어 조였던 단타 조건을 한 단계 풉니다.'); }
+            else if (r <= 0.2 && (P.dtMinUp > B.dtMinUp || P.dtRsMin > B.dtRsMin)) { toward('dtMinUp', 0.25, chg); toward('dtRsMin', 5, chg); ev.dtf = []; evid.push('20% 이하로 줄어 조였던 단타 조건을 한 단계 풉니다.'); }
           }
           dtCount++;
           if (dtCount >= FIXED.dtPauseMin && scores.dt <= FIXED.dtPauseScore && t > dtPausedUntil) {
@@ -577,7 +617,7 @@
             : right ? `손절한 뒤 1R 넘게 더 빠졌습니다(최저 ${round(lo, 2)}). 손절이 제 역할을 했습니다.` : '손절 뒤 크게 오르지도 더 빠지지도 않았습니다.';
           body += ` 털린 손절은 최근 ${w.length}건 중 ${count(w)}건(${Math.round(nr * 100)}%)입니다.`;
           if (w.length >= 6 && nr >= 0.5) { setParam(key, P[key] + 0.25, chg); w.length = 0; body += ' 50% 이상이라 손절 폭을 넓힙니다. 넓힌 만큼 수량을 줄여 1회 위험은 같습니다.'; }
-          else if (w.length >= 6 && nr <= 0.2 && P[key] > DEFAULTS[key]) { toward(key, 0.25, chg); w.length = 0; body += ' 20% 이하로 줄어 넓혀 둔 손절 폭을 한 단계 되돌립니다.'; }
+          else if (w.length >= 6 && nr <= 0.2 && P[key] > B[key]) { toward(key, 0.25, chg); w.length = 0; body += ' 20% 이하로 줄어 넓혀 둔 손절 폭을 한 단계 되돌립니다.'; }
           if (noise || right || chg.length) log(t, 'review', `${tr.sym} 손절 ${FIXED.reviewDays}일 뒤 점검`, body, chg, { trade: tr });
         }
         // follow-up 10 days after an exit by the clock or by a trailing stop: did the price run on (sold too early)?
@@ -594,7 +634,7 @@
             body = early ? `이익을 지키며 판 뒤 ${FIXED.reviewDays}거래일 안에 1R 넘게 더 올랐습니다(최고 ${round(hi, 2)}). 너무 일찍 판 경우입니다.` : '판 뒤 1R 넘게 더 오르지 않았습니다. 판 시점이 적절했습니다.';
             body += ` ${big ? '크게 오른 종목을' : '추적 손절로'} 너무 일찍 판 비율은 최근 ${w.length}건 중 ${count(w)}건입니다.`;
             if (w.length >= 6 && rate(w) >= 0.5) { setParam(key, P[key] + step, chg); w.length = 0; body += big ? ' 절반 이상이라 크게 오른 종목은 추적 손절을 더 넓혀 더 오래 들고 갑니다.' : ' 절반 이상이라 추적 손절 폭을 넓힙니다.'; }
-            else if (w.length >= 6 && rate(w) <= 0.2 && P[key] !== DEFAULTS[key]) { toward(key, step, chg); w.length = 0; body += ' 20% 이하로 줄어 넓혀 둔 폭을 한 단계 되돌립니다.'; }
+            else if (w.length >= 6 && rate(w) <= 0.2 && P[key] !== B[key]) { toward(key, step, chg); w.length = 0; body += ' 20% 이하로 줄어 넓혀 둔 폭을 한 단계 되돌립니다.'; }
             title = `${tr.sym} 이익 실현 ${FIXED.reviewDays}일 뒤 점검`;
           } else {
             body = early ? `기한이 차서 판 뒤 ${FIXED.reviewDays}거래일 안에 1R 넘게 올랐습니다(최고 ${round(hi, 2)}). 기다리는 기간이 짧았던 경우로 셉니다.` : '기한이 차서 판 뒤 1R 넘게 오르지 않았습니다. 정리한 판단이 맞았습니다.';
@@ -605,7 +645,7 @@
           if (early || chg.length) log(t, 'review', title, body, chg, { trade: tr });
         }
         // market filter relaxes after 40 calm days
-        if (P.regimeLevel > DEFAULTS.regimeLevel && t - lastMarketLoss >= 40 && D.spx[t] > D.spx50[t]) {
+        if (P.regimeLevel > B.regimeLevel && t - lastMarketLoss >= 40 && D.spx[t] > D.spx50[t]) {
           const chg = []; setParam('regimeLevel', P.regimeLevel - 1, chg); lastMarketLoss = t;
           log(t, 'relax', '시장 필터 완화', '시장 때문에 생긴 손실 없이 40거래일이 지났고 S&P 500이 50일선 위에 있어 시장 필터를 한 단계 낮춥니다.', chg);
         }
@@ -641,17 +681,17 @@
           }
         }
         // guard against over-fitting: every 20 days compare the adapted rules with the starting rules
-        if (t - lastValidate >= FIXED.validateEvery && t - from >= FIXED.validateWindow && differs(P)) {
+        if (t - lastValidate >= FIXED.validateEvery && t - base0 >= FIXED.validateWindow && differs(P, B)) {
           lastValidate = t;
           const a = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: P, adaptive: false, mults: M });
-          const b = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: DEFAULTS, adaptive: false, mults: M });
+          const b = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: B, adaptive: false, mults: M });
           const ra = a.stats.ret, rb = b.stats.ret;
           if (ra < rb - FIXED.validateMargin) {
             const chg = [];
-            for (const k in DEFAULTS) setParam(k, DEFAULTS[k], chg);
-            log(t, 'rollback', '정기 점검: 바꾼 규칙 되돌림', `최근 ${FIXED.validateWindow}거래일을 두 규칙으로 다시 돌려 보니 지금 규칙 ${pctTxt(ra)}, 처음 규칙 ${pctTxt(rb)}였습니다. 고친 규칙이 오히려 나빠 처음 규칙으로 되돌립니다.`, chg);
+            for (const k in DEFAULTS) setParam(k, B[k], chg);
+            log(t, 'rollback', '정기 점검: 바꾼 규칙 되돌림', `최근 ${FIXED.validateWindow}거래일을 두 규칙으로 다시 돌려 보니 지금 규칙 ${pctTxt(ra)}, 출발 규칙 ${pctTxt(rb)}였습니다. 고친 규칙이 오히려 나빠 출발 규칙으로 되돌립니다.`, chg);
           } else {
-            log(t, 'check', '정기 점검: 유지', `최근 ${FIXED.validateWindow}거래일 재검증 결과 지금 규칙 ${pctTxt(ra)}, 처음 규칙 ${pctTxt(rb)}입니다. 고친 규칙을 유지합니다.`, []);
+            log(t, 'check', '정기 점검: 유지', `최근 ${FIXED.validateWindow}거래일 재검증 결과 지금 규칙 ${pctTxt(ra)}, 출발 규칙 ${pctTxt(rb)}입니다. 고친 규칙을 유지합니다.`, []);
           }
         } else if (t - lastValidate >= FIXED.validateEvery) lastValidate = t;
       }
@@ -767,7 +807,7 @@
       }
 
       const eqEnd = marked(t);
-      const ep = { date: D.dates[t], eq: round(eqEnd, 2), cash: round(cash, 2), hedge: hedge ? round(hedge.value, 2) : 0, n: positions.length, dd: round(1 - eqEnd / Math.max(peak, eqEnd), 4), bench: round(capital * D.spx[t] / D.spx[from], 2) };
+      const ep = { date: D.dates[t], eq: round(eqEnd, 2), cash: round(cash, 2), hedge: hedge ? round(hedge.value, 2) : 0, n: positions.length, dd: round(1 - eqEnd / Math.max(peak, eqEnd), 4), bench: round(capital * D.spx[t] / D.spx[base0], 2) };
       if (D.times && D.times[t]) ep.time = D.times[t];
       if (prov) ep.prov = true;
       equity.push(ep);
@@ -794,7 +834,26 @@
         value: round(px * p.qty, 2), pnl: round((px - p.fill) * p.qty - (p.feeIn || 0), 2), pct: round(px / p.fill - 1, 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2), feeBuy: p.feeIn || 0,
         R: round((px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, px - p.stop) * p.qty, 2), et: p.et || null };
     });
-    return { from, to: lastT, capital, equity, trades, open, changes, params: P, scores, mults: M, weights: normW(M), dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState, signals, intraday, watch, hedge: hedge ? { value: round(hedge.value, 2), since: D.dates[hedge.t0], paid: round(hedge.paid, 2), got: round(hedge.got, 2), ratio: hedge.ratio, spx0: round(hedge.spx0, 2) } : null, hedgeFills, hedgeEpisodes, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
+    // opts.snapshot: everything needed to continue after this day (a book's state), days kept relative to this day
+    let snapshot = null;
+    if (opts.snapshot) {
+      const off = (v) => v - lastT, nm = (k) => D.S[k].s;
+      snapshot = {
+        P: Object.assign({}, P), base: Object.assign({}, B), scores: Object.assign({}, scores), M: Object.assign({}, M),
+        ev: Object.assign(JSON.parse(JSON.stringify(ev)), { mkt: ev.mkt.map(off) }),
+        cash, peak, idSeq, prevEq, dtCount, streak, ddStopOn, lastRiskKey, riskState: JSON.parse(JSON.stringify(riskState)),
+        lastSelect: off(lastSelect), dtPausedUntil: off(dtPausedUntil), blockUntil: off(blockUntil), lastMarketLoss: off(lastMarketLoss), lastValidate: off(lastValidate),
+        positions: positions.map((p) => { const q = Object.assign({}, p, { sym: nm(p.i), t0: off(p.t0) }); delete q.i; return q; }),
+        reviews: reviews.filter((r) => r.due > lastT).map((r) => ({ due: off(r.due), tr: r.tr, sym: nm(r.i) })),
+        holdReviews: holdReviews.filter((r) => r.due > lastT).map((r) => ({ due: off(r.due), tr: r.tr, sym: nm(r.i) })),
+        cool: [...cool].filter(([, d]) => d > lastT).map(([k, d]) => [nm(k), off(d)]),
+        hedge: hedge ? Object.assign({}, hedge, { t0: off(hedge.t0) }) : null,
+      };
+    }
+    // a run that only reads a book back (no new day) shows the book's own last-day curve and signals
+    const lastX = BK && BK.last && BK.last.date === D.dates[lastT] && from > to ? BK.last : null;
+    return { from: base0, to: lastT, capital, equity, trades, open, changes, params: P, base: B, scores, mults: M, weights: normW(M), dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState,
+      signals: lastX ? lastX.signals || [] : signals, intraday: lastX ? lastX.intraday || [] : intraday, watch, snapshot, hedge: hedge ? { value: round(hedge.value, 2), since: D.dates[hedge.t0], paid: round(hedge.paid, 2), got: round(hedge.got, 2), ratio: hedge.ratio, spx0: round(hedge.spx0, 2) } : null, hedgeFills, hedgeEpisodes, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
   }
 
   // ── Robinhood fees for US stocks (fee schedule checked 2026-11-18). No commission. Sells: SEC fee $20.60 per
@@ -828,7 +887,7 @@
     ranked.forEach((r, j) => { const tier = FIXED.selectTiers[j]; M[r.k] = r.sc > 0 ? tier : Math.min(tier, FIXED.selectLoserM); });
     return M;
   }
-  function differs(P) { for (const k in DEFAULTS) if (P[k] !== DEFAULTS[k]) return true; return false; }
+  function differs(P, B) { const R = B || DEFAULTS; for (const k in DEFAULTS) if (P[k] !== R[k]) return true; return false; }
   function pctTxt(v) { return (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%'; }
 
   function stats(equity, trades, capital) {
@@ -880,7 +939,47 @@
     };
   }
 
-  const api = { DEFAULTS, BOUNDS, LABELS, UNITS, FIXED, PB_NAME, TEAMS, TEAM_OF, prepare, simulate, runAll, regimeText };
+  // ── 4. The live account as a book ─────────────────────────────────────────────────────────────────────
+  // A trading day goes into the book (data/book.json) once its closing prices are final, and every later run continues
+  // from the book instead of recomputing those days. Fills in the book never change, whatever later happens to the
+  // engine, to the rules (the evolution lab) or to the price files.
+  const VERSION = 'v4';
+  function lastFinalIdx(D) { return D.prov ? D.prov.t - 1 : D.dates.length - 1; }
+  function bookOf(D, res, from0, capital) {
+    return {
+      v: 1, engine: VERSION, date: D.dates[res.to], from0, capital, saved: new Date().toISOString(),
+      state: res.snapshot,
+      hist: { equity: res.equity, trades: res.trades, changes: res.changes, hedgeFills: res.hedgeFills, hedgeEpisodes: res.hedgeEpisodes },
+      last: { date: D.dates[res.to], intraday: res.intraday, signals: res.signals },
+    };
+  }
+  // o: {book, warm, capital, liveStart, btStart}. Returns the book through the last day with final prices and the days added.
+  function advanceBook(D, o) {
+    const lf = lastFinalIdx(D);
+    const li = D.dates.findIndex((d) => d >= o.liveStart);
+    if (li < 0 || lf < li) return { book: o.book || null, added: [] };
+    if (o.book) {
+      const tb = D.dates.indexOf(o.book.date);
+      if (tb < 0) throw new Error('book day missing from the price data: ' + o.book.date);
+      if (tb >= lf) return { book: o.book, added: [] };
+      const res = simulate(D, { resume: o.book, to: lf, adaptive: true, log: true, snapshot: true });
+      return { book: bookOf(D, res, o.book.from0, o.book.capital), added: D.dates.slice(tb + 1, lf + 1) };
+    }
+    // first book: the account from its first day, starting from the fixed snapshot of what the past test learned
+    const w = o.warm, capital = o.capital;
+    const P0 = Object.assign({}, DEFAULTS, w.params);
+    const res = simulate(D, { from: li, to: lf, capital, params: P0, scores: w.scores, mults: w.mults, evidence: w.evidence, adaptive: true, log: true, snapshot: true });
+    const bi = D.dates.findIndex((d) => d >= (o.btStart || '2025-01-02'));
+    res.changes.unshift({ date: D.dates[li], t: li, kind: 'start', title: '연습 계좌 시작', body: `시작 자금 $${capital.toLocaleString('en-US')}. 과거 검증(${D.dates[bi]}~${D.dates[li - 1]}) 동안 스스로 고친 규칙에서 출발합니다. (출발 상태 고정: ${w.saved || ''})`, changes: Object.keys(DEFAULTS).filter((k) => P0[k] !== DEFAULTS[k]).map((k) => ({ key: k, label: LABELS[k], from: DEFAULTS[k], to: P0[k] })) });
+    return { book: bookOf(D, res, D.dates[li], capital), added: D.dates.slice(li, lf + 1) };
+  }
+  // market state on the last day, for the page
+  function marketView(D, P) {
+    const t = D.dates.length - 1, lvl = (P || DEFAULTS).regimeLevel;
+    return { regime: regimeText(D, t), spxLast: D.spx[t], gate: { ok: regimeOk(D, t, lvl), level: lvl, spx: round(D.spx[t], 2), spx50: round(D.spx50[t], 2), spx200: round(D.spx200[t], 2) } };
+  }
+
+  const api = { VERSION, DEFAULTS, BOUNDS, LABELS, UNITS, FIXED, PB_NAME, TEAMS, TEAM_OF, teamsOf, prepare, simulate, runAll, regimeText, regimeOk, lastFinalIdx, advanceBook, marketView };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PaperEngine = api;
 })(typeof self !== 'undefined' ? self : this);

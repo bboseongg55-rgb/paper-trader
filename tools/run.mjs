@@ -1,9 +1,12 @@
-// Runs the engine over everything collected so far and writes what the page shows (data/state.json, not committed),
-// the list of stocks held for the next intraday run (data/held.json) and a short summary kept in the repository.
+// Runs the engine over everything collected so far and writes what the page shows (data/state.json), the list of
+// stocks held for the next intraday run (data/held.json) and a short summary. The live account is kept as a book
+// (data/book.json): a day goes in once its closing prices are final and later runs continue from it, so fills that
+// happened never change. Once a day is in the book the evolution lab runs for that evening (data/evolution.json).
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const E = require('../engine.js');
+const Lab = require('../evolve.js');
 const readJSON = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 
 const t0 = Date.now();
@@ -18,12 +21,44 @@ if (fs.existsSync('data/intraday')) for (const f of fs.readdirSync('data/intrada
   const m = /^(\d{4}-\d{2}-\d{2})\.json$/.exec(f);
   if (m && m[1] >= (settings.liveStart || '')) intra[m[1]] = readJSON(`data/intraday/${f}`, null);
 }
-// the live account's starting state is saved once (data/warm.json) and reused, so engine changes keep its start
-const warm = readJSON('data/warm.json', null);
-const res = E.runAll(seed, Object.assign({}, live, { days }), warm ? Object.assign({}, settings, { warm }) : settings, intra);
-if (!warm && res.start) fs.writeFileSync('data/warm.json', JSON.stringify(Object.assign({ saved: new Date().toISOString().slice(0, 10) }, res.start)));
+const L = Object.assign({}, live, { days });
+const capital = settings.capital || 100000, liveStart = settings.liveStart || '2026-11-17';
+// the live account's starting state, saved once (data/warm.json) from what the past test learned
+let warm = readJSON('data/warm.json', null);
+let book = readJSON('data/book.json', null);
+if (!book && !warm) {
+  const r0 = E.runAll(seed, L, settings, intra);
+  if (r0.start) { warm = Object.assign({ saved: new Date().toISOString().slice(0, 10) }, r0.start); fs.writeFileSync('data/warm.json', JSON.stringify(warm)); }
+}
+const D = E.prepare(seed, L, intra);
+const T = D.dates.length;
+// days whose closing prices are final go into the book
+const adv = warm || book ? E.advanceBook(D, { book, warm, capital, liveStart, btStart: settings.btStart }) : { book: null, added: [] };
+book = adv.book;
+let bookChanged = adv.added.length > 0;
+// the evolution lab, once for each evening (a failure is noted once for that day and does not stop the account)
+let evo = readJSON('data/evolution.json', null), evoChanged = false, labMs = null, promoted = null;
+if (book && (!evo || !evo.lastRun || evo.lastRun < book.date) && !(evo && evo.lastError && evo.lastError.date === book.date)) {
+  const t1 = Date.now();
+  try {
+    const r = Lab.night(E, D, book, evo);
+    if (r.changed) { evo = r.evo; evoChanged = true; }
+    if (r.book !== book) { book = r.book; bookChanged = true; promoted = r.promoted; }
+  } catch (e) {
+    evo = Object.assign({ v: 1, gen: 0, since: book.from0, seq: 0, shadows: [], history: [], lastRun: null, lastScreen: null }, evo || {},
+      { lastError: { date: book.date, at: new Date().toISOString(), msg: String((e && e.stack) || e).slice(0, 800) } });
+    evoChanged = true;
+  }
+  labMs = Date.now() - t1;
+}
+if (bookChanged) fs.writeFileSync('data/book.json', JSON.stringify(book));
+if (evoChanged) fs.writeFileSync('data/evolution.json', JSON.stringify(evo));
+// what the page shows: the book, plus today while the market is open
+const lv = book ? E.simulate(D, { resume: book, to: T - 1, adaptive: true, log: true }) : null;
+const mv = E.marketView(D, lv ? lv.params : null);
+const res = { D: { last: D.dates[T - 1], lastTime: D.times[T - 1] || null, prov: D.prov ? { date: D.dates[D.prov.t], time: D.prov.time } : null },
+  regime: mv.regime, gate: mv.gate, capital, liveStart, live: lv };
 const fin = (st) => Object.fromEntries(Object.entries(st || {}).map(([k, v]) => [k, typeof v === 'number' && !Number.isFinite(v) ? null : v]));
-const lv = res.live;
 // fills: every buy and sell, newest first (a trade still open has only its buy)
 const orders = [];
 if (lv) {
@@ -76,8 +111,9 @@ const state = {
   asOf: { date: res.D.last, time: res.D.lastTime, prov: !!res.D.prov },
   regime: res.regime, gate: res.gate, capital: res.capital, liveStart: res.liveStart,
   account: lv ? { equity: lv.equity, intraday: lv.intraday, open: lv.open, stats: fin(lv.stats), mults: lv.mults, dtPaused: lv.dtPaused, risk: lv.risk,
-    hedge: lv.hedge, hedgeFees: Math.round((lv.hedgeFills || []).reduce((a, h) => a + (h.fee || 0), 0) * 100) / 100 } : null,
+    hedge: lv.hedge, hedgeFees: Math.round((lv.hedgeFills || []).reduce((a, h) => a + (h.fee || 0), 0) * 100) / 100, lockedThrough: book ? book.date : null } : null,
   teams: lv ? teamsView(lv) : null,
+  evolution: Lab.view(E, evo),
   orders, daily, byPb,
   data: { liveBuilt: live.built || null, sources: readJSON('data/source.json', null) },
 };
@@ -91,7 +127,9 @@ const summary = {
     open: lv.open.map((p) => ({ sym: p.sym, qty: p.qty, entry: p.entry, price: p.price, stop: p.stop, pnl: p.pnl })),
     lastTrades: lv.trades.slice(-5).map((t) => ({ sym: t.sym, exit: t.exitDate, R: t.R, pnl: t.pnl, reason: t.reason })),
     lastChanges: lv.changes.slice(-5).map((c) => ({ date: c.date, kind: c.kind, title: c.title })) } : null,
-  signals: ((lv ? lv.signals : res.bt.signals) || []).slice(0, 10).map((s) => ({ sym: s.sym, pb: s.pb, taken: s.taken, why: s.why })),
+  signals: ((lv ? lv.signals : []) || []).slice(0, 10).map((s) => ({ sym: s.sym, pb: s.pb, taken: s.taken, why: s.why })),
+  book: book ? book.date : null, evolution: evo ? { gen: evo.gen, shadows: evo.shadows.length, lastRun: evo.lastRun, error: evo.lastError || null } : null,
 };
 fs.writeFileSync('data/summary.json', JSON.stringify(summary, null, 1));
-console.log(JSON.stringify({ ok: true, ms: Date.now() - t0, asOf: state.asOf, equity: last ? last.eq : null, open: lv ? lv.open.length : 0, bytes: fs.statSync('data/state.json').size }));
+console.log(JSON.stringify({ ok: true, ms: Date.now() - t0, asOf: state.asOf, equity: last ? last.eq : null, open: lv ? lv.open.length : 0, book: book ? book.date : null, added: adv.added,
+  lab: labMs == null ? null : { ms: labMs, gen: evo.gen, shadows: evo.shadows.length, promoted: promoted ? promoted.gen : null, error: evo.lastError ? evo.lastError.msg.slice(0, 120) : null }, bytes: fs.statSync('data/state.json').size }));
