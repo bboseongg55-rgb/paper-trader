@@ -1,28 +1,60 @@
 {
- "built": "2026-11-19T20:45:23.587Z",
+ "built": "2026-11-19T20:50:23.020Z",
  "asOf": {
   "date": "2026-11-19",
-  "time": "15:45",
-  "prov": true
+  "time": "15:50",
+  "prov": false
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-19",
-   "eq": 81039.01,
-   "cash": 81039.01,
+   "eq": 81009.09,
+   "cash": 51092.83,
    "hedge": 0,
-   "n": 0,
-   "dd": 0.0025,
-   "bench": 97941.84,
-   "time": "15:45",
-   "prov": true
+   "n": 4,
+   "dd": 0.0028,
+   "bench": 97988.43,
+   "time": "15:50"
   },
-  "ret": -0.1896099,
-  "bench": -0.02058160000000009,
+  "ret": -0.18990910000000005,
+  "bench": -0.02011570000000007,
   "trades": 6,
   "fees": 0.99,
-  "open": [],
+  "open": [
+   {
+    "sym": "KR10Y",
+    "qty": 25,
+    "entry": 102.66,
+    "price": 102.56,
+    "stop": 100.39,
+    "pnl": -2.56
+   },
+   {
+    "sym": "CN10Y",
+    "qty": 96,
+    "entry": 123.29,
+    "price": 123.17,
+    "stop": 122.7,
+    "pnl": -11.82
+   },
+   {
+    "sym": "US2Y",
+    "qty": 108,
+    "entry": 111.69,
+    "price": 111.58,
+    "stop": 111.28,
+    "pnl": -12.05
+   },
+   {
+    "sym": "JP10Y",
+    "qty": 45,
+    "entry": 77.36,
+    "price": 77.29,
+    "stop": 76.12,
+    "pnl": -3.48
+   }
+  ],
   "lastTrades": [
    {
     "sym": "RMD",
@@ -88,12 +120,37 @@
    }
   ]
  },
- "signals": [],
- "book": "2026-11-18",
+ "signals": [
+  {
+   "sym": "KR10Y",
+   "pb": "bd",
+   "taken": true,
+   "why": ""
+  },
+  {
+   "sym": "CN10Y",
+   "pb": "bd",
+   "taken": true,
+   "why": ""
+  },
+  {
+   "sym": "US2Y",
+   "pb": "bd",
+   "taken": true,
+   "why": ""
+  },
+  {
+   "sym": "JP10Y",
+   "pb": "bd",
+   "taken": true,
+   "why": ""
+  }
+ ],
+ "book": "2026-11-19",
  "evolution": {
   "gen": 0,
   "shadows": 3,
-  "lastRun": "2026-11-18",
+  "lastRun": "2026-11-19",
   "error": null
  }
 }
