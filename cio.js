@@ -150,8 +150,8 @@
     const headline = `${LABEL[key]}${tags.length ? ' · ' + tags.slice(0, 2).join(' · ') : ''} → ${top.join('·')} 우선`;
     const signals = [
       isNum(p.d200) ? { k: 'S&P 500 추세', v: { up: '상승', mixed: '약세', down: '하락' }[p.trend], c: p.trend === 'up' ? 'up' : 'down', sub: `200일선 ${pct(p.d200)} · 50일선 ${pct(p.d50)}` } : null,
-      isNum(p.vix) ? { k: 'VIX(변동성)', v: p.vix.toFixed(1), c: p.volLv === 'low' || p.volLv === 'normal' ? 'up' : 'down', sub: { low: '낮음', normal: '보통', high: '높음', extreme: '극단' }[p.volLv] + (isNum(p.vxn) ? ` · 나스닥 VXN ${p.vxn.toFixed(1)}` : '') } : null,
-      isNum(p.hy) ? { k: '하이일드 스프레드', v: p.hy.toFixed(2) + '%', c: p.credit === 'calm' ? 'up' : 'down', sub: `3개월 ${pp(p.dhy)} · ${{ calm: '안정', widening: '확대', stress: '경색' }[p.credit]}` } : null,
+      isNum(p.vix) ? { k: 'VIX(변동성)', v: p.vix.toFixed(1), sub: { low: '낮음', normal: '보통', high: '높음', extreme: '극단' }[p.volLv] + (isNum(p.vxn) ? ` · 나스닥 VXN ${p.vxn.toFixed(1)}` : '') } : null,
+      isNum(p.hy) ? { k: '하이일드 스프레드', v: p.hy.toFixed(2) + '%', sub: `3개월 ${pp(p.dhy)} · ${{ calm: '안정', widening: '확대', stress: '경색' }[p.credit]}` } : null,
       isNum(p.y2) ? { k: '미 2년 금리', v: p.y2.toFixed(2) + '%', sub: `3개월 ${pp(p.dy2)} · ${{ cutting: '인하 기대', hiking: '인상 압력', flat: '보합' }[p.rates]}` } : null,
       isNum(p.curve) ? { k: '장단기 금리차(10년−2년)', v: pp(p.curve), sub: p.curve < 0 ? '역전: 경기 둔화 신호' : p.curve < 0.5 ? '평평' : '정상' } : null,
       isNum(p.scRel) ? { k: '중소형주(러셀 2000)', v: pct(p.scRel), c: p.scRel >= 0 ? 'up' : 'down', sub: 'S&P 500 대비 3개월' } : null,

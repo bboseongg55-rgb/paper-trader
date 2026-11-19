@@ -1,6 +1,7 @@
 # 코인 계좌: one job polls five US crypto exchanges about every 15 seconds, runs the crypto strategies and saves the
 # account every 2 minutes; each job runs up to about 6 hours and the hourly schedule keeps the next one waiting, so the
-# account trades around the clock. Public price endpoints only, no API keys.
+# account trades around the clock. A job that finishes a full run also queues its successor itself, so a late or
+# dropped schedule leaves no gap. Public price endpoints only, no API keys.
 name: crypto
 on:
   schedule:
@@ -8,6 +9,7 @@ on:
   workflow_dispatch: {}
 permissions:
   contents: write
+  actions: write
 concurrency:
   group: crypto
   cancel-in-progress: false
@@ -16,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 355
     steps:
+      - name: Note the start time
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -24,3 +28,10 @@ jobs:
         run: node tools/crypto_loop.mjs
         env:
           MINUTES: '340'
+      - name: Queue the next job now (only after a full run, so an early failure cannot loop)
+        if: success()
+        run: |
+          ran=$(( $(date +%s) - T0 ))
+          if [ "$ran" -ge 3600 ]; then gh workflow run crypto.yml --ref main -R "$GITHUB_REPOSITORY"; else echo "ran ${ran}s, not queuing"; fi
+        env:
+          GH_TOKEN: ${{ github.token }}
