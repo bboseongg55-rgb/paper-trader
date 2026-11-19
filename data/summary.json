@@ -1,28 +1,45 @@
 {
- "built": "2026-11-19T15:15:22.914Z",
+ "built": "2026-11-19T15:20:23.034Z",
  "asOf": {
   "date": "2026-11-19",
-  "time": "10:15",
+  "time": "10:20",
   "prov": true
  },
- "regime": "200일선 위 · 50일선 아래",
+ "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-19",
-   "eq": 81247.93,
-   "cash": 81247.93,
+   "eq": 81233.2,
+   "cash": 66509.31,
    "hedge": 0,
-   "n": 0,
-   "dd": 0,
-   "bench": 100179.28,
-   "time": "10:15",
+   "n": 2,
+   "dd": 0.0001,
+   "bench": 100001.5,
+   "time": "10:20",
    "prov": true
   },
-  "ret": -0.1875207000000001,
-  "bench": 0.0017928000000000388,
+  "ret": -0.18766800000000006,
+  "bench": 0.000015000000000098268,
   "trades": 4,
   "fees": 0.68,
-  "open": [],
+  "open": [
+   {
+    "sym": "A",
+    "qty": 47,
+    "entry": 180.27,
+    "price": 180.09,
+    "stop": 178.26,
+    "pnl": -8.46
+   },
+   {
+    "sym": "TGT",
+    "qty": 37,
+    "entry": 169.35,
+    "price": 169.18,
+    "stop": 166.78,
+    "pnl": -6.26
+   }
+  ],
   "lastTrades": [
    {
     "sym": "DIS",
@@ -71,68 +88,7 @@
    }
   ]
  },
- "signals": [
-  {
-   "sym": "VEEV",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "IQV",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "MPC",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "THC",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "WDAY",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "VLO",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "ADP",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "CAH",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "MCK",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "IBN",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  }
- ],
+ "signals": [],
  "book": "2026-11-18",
  "evolution": {
   "gen": 0,
