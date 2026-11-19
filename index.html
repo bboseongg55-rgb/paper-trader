@@ -69,8 +69,9 @@ button { font: inherit; color: inherit; }
 
 /* top bar */
 .top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: calc(10px + env(safe-area-inset-top)) 20px 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.top h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
-.live { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.top h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; flex: none; }
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); min-width: 0; text-align: right; }
+.live > span { min-width: 0; word-break: keep-all; }
 .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .live.on i { background: var(--ok); }
 
@@ -304,7 +305,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   function setLive() {
     const on = marketOpen();
     $('live').className = 'live' + (on || (funded() && wsOk) ? ' on' : '');
-    $('live').lastElementChild.textContent = S ? `${on ? '장중' : '장 마감'}${funded() ? (wsOk ? ' · 코인 실시간' : ' · 코인 24시간') : ''} · ${clock(S.built)} 업데이트` : '불러오는 중';
+    $('live').lastElementChild.textContent = S ? `${on ? '장중' : '장 마감'}${funded() ? (wsOk ? ' · 코인 실시간' : ' · 코인 24시간') : ''} · ${clock(S.built)}` : '불러오는 중';
   }
 
   // ── tabs
