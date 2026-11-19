@@ -405,7 +405,9 @@
 
   // ── what the page shows
   function view(st) {
+    const sdOf = (k) => (st.signals && st.signals[k] && st.signals[k].vol) || null;
     const fut = Object.values(st.fut).map((p) => ({ key: p.key, name: p.name, g: p.g, qty: p.qty, contract: p.contract, exp: p.exp, entry: p.entry, px: p.px,
+      stop: p.best && sdOf(p.key) ? r4(p.qty > 0 ? p.best * (1 - CFG.cta.stopK * sdOf(p.key)) : p.best * (1 + CFG.cta.stopK * sdOf(p.key))) : null,
       notional: r2(Math.abs(p.qty) * p.px * p.mult), margin: r2(Math.abs(p.qty) * p.px * p.mult * FUT_BY[p.key].mr), pnl: r2((p.real || 0) + p.qty * p.mult * (p.px - p.mark) - (p.feesPaid || 0)), date: p.date, why: p.why }));
     const opt = st.opt.map((o) => ({ id: o.id, side: o.side, exp: o.exp, kLong: o.kLong, kShort: o.kShort, n: o.n, cost: o.cost, val: o.val, value: r2(o.n * 100 * (o.val != null ? o.val : o.cost)),
       pnl: r2(o.n * 100 * ((o.val != null ? o.val : o.cost) - o.cost) - (o.fees || 0)), maxLoss: r2(o.side === 'credit' ? o.n * 100 * (o.kShort - o.kLong + o.cost) : o.n * 100 * o.cost), date: o.date, why: o.why }));

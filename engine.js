@@ -945,7 +945,7 @@
       return { id: p.id, sym: x.s, name: x.n, sec: x.sec, pb: p.pb, entryDate: D.dates[p.t0], entry: round(p.fill, 2), qty: p.qty, price: round(px, 2),
         value: round(px * p.qty, 2), pnl: round((px - p.fill) * p.qty - (p.feeIn || 0), 2), pct: round(px / p.fill - 1, 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2), feeBuy: p.feeIn || 0,
         R: round((px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, px - p.stop) * p.qty, 2), et: p.et || null,
-        kind: x.kind || 'stock', yld: x.yld && isNum(x.yld[lastT]) ? round(x.yld[lastT], 3) : null, why: p.why || null, ctx: p.ctx || null };
+        kind: x.kind || 'stock', syn: x.syn ? true : undefined, yld: x.yld && isNum(x.yld[lastT]) ? round(x.yld[lastT], 3) : null, why: p.why || null, ctx: p.ctx || null };
     });
     // opts.snapshot: everything needed to continue after this day (a book's state), days kept relative to this day
     let snapshot = null;

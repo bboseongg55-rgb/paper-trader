@@ -236,11 +236,20 @@ function teamsView(lv) {
     risk: { name: E.TEAMS.risk, rules: own('risk'), log: logs('risk'), gate: res.gate, regime: res.regime, hedge: lv.hedge, risk: lv.risk },
   };
 }
+// a bond built from yields has no market quote to chart, so its own daily values (last year) go with it to the page
+const withHist = (p) => {
+  if (p.kind !== 'bond' || !p.syn) return p;
+  const x = D.S.find((y) => y.s === p.sym);
+  if (!x) return p;
+  const hist = [];
+  for (let t = Math.max(0, D.dates.length - 260); t < D.dates.length; t++) if (Number.isFinite(x.c[t])) hist.push([D.dates[t], Math.round(x.c[t] * 1e4) / 1e4]);
+  return Object.assign({}, p, { hist });
+};
 const state = {
   v: 2, built: new Date().toISOString(),
   asOf: { date: res.D.last, time: res.D.lastTime, prov: !!res.D.prov },
   regime: res.regime, gate: res.gate, capital: res.capital, liveStart: res.liveStart,
-  account: lv ? { equity: lv.equity, intraday: lv.intraday, open: lv.open, stats: fin(lv.stats), mults: lv.mults, dtPaused: lv.dtPaused, risk: lv.risk,
+  account: lv ? { equity: lv.equity, intraday: lv.intraday, open: lv.open.map(withHist), stats: fin(lv.stats), mults: lv.mults, dtPaused: lv.dtPaused, risk: lv.risk,
     hedge: lv.hedge, hedgeFees: Math.round((lv.hedgeFills || []).reduce((a, h) => a + (h.fee || 0), 0) * 100) / 100, lockedThrough: book ? book.date : null,
     marginPaid: lv.marginPaid || 0, rpGot: lv.rpGot || 0, lev: lv.lev || 1, flows: (book && book.flows) || [],
     // money moved out after the last row (the row is before the move): the stock account's value now
