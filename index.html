@@ -221,6 +221,9 @@ a.row:focus-visible, a.ain-r:focus-visible, .back:focus-visible { outline: 2px s
 .back:active { background: var(--band); }
 .hero-label .tag { margin-left: 8px; vertical-align: 1px; }
 .chart.achart { height: 260px; }
+.periods .sep { flex: none; width: 1px; margin: 9px 2px; background: var(--line); }
+.periods .ct { flex: none; width: 42px; display: grid; place-items: center; padding: 0; }
+.periods .ct svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .achart .ref { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 6 5; opacity: 0.75; }
 .achart .ref2 { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 4; }
 .achart .rl { font-size: 15px; font-weight: 700; fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
@@ -1161,7 +1164,18 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const APER = [['1d', '1일'], ['1w', '1주'], ['1m', '1달'], ['3m', '3달'], ['1y', '1년']];
   const SPAN = { '1d': 1, '1w': 7, '1m': 30, '3m': 91, '1y': 365 };
   const aCache = {};
-  let aPick = '1d', aPer = '1d', aScrub = false;       // the period the reader chose, and the one this holding can show
+  let aPick = '1d', aPer = '1d', aScrub = false;
+  let aType = (() => { try { return localStorage.getItem('pt.ctype') === 'candle' ? 'candle' : 'line'; } catch (e) { return 'line'; } })();
+  const hasOHLC = (pts) => pts.length > 1 && pts.every((q) => q.o > 0 && q.h > 0 && q.l > 0);
+  // candles: at most about 80 on screen (a year shows weekly candles), each from consecutive bars
+  function candles(pts, per) {
+    const n = pts.length, k = per === '1y' ? 5 : Math.max(1, Math.ceil(n / 80)), out = [];
+    for (let i = 0; i < n; i += k) {
+      const g = pts.slice(i, i + k);
+      out.push({ t: g[0].t, o: g[0].o, v: g[g.length - 1].v, h: Math.max(...g.map((q) => q.h)), l: Math.min(...g.map((q) => q.l)), day: g[0].day, utc: g[0].utc, n: g.length });
+    }
+    return out;
+  }       // the period the reader chose, and the one this holding can show
   const curAssetId = () => { const h = (location.hash || '').slice(1); return h.startsWith('a/') ? decodeURIComponent(h.slice(2)) : null; };
   const pxText = (x, v) => (v == null || !Number.isFinite(v) ? '—' : x.unit === '$' ? usd(v, x.dp) : x.unit === '%' ? fmt(v, x.dp) + '%' : fmt(v, x.dp));
   function aHead(x, v, scrub) {           // under the price: against the average price, and the profit or loss now
@@ -1181,19 +1195,19 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const IV = { '1d': ['5M', 5], '1w': ['30M', 9], '1m': ['1H', 33], '3m': ['1D', 95], '1y': ['1D', 370] }[per], now = Date.now();
     const j = await getJ(CNB(sym, IV[0], etStamp(now - IV[1] * 86400e3).slice(0, 8) + '000000', etStamp(now).slice(0, 8) + '235959'));
     const day = IV[0] === '1D', open = IV[0] === '1H' ? '0900' : '0930';
-    let pts = ((j && j.barData && j.barData.priceBars) || []).map((r) => ({ t: +r.tradeTimeinMills, v: numOf(r.close), hm: String(r.tradeTime).slice(8, 12), d: String(r.tradeTime).slice(0, 8) })).filter((q) => q.v > 0 && q.t > 0);
+    let pts = ((j && j.barData && j.barData.priceBars) || []).map((r) => ({ t: +r.tradeTimeinMills, v: numOf(r.close), o: numOf(r.open), h: numOf(r.high), l: numOf(r.low), hm: String(r.tradeTime).slice(8, 12), d: String(r.tradeTime).slice(0, 8) })).filter((q) => q.v > 0 && q.t > 0);
     if (!day && reg) pts = pts.filter((q) => q.hm >= open && q.hm < '1600');
     if (per === '1d') {
       if (reg) { const last = pts.length ? pts[pts.length - 1].d : null; pts = pts.filter((q) => q.d === last); }
       else { const end = pts.length ? pts[pts.length - 1].t : 0; pts = pts.filter((q) => q.t > end - 86400e3); }
     } else pts = pts.filter((q) => q.t >= now - SPAN[per] * 86400e3);
-    return pts.map((q) => ({ t: q.t, v: q.v, day }));
+    return pts.map((q) => ({ t: q.t, v: q.v, o: q.o, h: q.h, l: q.l, day }));
   }
   async function krakenSeries(pair, tok, per) {
     const iv = { '1d': 5, '1w': 30, '1m': 60, '3m': 1440, '1y': 1440 }[per];
     const j = await getJ(`https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${iv}${tok ? '&asset_class=tokenized_asset' : ''}`);
     const k = Object.keys((j && j.result) || {}).find((x) => x !== 'last'), rows = k ? j.result[k] : [], from = Date.now() - SPAN[per] * 86400e3;
-    return rows.map((r) => ({ t: r[0] * 1000, v: numOf(r[4]), utc: iv === 1440 })).filter((q) => q.v > 0 && q.t >= from);
+    return rows.map((r) => ({ t: r[0] * 1000, v: numOf(r[4]), o: numOf(r[1]), h: numOf(r[2]), l: numOf(r[3]), utc: iv === 1440 })).filter((q) => q.v > 0 && q.t >= from);
   }
   async function fetchSeries(x, per) {
     const src = x.src;
@@ -1226,15 +1240,23 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       el.dataset.id = id;
       el.innerHTML = `<div class="ast-bar"><a class="back" href="#account" id="aBackBtn">계좌</a></div>
         <div class="hero"><div class="hero-label">${esc(x.name)}${x.tag ? `<span class="tag">${esc(x.tag)}</span>` : ''}</div><div class="hero-value num" id="aPx"></div><div class="hero-change num" id="aChg"></div></div>
-        <div class="periods" id="aPer" role="group" aria-label="차트 기간">${APER.filter(([k]) => !x.periods || x.periods.includes(k)).map(([k, l]) => `<button type="button" data-p="${k}" aria-pressed="${k === aPer}">${l}</button>`).join('')}</div>
+        <div class="periods" id="aPer" role="group" aria-label="차트 기간">${APER.filter(([k]) => !x.periods || x.periods.includes(k)).map(([k, l]) => `<button type="button" data-p="${k}" aria-pressed="${k === aPer}">${l}</button>`).join('')}${x.src.k === 'cnbc' || x.src.k === 'kraken' ? `<i class="sep" aria-hidden="true"></i>
+          <button type="button" class="ct" data-ct="line" aria-pressed="${aType === 'line'}" aria-label="선 차트"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 14l5-5 4 3 7-8"/></svg></button>
+          <button type="button" class="ct" data-ct="candle" aria-pressed="${aType === 'candle'}" aria-label="캔들 차트"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 2v16M14 4v13"/><rect x="3.5" y="6" width="5" height="7" rx="1"/><rect x="11.5" y="8" width="5" height="5" rx="1"/></svg></button>` : ''}</div>
         <div class="chart achart" id="aChart"></div><p class="asrc" id="aSrc"></p>
         <div class="band"></div><h2>내 투자</h2><div class="ainfo" id="aInfo"></div>
         ${x.why ? `<div class="band"></div><h2>편입 이유</h2><p class="awhy">${esc(x.why)}</p>` : ''}<div style="height:24px"></div>`;
       $('aBackBtn').addEventListener('click', (e) => { if (aBack) { e.preventDefault(); history.back(); } });
-      $('aPer').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      $('aPer').querySelectorAll('button[data-p]').forEach((b) => b.addEventListener('click', () => {
         aPick = aPer = b.dataset.p;
-        $('aPer').querySelectorAll('button').forEach((y) => y.setAttribute('aria-pressed', String(y === b)));
+        $('aPer').querySelectorAll('button[data-p]').forEach((y) => y.setAttribute('aria-pressed', String(y === b)));
         loadAsset(true);
+      }));
+      $('aPer').querySelectorAll('button[data-ct]').forEach((b) => b.addEventListener('click', () => {
+        aType = b.dataset.ct;
+        try { localStorage.setItem('pt.ctype', aType); } catch (e) { /* private mode */ }
+        $('aPer').querySelectorAll('button[data-ct]').forEach((y) => y.setAttribute('aria-pressed', String(y === b)));
+        const y = assetOf(curAssetId()); if (y) drawAsset(y);
       }));
       loadAsset(true);
     } else loadAsset(false);
@@ -1252,45 +1274,55 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   function drawAsset(x) {
     const el = $('aChart'), c = aCache[curAssetId() + '|' + aPer];
     if (!el || !c) return;
-    const pts = c.pts.slice();
-    // the price now at the end, while its market trades
-    if (x.px > 0 && x.liveAt && pts.length && x.liveAt > pts[pts.length - 1].t + 30e3 && (!x.src.reg || marketOpen())) pts.push({ t: x.liveAt, v: x.px, live: true });
+    const asCandle = aType === 'candle' && (x.src.k === 'cnbc' || x.src.k === 'kraken') && hasOHLC(c.pts);
+    const pts = asCandle ? candles(c.pts, aPer) : c.pts.slice();
+    // the price now at the end, while its market trades: a new point on the line, the last candle's close
+    const liveNow = x.px > 0 && x.liveAt && pts.length && (!x.src.reg || marketOpen());
+    if (liveNow && asCandle) { const z = pts[pts.length - 1]; if (x.liveAt > z.t) { z.v = x.px; z.h = Math.max(z.h, x.px); z.l = Math.min(z.l, x.px); } }
+    else if (liveNow && x.liveAt > pts[pts.length - 1].t + 30e3) pts.push({ t: x.liveAt, v: x.px, live: true });
     const W = Math.floor(el.clientWidth), H = Math.floor(el.clientHeight);
     if (!W || !H) return;
     if (pts.length < 2) { el.innerHTML = `<div class="empty">${c.err ? '차트를 받지 못했습니다. 잠시 뒤 다시 받습니다' : '이 기간의 가격 기록이 없습니다'}</div>`; return; }
-    const vals = pts.map((q) => q.v);
-    let lo = Math.min(...vals), hi = Math.max(...vals);
+    let lo = Math.min(...pts.map((q) => (asCandle ? q.l : q.v))), hi = Math.max(...pts.map((q) => (asCandle ? q.h : q.v)));
     const span0 = hi - lo || Math.abs(hi) * 0.01 || 1, refs = [];
     // the average price is always on the chart; other lines when they are close to the prices (or must be seen)
     if (x.entry > 0) refs.push({ v: x.entry, l: x.entryL, main: true });
     for (const r of x.lines || []) if (r && r.v > 0 && (r.keep || (r.v > lo - span0 * 1.5 && r.v < hi + span0 * 1.5))) refs.push(r);
     for (const r of refs) { lo = Math.min(lo, r.v); hi = Math.max(hi, r.v); }
     const padV = (hi - lo) * 0.08 || span0 * 0.1; lo -= padV; hi += padV;
-    const L = 12, R = 12, T = 22, B = 30;
-    const X = (i) => L + (i / (pts.length - 1)) * (W - L - R), Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+    const L = 12, R = 12, T = 22, B = 30, stepC = (W - L - R) / pts.length;
+    const X = asCandle ? (i) => L + stepC * (i + 0.5) : (i) => L + (i / (pts.length - 1)) * (W - L - R), Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
     const col = pts[pts.length - 1].v >= pts[0].v ? 'var(--up)' : 'var(--down)';
     let refsSvg = '';
     const rs = refs.map((r) => ({ r, y: Y(r.v), ty: Y(r.v) - 7 })).sort((a, b) => a.y - b.y), GAP = 17, TOP = 15, BOT = H - B - 4;
     for (let i = 0; i < rs.length; i++) rs[i].ty = Math.max(rs[i].ty, TOP, i ? rs[i - 1].ty + GAP : -Infinity);
     for (let i = rs.length - 1; i >= 0; i--) rs[i].ty = Math.min(rs[i].ty, i < rs.length - 1 ? rs[i + 1].ty - GAP : BOT);
     for (const { r, y, ty } of rs) refsSvg += `<line x1="${L}" x2="${W - R}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="${r.main ? 'ref' : 'ref2'}"/><text x="${L + 2}" y="${ty.toFixed(1)}" class="${r.main ? 'rl' : 'rl2'}">${esc(r.l)} ${esc(pxText(x, r.v))}</text>`;
-    const d = pts.map((q, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(q.v).toFixed(1)}`).join('');
     const end = pts.length - 1;
+    let body = '';
+    if (asCandle) {                       // red when it closed above its open, blue below (Korean convention)
+      const bw = Math.max(1, Math.min(14, stepC * 0.62));
+      for (let i = 0; i <= end; i++) {
+        const q = pts[i], cc = q.v >= q.o ? 'var(--up)' : 'var(--down)', x0 = X(i), top = Y(Math.max(q.o, q.v)), bot = Y(Math.min(q.o, q.v));
+        body += `<line x1="${x0.toFixed(1)}" x2="${x0.toFixed(1)}" y1="${Y(q.h).toFixed(1)}" y2="${Y(q.l).toFixed(1)}" stroke="${cc}" stroke-width="1"/><rect x="${(x0 - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, bot - top).toFixed(1)}" fill="${cc}"/>`;
+      }
+    } else body = `<path d="${pts.map((q, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(q.v).toFixed(1)}`).join('')}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
     el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${refsSvg}
-      <path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${body}
       <line class="cur" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke-width="1" style="stroke:var(--muted);display:none"/>
-      <circle class="dot" cx="${X(end).toFixed(1)}" cy="${Y(pts[end].v).toFixed(1)}" r="4.5" stroke-width="2.5" style="fill:${col};stroke:var(--bg)"/>
+      <circle class="dot" cx="${X(end).toFixed(1)}" cy="${Y(pts[end].v).toFixed(1)}" r="4.5" stroke-width="2.5" style="fill:${col};stroke:var(--bg)${asCandle ? ';display:none' : ''}"/>
       <text x="${L}" y="${H - 8}" class="cax">${esc(tLabel(pts[0]))}</text><text x="${W - R}" y="${H - 8}" text-anchor="end" class="cax">${esc(tLabel(pts[end]))}</text></svg>`;
     el.setAttribute('role', 'img');
     el.setAttribute('aria-label', `${x.name} ${APER.find((q) => q[0] === aPer)[1]} 가격 ${pxText(x, pts[0].v)}에서 ${pxText(x, pts[end].v)}${x.entry > 0 ? `, ${x.entryL} ${pxText(x, x.entry)}` : ''}`);
     const svg = el.querySelector('svg'), cur = svg.querySelector('.cur'), dot = svg.querySelector('.dot');
-    const at = (ev) => { const r = svg.getBoundingClientRect(); return Math.max(0, Math.min(end, Math.round((ev.clientX - r.left - L) / (W - L - R) * end))); };
+    const at = (ev) => { const r = svg.getBoundingClientRect(), px = ev.clientX - r.left - L; return Math.max(0, Math.min(end, asCandle ? Math.floor(px / stepC) : Math.round(px / (W - L - R) * end))); };
     const show = (i) => {
       aScrub = true;
+      const q = pts[i];
       cur.setAttribute('x1', X(i)); cur.setAttribute('x2', X(i)); cur.style.display = '';
-      dot.setAttribute('cx', X(i)); dot.setAttribute('cy', Y(pts[i].v));
-      $('aPx').textContent = pxText(x, pts[i].v);
-      $('aChg').innerHTML = aHead(x, pts[i].v, true) + ` <span class="when">${esc(tLabel(pts[i], true))}</span>`;
+      if (!asCandle) { dot.setAttribute('cx', X(i)); dot.setAttribute('cy', Y(q.v)); }
+      $('aPx').textContent = pxText(x, q.v);
+      $('aChg').innerHTML = (asCandle ? `<span class="muted">시가 ${esc(pxText(x, q.o))} · 고가 ${esc(pxText(x, q.h))} · 저가 ${esc(pxText(x, q.l))}</span>` : aHead(x, q.v, true)) + ` <span class="when">${esc(tLabel(q, true))}</span>`;
     };
     const hide = () => {
       aScrub = false; cur.style.display = 'none';
