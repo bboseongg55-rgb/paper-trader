@@ -8,17 +8,20 @@ const ymd = `${et.getFullYear()}${pad(et.getMonth() + 1)}${pad(et.getDate())}`;
 const QS = 'requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&events=1';
 const SY = ['VCIT', '.RUT', '.DJI', 'US2Y', 'US5Y', 'US10Y', 'US30Y', '@TU.1', '@TU.2', '@TFS.1', '@SP.1', '@BTC.1', '@ETH.1', '@SI.1', '@HG.1', 'BTC.CM='].map(encodeURIComponent).join('%7C');
 const bar = (sym, iv, a, b) => `https://ts-api.cnbc.com/harmony/app/bars/${encodeURIComponent(sym)}/${iv}/${a}/${b}/adjusted/EST5EDT.json`;
-const urls = [
-  ['lido steth apr sma', 'https://eth-api.lido.fi/v1/protocol/steth/apr/sma'],
-  ['lido steth apr last', 'https://eth-api.lido.fi/v1/protocol/steth/apr/last'],
-  ['jito stats', 'https://kobe.mainnet.jito.network/api/v1/stake_pool_stats'],
-  ['jito apy', 'https://kobe.mainnet.jito.network/api/v1/jitosol_apy'],
-  ['marinade apy 30d', 'https://api.marinade.finance/msol/apy/30d'],
-  ['marinade apy 1y', 'https://api.marinade.finance/msol/apy/1y'],
-  ['sanctum jitosol apy', 'https://sanctum-extra-api.ngrok.dev/v1/apy/latest?lst=jitoSOL'],
-  ['defillama yields', 'https://yields.llama.fi/pools'],
-  ['cboe IWM options', 'https://cdn.cboe.com/api/global/delayed_quotes/options/IWM.json'],
-];
+const urls = [];
+for (const u of ['SPY', 'IWM']) {
+  try {
+    const j = await (await fetch(`https://cdn.cboe.com/api/global/delayed_quotes/options/${u}.json`, { signal: AbortSignal.timeout(40000) })).json();
+    const os = (j.data && j.data.options) || [], roots = {};
+    for (const o of os) { const m = /^(.*?)(\d{6})([CP])(\d{8})$/.exec(o.option); const r = m ? m[1] : '?'; roots[r] = (roots[r] || 0) + 1; }
+    console.log(u, 'spot', j.data && j.data.current_price, 'n', os.length, 'roots', JSON.stringify(roots));
+    const reg = os.filter((o) => new RegExp('^' + u + '\\d{6}[CP]\\d{8}$').test(o.option));
+    const spot = j.data.current_price, pick = reg.filter((o) => /P/.test(o.option.slice(u.length + 6, u.length + 7))).filter((o) => { const K = +o.option.slice(-8) / 1000; return K < spot && K > spot * 0.9; }).slice(0, 3);
+    console.log('  sample puts', JSON.stringify(pick.map((o) => [o.option, o.bid, o.ask, o.iv, o.delta])));
+    const b1 = os.filter((o) => o.option.startsWith('B1')).slice(0, 2);
+    console.log('  sample B1', JSON.stringify(b1.map((o) => [o.option, o.bid, o.ask, o.iv, o.delta])));
+  } catch (e) { console.log(u, 'error', e.message); }
+}
 for (const [name, u] of urls) {
   const t0 = Date.now();
   try {
