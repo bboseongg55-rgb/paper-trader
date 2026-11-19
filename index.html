@@ -325,7 +325,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const live = {};
   const funded = () => !!(CV && CV.funded > 0);
   const coinPx = (c) => (live[c] > 0 ? live[c] : CV && CV.last && CV.last[c] > 0 ? CV.last[c] : 0);
-  const cryptoLive = () => (funded() ? CV.usd + (CV.hold || []).reduce((t, h) => t + h.qty * coinPx(h.c), 0) : 0);
+  const cryptoLive = () => (funded() ? CV.usd + (CV.hold || []).reduce((t, h) => t + h.qty * coinPx(h.c), 0) + (CV.toks || []).reduce((t, x) => t + (x.value || 0), 0) : 0);   // dollars, coins at live prices, tokens as last saved
   function cryptoAt(ms) {                 // the crypto account's value at a time (0 before its money arrived)
     if (!funded()) return 0;
     const pick = (list) => { let v = null; for (const [t, e] of list || []) { if (t <= ms) v = e; else break; } return v; };
@@ -624,7 +624,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const avail = IDX.filter(([k]) => hasIdx(k));
     if (avail.length) h += `<div class="cmp" role="group" aria-label="지수와 수익률 비교"><span class="cmp-label">비교</span>${avail.map(([k, nm, col, chip]) => `<button type="button" data-k="${k}" aria-pressed="${cmp.includes(k)}" aria-label="${esc(nm)}와 비교"><i class="key" style="background:${col}"></i>${esc(chip)}</button>`).join('')}</div>`;
     h += kv([
-      cashNow < 0 ? ['증거금 대출(주식)', usd(-cashNow)] : [S.rates && S.rates.rp != null ? `현금(RP 연 ${fmt(S.rates.rp * 100, 2)}%)` : '현금', usd(cashAll)],
+      cashNow < 0 ? ['증거금 대출(주식)', usd(-cashNow)] : ['현금·RP', usd(cashAll)],
       ['투자 중', `<span id="kvInv">${usd(total - cashAll)}</span>`],
     ].concat(hasCoin() ? [['주식·채권', usd(stockNow())], ['선물·옵션·ELS', usd(derivNow())], ['코인·토큰(24시간)', `<span id="kvCoin">${usd(coinTotal())}</span>`]] : []).concat([
       [S.asOf.prov ? '오늘 손익' : '마지막 거래일 이후', `<span id="kvDay" class="${cls(total - prevTotal)}">${sgnUsd(total - prevTotal)}</span>`],
