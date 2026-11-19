@@ -10,18 +10,15 @@ const SY = ['VCIT', '.RUT', '.DJI', 'US2Y', 'US5Y', 'US10Y', 'US30Y', '@TU.1', '
 const bar = (sym, iv, a, b) => `https://ts-api.cnbc.com/harmony/app/bars/${encodeURIComponent(sym)}/${iv}/${a}/${b}/adjusted/EST5EDT.json`;
 const urls = [
   ['cnbc quote', `https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=${SY}&${QS}&output=json`],
-  ['cnbc bars 5M @TU.1', bar('@TU.1', '5M', ymd + '000000', ymd + '235959')],
-  ['cnbc bars 5M @TFS.1', bar('@TFS.1', '5M', ymd + '000000', ymd + '235959')],
-  ['cnbc bars 1D @TU.1', bar('@TU.1', '1D', '20260801000000', ymd + '235959')],
-  ['cnbc bars 1D @TU.2', bar('@TU.2', '1D', '20260801000000', ymd + '235959')],
-  ['cnbc bars 15M AAPL', bar('AAPL', '15M', '20261112000000', ymd + '235959')],
-  ['cnbc bars 30M AAPL', bar('AAPL', '30M', '20261112000000', ymd + '235959')],
-  ['cnbc bars 1H AAPL', bar('AAPL', '1H', '20261020000000', ymd + '235959')],
-  ['cnbc bars 1W AAPL', bar('AAPL', '1W', '20250101000000', ymd + '235959')],
-  ['cnbc bars 5M US2Y', bar('US2Y', '5M', ymd + '000000', ymd + '235959')],
+  ['cnbc bars 1M @TFS.1', bar('@TFS.1', '1M', ymd + '000000', ymd + '235959')],
+  ['cnbc bars 1M @SP.1', bar('@SP.1', '1M', ymd + '000000', ymd + '235959')],
+  ['cnbc bars 1M @TU.1', bar('@TU.1', '1M', ymd + '000000', ymd + '235959')],
+  ['cnbc bars 1M @GC.1', bar('@GC.1', '1M', ymd + '000000', ymd + '235959')],
+  ['cnbc bars 1M .RUT', bar('.RUT', '1M', ymd + '000000', ymd + '235959')],
   ['cnbc bars 1M .SPX', bar('.SPX', '1M', ymd + '000000', ymd + '235959')],
-  ['cnbc bars 5M 5days AAPL', bar('AAPL', '5M', '20261113000000', ymd + '235959')],
-  ['cnbc bars 1D VCIT', bar('VCIT', '1D', '20260101000000', ymd + '235959')],
+  ['cnbc bars 1M SPY', bar('SPY', '1M', ymd + '000000', ymd + '235959')],
+  ['cnbc bars 30M @TU.2', bar('@TU.2', '30M', '20261112000000', ymd + '235959')],
+  ['cnbc bars 1H @TFS.1', bar('@TFS.1', '1H', '20261020000000', ymd + '235959')],
 ];
 for (const [name, u] of urls) {
   const t0 = Date.now();
@@ -37,7 +34,7 @@ for (const [name, u] of urls) {
       } catch (e) { console.log('   parse error ' + e.message); }
     }
     if (/bars/.test(name)) {
-      try { const j = JSON.parse(body); const b = (j.barData && j.barData.priceBars) || []; console.log(`   bars ${b.length}: first ${b[0] && b[0].tradeTime} last ${b.length && b[b.length - 1].tradeTime} ${b.length && b[b.length - 1].close}`); } catch (e) { console.log('   parse error ' + e.message); }
+      try { const j = JSON.parse(body); const b = (j.barData && j.barData.priceBars) || []; console.log(`   bars ${b.length}: first ${b[0] && b[0].tradeTime} last ${b.length && b[b.length - 1].tradeTime} close ${b.length && b[b.length - 1].close} | last3 ${b.slice(-3).map((x) => x.tradeTime.slice(8, 12) + ':' + x.close).join(' ')} | now ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}`); } catch (e) { console.log('   parse error ' + e.message); }
     }
   } catch (e) { console.log(`\n== ${name}: ERROR ${String(e.message || e).slice(0, 200)}`); }
 }
