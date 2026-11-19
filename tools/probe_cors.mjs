@@ -9,16 +9,15 @@ const QS = 'requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&events=1';
 const SY = ['VCIT', '.RUT', '.DJI', 'US2Y', 'US5Y', 'US10Y', 'US30Y', '@TU.1', '@TU.2', '@TFS.1', '@SP.1', '@BTC.1', '@ETH.1', '@SI.1', '@HG.1', 'BTC.CM='].map(encodeURIComponent).join('%7C');
 const bar = (sym, iv, a, b) => `https://ts-api.cnbc.com/harmony/app/bars/${encodeURIComponent(sym)}/${iv}/${a}/${b}/adjusted/EST5EDT.json`;
 const urls = [
-  ['cnbc quote', `https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=${SY}&${QS}&output=json`],
-  ['cnbc bars 1M @TFS.1', bar('@TFS.1', '1M', ymd + '000000', ymd + '235959')],
-  ['cnbc bars 1M @SP.1', bar('@SP.1', '1M', ymd + '000000', ymd + '235959')],
-  ['cnbc bars 1M @TU.1', bar('@TU.1', '1M', ymd + '000000', ymd + '235959')],
-  ['cnbc bars 1M @GC.1', bar('@GC.1', '1M', ymd + '000000', ymd + '235959')],
-  ['cnbc bars 1M .RUT', bar('.RUT', '1M', ymd + '000000', ymd + '235959')],
-  ['cnbc bars 1M .SPX', bar('.SPX', '1M', ymd + '000000', ymd + '235959')],
-  ['cnbc bars 1M SPY', bar('SPY', '1M', ymd + '000000', ymd + '235959')],
-  ['cnbc bars 30M @TU.2', bar('@TU.2', '30M', '20261112000000', ymd + '235959')],
-  ['cnbc bars 1H @TFS.1', bar('@TFS.1', '1H', '20261020000000', ymd + '235959')],
+  ['lido steth apr sma', 'https://eth-api.lido.fi/v1/protocol/steth/apr/sma'],
+  ['lido steth apr last', 'https://eth-api.lido.fi/v1/protocol/steth/apr/last'],
+  ['jito stats', 'https://kobe.mainnet.jito.network/api/v1/stake_pool_stats'],
+  ['jito apy', 'https://kobe.mainnet.jito.network/api/v1/jitosol_apy'],
+  ['marinade apy 30d', 'https://api.marinade.finance/msol/apy/30d'],
+  ['marinade apy 1y', 'https://api.marinade.finance/msol/apy/1y'],
+  ['sanctum jitosol apy', 'https://sanctum-extra-api.ngrok.dev/v1/apy/latest?lst=jitoSOL'],
+  ['defillama yields', 'https://yields.llama.fi/pools'],
+  ['cboe IWM options', 'https://cdn.cboe.com/api/global/delayed_quotes/options/IWM.json'],
 ];
 for (const [name, u] of urls) {
   const t0 = Date.now();
