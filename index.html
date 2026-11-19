@@ -224,9 +224,10 @@ a.row:focus-visible, a.ain-r:focus-visible, .back:focus-visible { outline: 2px s
 .periods .sep { flex: none; width: 1px; margin: 9px 2px; background: var(--line); }
 .periods .ct { flex: none; width: 42px; display: grid; place-items: center; padding: 0; }
 .periods .ct svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.achart .ref { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 6 5; opacity: 0.75; }
+.achart .ref { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 7 5; }
 .achart .ref2 { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 4; }
-.achart .rl { font-size: 15px; font-weight: 700; fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+.achart .rl { font-size: 16px; font-weight: 800; fill: #000; }
+.achart .rlb rect { fill: #fff; stroke: #000; stroke-width: 1.5; }
 .achart .rl2 { font-size: 15px; font-weight: 500; fill: var(--sub); paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
 .achart .cax { font-size: 15px; fill: var(--muted); }
 .asrc { margin: 0; padding: 8px 20px 0; font-size: 15px; color: var(--muted); }
@@ -1294,10 +1295,13 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const X = asCandle ? (i) => L + stepC * (i + 0.5) : (i) => L + (i / (pts.length - 1)) * (W - L - R), Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
     const col = pts[pts.length - 1].v >= pts[0].v ? 'var(--up)' : 'var(--down)';
     let refsSvg = '';
-    const rs = refs.map((r) => ({ r, y: Y(r.v), ty: Y(r.v) - 7 })).sort((a, b) => a.y - b.y), GAP = 17, TOP = 15, BOT = H - B - 4;
+    const rs = refs.map((r) => ({ r, y: Y(r.v), ty: Y(r.v) - 8 })).sort((a, b) => a.y - b.y), GAP = 22, TOP = 18, BOT = H - B - 6;
     for (let i = 0; i < rs.length; i++) rs[i].ty = Math.max(rs[i].ty, TOP, i ? rs[i - 1].ty + GAP : -Infinity);
     for (let i = rs.length - 1; i >= 0; i--) rs[i].ty = Math.min(rs[i].ty, i < rs.length - 1 ? rs[i + 1].ty - GAP : BOT);
-    for (const { r, y, ty } of rs) refsSvg += `<line x1="${L}" x2="${W - R}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="${r.main ? 'ref' : 'ref2'}"/><text x="${L + 2}" y="${ty.toFixed(1)}" class="${r.main ? 'rl' : 'rl2'}">${esc(r.l)} ${esc(pxText(x, r.v))}</text>`;
+    for (const { r, y, ty } of rs) refsSvg += `<line x1="${L}" x2="${W - R}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="${r.main ? 'ref' : 'ref2'}"/>`;
+    let tagsSvg = '';                     // labels go over the prices, the lines under them
+    for (const { r, ty } of rs) tagsSvg += r.main ? `<g class="rlb"><rect rx="6" ry="6"/><text x="${L + 8}" y="${ty.toFixed(1)}" class="rl">${esc(r.l)} ${esc(pxText(x, r.v))}</text></g>`
+      : `<text x="${L + 2}" y="${ty.toFixed(1)}" class="rl2">${esc(r.l)} ${esc(pxText(x, r.v))}</text>`;
     const end = pts.length - 1;
     let body = '';
     if (asCandle) {                       // red when it closed above its open, blue below (Korean convention)
@@ -1308,10 +1312,11 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       }
     } else body = `<path d="${pts.map((q, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(q.v).toFixed(1)}`).join('')}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
     el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${refsSvg}
-      ${body}
+      ${body}${tagsSvg}
       <line class="cur" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke-width="1" style="stroke:var(--muted);display:none"/>
       <circle class="dot" cx="${X(end).toFixed(1)}" cy="${Y(pts[end].v).toFixed(1)}" r="4.5" stroke-width="2.5" style="fill:${col};stroke:var(--bg)${asCandle ? ';display:none' : ''}"/>
       <text x="${L}" y="${H - 8}" class="cax">${esc(tLabel(pts[0]))}</text><text x="${W - R}" y="${H - 8}" text-anchor="end" class="cax">${esc(tLabel(pts[end]))}</text></svg>`;
+    el.querySelectorAll('.rlb').forEach((g) => { const t = g.querySelector('text'), r = g.querySelector('rect'); try { const b = t.getBBox(); r.setAttribute('x', b.x - 6); r.setAttribute('y', b.y - 3); r.setAttribute('width', b.width + 12); r.setAttribute('height', b.height + 6); } catch (e) { /* not drawn yet */ } });
     el.setAttribute('role', 'img');
     el.setAttribute('aria-label', `${x.name} ${APER.find((q) => q[0] === aPer)[1]} 가격 ${pxText(x, pts[0].v)}에서 ${pxText(x, pts[end].v)}${x.entry > 0 ? `, ${x.entryL} ${pxText(x, x.entry)}` : ''}`);
     const svg = el.querySelector('svg'), cur = svg.querySelector('.cur'), dot = svg.querySelector('.dot');
