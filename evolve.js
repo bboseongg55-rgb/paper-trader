@@ -70,8 +70,9 @@
   const briefF = (f) => (f ? { age: f.age, ret: r4(f.ret), champRet: r4(f.champRet), excess: r4(f.excess), mdd: r4(f.mdd), champMdd: r4(f.champMdd), trades: f.trades, champTrades: f.champTrades, open: f.open } : null);
 
   // a shadow account traded from its first day through day td, next to the live account over the same days
+  let TILT = null;                 // the allocator's tilts by day, so shadows trade under the same budgets as the account
   function forward(E, D, book, sh, td) {
-    const r = E.simulate(D, { resume: { date: sh.born, from0: book.from0, capital: book.capital, state: sh.state, hist: {} }, to: td, adaptive: true, log: false });
+    const r = E.simulate(D, { resume: { date: sh.born, from0: book.from0, capital: book.capital, state: sh.state, hist: {} }, to: td, adaptive: true, log: false, tilt: TILT });
     const rows = r.equity, eq0 = sh.eq0, end = D.dates[td];
     // the live account's rows, with money moved out to the crypto account added back (a move is not a loss)
     // (moves the shadow's starting state already had are left as they are)
@@ -96,7 +97,8 @@
 
   // one evening, after the book has taken in day book.date. Returns the book (new rules from the next day if a shadow
   // was promoted) and the lab's new state.
-  function night(E, D, book, evo0) {
+  function night(E, D, book, evo0, opts) {
+    TILT = (opts && opts.tilt) || null;
     const evo = evo0 ? JSON.parse(JSON.stringify(evo0)) : { v: 1, gen: 0, since: book.from0, seq: 0, shadows: [], history: [], lastRun: null, lastScreen: null };
     const day = book.date, td = D.dates.indexOf(day);
     if (td < 0) throw new Error('lab: book day missing from the price data: ' + day);

@@ -9,12 +9,18 @@
      on a 10-hour low. One position per coin.
    - scalp (초단타): one-minute bars; buys a break of the last 15 minutes' high after a fast 5-minute rise, takes +0.5%,
      stops at −0.35%, or leaves after 20 minutes.
+   - tok (토큰화 주식): US stocks and ETFs as Kraken xStocks tokens, traded around the clock at Kraken's displayed bid and
+     ask (taker fee 0.08%, 확인필요): the same hourly trend rule as the coins, only when the spread is under 0.3%.
    Trend and scalp trade on the cheapest exchange (Binance.US). Every 24 hours the AI re-weights trend and scalp by
    their last 7 days (best gets full risk, second half, a loser a sixth, too few trades a quarter). Account brakes: a 3%
    loss within a UTC day stops new trades for the rest of the day; a 15% drawdown halves risk; 25% stops new trades. */
 (function (root) {
   'use strict';
   const COINS = ['BTC', 'ETH', 'SOL'];
+  // tokenized US stocks and ETFs at Kraken (xStocks): symbol → name
+  const TOKS = { SPYx: 'S&P 500 ETF', QQQx: '나스닥 100 ETF', IWMx: '러셀 2000 ETF(중소형주)', NVDAx: '엔비디아', TSLAx: '테슬라', AAPLx: '애플', MSFTx: '마이크로소프트',
+    GOOGLx: '알파벳', AMZNx: '아마존', METAx: '메타', AVGOx: '브로드컴', GLDx: '금 ETF' };
+  const TOK_FEE = 0.0008;
   // taker fees at the entry tier for a US account (checked 2026-11-18 from public fee schedules and reviews):
   // Coinbase Advanced 0.90% (since 2026-09-16), Kraken Pro 0.80% (since 2026-07-09), Bitstamp 0.40%,
   // Gemini ActiveTrader 1.20%, Binance.US 0.02%
@@ -30,6 +36,7 @@
   const CFG = {
     arbShare: 0.3, arbMinEdge: 0.0005, arbMaxUsd: 1500, slip: 0.0002, exec: 'binanceus',
     trend: { hi: 20, lo: 10, atr: 14, ema: 100, stopK: 3, risk: 0.01, maxW: 0.3 },
+    tok: { hi: 20, lo: 10, atr: 14, ema: 100, stopK: 3, risk: 0.005, maxW: 0.2, maxAll: 0.6, maxSpread: 0.003 },
     scalp: { look: 15, mom: 0.003, tp: 0.005, sl: 0.0035, maxMin: 20, risk: 0.0025, maxW: 0.2 },
     brakes: { day: 0.03, half: 0.15, stop: 0.25 },
     reweightMs: 24 * 3600e3, reviewMs: 7 * 24 * 3600e3, trialW: 0.25, tiers: [1, 0.5], loserW: 0.17, minTrades: 5,
@@ -53,8 +60,10 @@
     const px = (c) => (isNum(m[c]) ? m[c] : st.last[c] || 0);
     for (const k in st.venues) { const a = st.venues[k]; v += a.usd; for (const c of COINS) v += (a.coin[c] || 0) * px(c); }
     v += st.trade.usd; for (const c of COINS) v += (st.trade.coin[c] || 0) * px(c);
+    if (st.tok) for (const k in st.tok.hold) { const qq = st.tok.q[k]; if (qq && qq.mid > 0) v += st.tok.hold[k] * qq.mid; }
     return v;
   }
+  const tokState = (st) => (st.tok = st.tok || { hold: {}, pos: {}, bars: {}, q: {} });
   function fill(st, f) { st.fills.push(f); if (st.fills.length > CFG.keepFills) st.fills.splice(0, st.fills.length - CFG.keepFills); }
 
   // a new account: part of the money spread over the exchanges for arbitrage (half dollars, half coins), the rest in
@@ -63,7 +72,8 @@
     const m = mids(q), venues = {};
     for (const k in VENUES) venues[k] = { usd: 0, coin: Object.fromEntries(COINS.map((c) => [c, 0])) };
     const st = { v: 1, start: now, funded: 0, venues, trade: { usd: 0, coin: Object.fromEntries(COINS.map((c) => [c, 0])) }, pos: { trend: {}, scalp: {} }, bars: { h: {}, m: {} }, fills: [], eqMin: [], eqHour: [], closes: {},
-      w: { trend: CFG.trialW, scalp: CFG.trialW }, lastReweight: now, peak: 0, day: { date: utcDay(now), eq: 0 }, last: {}, spreads: {}, transfers: [], stats: { arb: { n: 0, pnl: 0, fees: 0 }, trend: { n: 0, pnl: 0, fees: 0 }, scalp: { n: 0, pnl: 0, fees: 0 }, moves: { n: 0, fees: 0 } }, log: [] };
+      w: { trend: CFG.trialW, scalp: CFG.trialW }, lastReweight: now, peak: 0, day: { date: utcDay(now), eq: 0 }, last: {}, spreads: {}, transfers: [], stats: { arb: { n: 0, pnl: 0, fees: 0 }, trend: { n: 0, pnl: 0, fees: 0 }, scalp: { n: 0, pnl: 0, fees: 0 }, tok: { n: 0, pnl: 0, fees: 0 }, moves: { n: 0, fees: 0 } }, log: [],
+      tok: { hold: {}, pos: {}, bars: {}, q: {} } };
     for (const c of COINS) st.last[c] = m[c];
     if (capital > 0) fund(st, capital, q, now, 'start');
     return st;
@@ -79,13 +89,20 @@
         for (const c of COINS) if (m[c] > 0) st.venues[k].coin[c] += (per / 2 / COINS.length) / m[c];
       }
       st.trade.usd += rest;
-    } else st.trade.usd += amount;          // money out comes from trading cash
+    } else {                                // money out: trading dollars first, then the exchanges' arbitrage dollars
+      let need = -amount;
+      const take = Math.min(need, Math.max(0, st.trade.usd)); st.trade.usd -= take; need -= take;
+      const ks2 = Object.keys(VENUES);
+      for (const k of ks2) { if (need <= 0) break; const x = Math.min(need, Math.max(0, st.venues[k].usd)); st.venues[k].usd -= x; need -= x; }
+    }
     st.peak = Math.max(st.peak + amount, equity(st, m));
     st.day.eq += amount;
     st.transfers.push({ id, t: now, amount: r2(amount) });
-    st.log.push({ t: now, kind: 'fund', text: `${amount >= 0 ? '주식 계좌에서 받음' : '주식 계좌로 보냄'} $${Math.abs(r2(amount)).toLocaleString('en-US')}` });
+    st.log.push({ t: now, kind: 'fund', text: `${amount >= 0 ? 'AI 배분으로 계좌 안에서 받음' : 'AI 배분으로 계좌 안 다른 운용에 보냄'} $${Math.abs(r2(amount)).toLocaleString('en-US')}` });
     return st;
   }
+  // dollars that can leave the 24-hour market now without selling anything
+  function freeUsd(st) { return Math.max(0, st.trade.usd) + Object.values(st.venues).reduce((a, v) => a + Math.max(0, v.usd), 0); }
 
   // ── arbitrage across exchanges (each pair, each coin, both directions)
   function arb(st, q, now) {
@@ -155,7 +172,7 @@
     const v = st.trade, f = VENUES[CFG.exec].taker, fillPx = px * (1 + CFG.slip), fee = qty * fillPx * f;
     v.usd -= qty * fillPx + fee; v.coin[c] += qty;
     st.stats[s].fees += fee;
-    const p = Object.assign({ c, qty, entry: fillPx, t0: now, fee }, extra || {});
+    const p = Object.assign({ c, qty, entry: fillPx, t0: now, fee, why }, extra || {});
     st.pos[s][c] = p;
     fill(st, { t: now, s, c, side: 'buy', qty, px: r2(fillPx), fee: r2(fee), why });
     return p;
@@ -211,23 +228,24 @@
           const lo = Math.min(...done.slice(-CFG.trend.lo - 1, -1).map((b) => b.l));
           if (last.c < lo) sell(st, 'trend', c, B.bid, now, `${CFG.trend.lo}시간 최저가 이탈`);
         } else if (!stopNew && last.c > Math.max(...prev.map((b) => b.h)) && last.c > e && a > 0) {
-          const risk = eq * CFG.trend.risk * st.w.trend * half, per = CFG.trend.stopK * a;
+          const risk = eq * CFG.trend.risk * st.w.trend * tiltOf(st, 'trend') * half, per = CFG.trend.stopK * a;
           let qty = Math.min(risk / per, (CFG.trend.maxW * eq) / B.ask, st.trade.usd / (B.ask * 1.01));
           qty = f8(qty);
-          if (qty * B.ask >= 20) buy(st, 'trend', c, qty, B.ask, now, `${CFG.trend.hi}시간 신고가`, { stop: B.ask - per, stop0: B.ask - per, hiC: last.c, risk: qty * per });
+          if (qty * B.ask >= 20) buy(st, 'trend', c, qty, B.ask, now, `${CFG.trend.hi}시간 신고가(${r2(last.c)})·100시간 평균(${r2(e)}) 위, 손절 ${r2(B.ask - per)}(1시간 변동폭의 ${CFG.trend.stopK}배)`, { stop: B.ask - per, stop0: B.ask - per, hiC: last.c, risk: qty * per });
         }
       }
       // scalp: signals on a closed minute bar
       if (mClosed && mb.length > CFG.scalp.look + 2 && !st.pos.scalp[c] && !stopNew) {
         const done = mb.slice(0, -1), last = done[done.length - 1], prev = done.slice(-CFG.scalp.look - 1, -1), c5 = done[done.length - 6];
         if (c5 && last.c > Math.max(...prev.map((b) => b.h)) && last.c / c5.c - 1 > CFG.scalp.mom) {
-          const risk = eq * CFG.scalp.risk * st.w.scalp * half, per = B.ask * CFG.scalp.sl;
+          const risk = eq * CFG.scalp.risk * st.w.scalp * tiltOf(st, 'scalp') * half, per = B.ask * CFG.scalp.sl;
           let qty = Math.min(risk / per, (CFG.scalp.maxW * eq) / B.ask, st.trade.usd / (B.ask * 1.01));
           qty = f8(qty);
           if (qty * B.ask >= 20) buy(st, 'scalp', c, qty, B.ask, now, `15분 고점 돌파·5분 +${(CFG.scalp.mom * 100).toFixed(1)}% 이상`, { risk: qty * per });
         }
       }
     }
+    toks(st, q, now, eq, stopNew, half);
     // the AI re-weights trend and scalp by their last 7 days
     if (now - st.lastReweight >= CFG.reweightMs) {
       st.lastReweight = now;
@@ -255,6 +273,54 @@
     return st;
   }
 
+  const tiltOf = (st, k) => (st.tilt && isNum(st.tilt[k]) ? st.tilt[k] : 1);
+  // ── tokenized stocks at Kraken: hourly trend, only with a tight spread, at the displayed bid and ask
+  function toks(st, q, now, eq, stopNew, half) {
+    const T = tokState(st), K = CFG.tok, quotes = q.toks || {};
+    if (!st.stats.tok) st.stats.tok = { n: 0, pnl: 0, fees: 0 };
+    for (const k of Object.keys(TOKS)) {
+      const x = quotes[k];
+      if (!x || !(x.bid > 0) || !(x.ask >= x.bid)) continue;
+      const mid = (x.bid + x.ask) / 2, spr = x.ask / x.bid - 1;
+      T.q[k] = { bid: x.bid, ask: x.ask, mid, t: now };
+      const hb = (T.bars[k] = T.bars[k] || []);
+      const closed = bar(hb, Math.floor(now / 3600e3) * 3600e3, mid, CFG.keepBarsH);
+      const p = T.pos[k];
+      if (p && x.bid <= p.stop) tokSell(st, k, x.bid, now, p.stop > p.stop0 ? '추적 손절' : '손절');
+      if (!closed || hb.length <= K.ema) continue;
+      const done = hb.slice(0, -1), last = done[done.length - 1], prev = done.slice(-K.hi - 1, -1);
+      const a = atr(done, K.atr), e = ema(done.map((b) => b.c), K.ema);
+      const p2 = T.pos[k];
+      if (p2) {
+        p2.hiC = Math.max(p2.hiC || 0, last.c);
+        p2.stop = Math.max(p2.stop, p2.hiC - K.stopK * a);
+        const lo = Math.min(...done.slice(-K.lo - 1, -1).map((b) => b.l));
+        if (last.c < lo) tokSell(st, k, x.bid, now, `${K.lo}시간 최저가 이탈`);
+      } else if (!stopNew && spr <= K.maxSpread && last.c > Math.max(...prev.map((b) => b.h)) && last.c > e && a > 0) {
+        const held = Object.keys(T.hold).reduce((s2, j) => s2 + (T.hold[j] || 0) * ((T.q[j] && T.q[j].mid) || 0), 0);
+        const tilt = tiltOf(st, 'tok') * (k === 'IWMx' ? tiltOf(st, 'tokSmall') : 1);
+        const risk = eq * K.risk * tilt * half, per = K.stopK * a;
+        let qty = Math.min(risk / per, (K.maxW * eq) / x.ask, (K.maxAll * eq - held) / x.ask, st.trade.usd / (x.ask * (1 + TOK_FEE) * 1.01));
+        qty = f8(qty);
+        if (qty * x.ask >= 20) {
+          const fee = qty * x.ask * TOK_FEE;
+          st.trade.usd -= qty * x.ask + fee; T.hold[k] = (T.hold[k] || 0) + qty; st.stats.tok.fees += fee;
+          const why = `${TOKS[k]} 토큰: ${K.hi}시간 신고가(${r2(last.c)})·100시간 평균(${r2(e)}) 위${tilt !== 1 ? `, AI 배분 ${Math.round(tilt * 100)}%` : ''}. 미국 장이 닫혀 있어도 코인 거래소에서 24시간 거래(호가 차이 ${(spr * 100).toFixed(2)}%)`;
+          T.pos[k] = { c: k, qty, entry: x.ask, t0: now, fee, stop: x.ask - per, stop0: x.ask - per, hiC: last.c, risk: qty * per, why };
+          fill(st, { t: now, s: 'tok', c: k, side: 'buy', qty, px: r2(x.ask), fee: r2(fee), why });
+        }
+      }
+    }
+  }
+  function tokSell(st, k, px, now, why) {
+    const T = tokState(st), p = T.pos[k], fee = p.qty * px * TOK_FEE;
+    st.trade.usd += p.qty * px - fee; T.hold[k] = (T.hold[k] || 0) - p.qty; if (T.hold[k] < 1e-9) delete T.hold[k];
+    const pnl = p.qty * (px - p.entry) - fee - p.fee, R = p.risk > 0 ? pnl / p.risk : 0;
+    st.stats.tok.n++; st.stats.tok.pnl += pnl; st.stats.tok.fees += fee;
+    (st.closed = st.closed || []).push({ t: now, s: 'tok', c: k, pnl: r2(pnl), R: Math.round(R * 100) / 100 });
+    fill(st, { t: now, s: 'tok', c: k, side: 'sell', qty: p.qty, px: r2(px), fee: r2(fee), pnl: r2(pnl), why, held: Math.round((now - p.t0) / 60e3) });
+    delete T.pos[k];
+  }
   // what the page shows
   function view(st) {
     if (!st) return null;
@@ -276,7 +342,9 @@
       v: 1, at: st.at, start: st.start, funded: r2(st.funded), eq: st.eq, usd: r2(usd), hold, last: st.last,
       venues: Object.fromEntries(Object.entries(st.venues).map(([k, a]) => [k, { name: VENUES[k].name, taker: VENUES[k].taker, usd: r2(a.usd), coin: Object.fromEntries(COINS.map((c) => [c, r8(a.coin[c] || 0)])) }])),
       trade: { venue: VENUES[CFG.exec].name, usd: r2(st.trade.usd), coin: Object.fromEntries(COINS.map((c) => [c, r8(st.trade.coin[c] || 0)])) },
-      pos: st.pos, w: st.w, brake: st.brake, spreads: st.spreads, mkt,
+      pos: st.pos, w: st.w, tilt: st.tilt || null, brake: st.brake, spreads: st.spreads, mkt,
+      toks: Object.keys((st.tok && st.tok.hold) || {}).map((k) => { const T = st.tok, qq = T.q[k] || {}, p = T.pos[k] || null; return { s: k, name: TOKS[k] || k, qty: r8(T.hold[k]), bid: qq.bid || null, ask: qq.ask || null, value: r2(T.hold[k] * (qq.mid || 0)), entry: p ? r2(p.entry) : null, stop: p ? r2(p.stop) : null, t0: p ? p.t0 : null, pnl: p ? r2(T.hold[k] * ((qq.bid || 0) - p.entry) - p.fee) : null, why: p ? p.why : null }; }),
+      tokQ: Object.fromEntries(Object.entries((st.tok && st.tok.q) || {}).map(([k, v]) => [k, { bid: v.bid, ask: v.ask }])),
       stats: Object.fromEntries(Object.entries(st.stats).map(([k, v]) => [k, { n: v.n, pnl: r2(v.pnl || 0), fees: r2(v.fees || 0) }])),
       fills: st.fills.slice(-80).reverse(), log: st.log.slice(-30).reverse(), eqMin: st.eqMin.slice(-1440), eqHour: st.eqHour.slice(-720), transfers: st.transfers,
       cfg: { coins: COINS, exec: CFG.exec, arbShare: CFG.arbShare, arbMinEdge: CFG.arbMinEdge, scalp: CFG.scalp, trend: CFG.trend, brakes: CFG.brakes },
@@ -292,7 +360,14 @@
     if (list.length > keep) list.splice(0, list.length - keep);
   }
 
-  const api = { COINS, VENUES, CFG, WD_FEE, init, fund, step, view, mids, equity, seed };
+  // hourly bars for a token from Kraken's candles
+  function seedTok(st, k, candles) {
+    const T = tokState(st), list = (T.bars[k] = T.bars[k] || []), have = new Set(list.map((b) => b.t));
+    for (const [t, o, h, l, cl] of candles) if (!have.has(t) && [o, h, l, cl].every(isNum)) list.push({ t, o, h, l, c: cl });
+    list.sort((a, b) => a.t - b.t);
+    if (list.length > CFG.keepBarsH) list.splice(0, list.length - CFG.keepBarsH);
+  }
+  const api = { COINS, TOKS, TOK_FEE, VENUES, CFG, WD_FEE, init, fund, freeUsd, step, view, mids, equity, seed, seedTok };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PaperCrypto = api;
 })(typeof self !== 'undefined' ? self : this);

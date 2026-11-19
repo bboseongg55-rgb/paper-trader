@@ -1,13 +1,19 @@
-// Runs the engine over everything collected so far and writes what the page shows (data/state.json), the list of
-// stocks held for the next intraday run (data/held.json) and a short summary. The live account is kept as a book
-// (data/book.json): a day goes in once its closing prices are final and later runs continue from it, so fills that
-// happened never change. Once a day is in the book the evolution lab runs for that evening (data/evolution.json).
+// Runs the combined account and writes what the page shows (data/state.json), the list of stocks held for the next
+// intraday run (data/held.json) and a short summary. The account has three parts that share one balance:
+// - stocks, bonds and the hedge (engine.js), kept as a book (data/book.json): a day goes in once its closing prices are
+//   final and later runs continue from it, so fills that happened never change; the evolution lab runs each evening;
+// - futures, options and ELS (deriv.js, data/deriv/state.json): settled once per closed day, managed during the session;
+// - coins and tokenized stocks around the clock (crypto.js, run by tools/crypto_loop.mjs, data/crypto/view.json).
+// Once per closed day the allocator (cio.js) reads the market, sets each part's budget and moves money between the parts
+// (data/alloc.json). Idle cash earns the RP rate.
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const E = require('../engine.js');
 const Lab = require('../evolve.js');
 const Bonds = require('../bonds.js');
+const Dv = require('../deriv.js');
+const CIO = require('../cio.js');
 const readJSON = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 
 const t0 = Date.now();
@@ -33,10 +39,28 @@ if (!book && !warm) {
 }
 // bonds: each country's government bond (from its yield and currency) and bond ETFs, on the same trading days
 const bondsHist = readJSON('data/bonds_hist.json', null);
-const D = E.prepare(seed, L, intra, bondsHist ? { instruments: (dates) => Bonds.build(bondsHist, L.days, dates) } : null);
+// the market picture and futures history (data/macro_hist.json), and live futures, indexes and options (data/markets.json)
+const macro = readJSON('data/macro_hist.json', null), MS = (macro && macro.s) || {};
+const mk = readJSON('data/markets.json', null) || {};
+// today's closing values from the live quotes, where the daily history has not caught up yet
+for (const [sym, q] of Object.entries(mk.ix || {})) { const d = q && q.time && q.time.slice(0, 10); if (d && q.px > 0) { MS[sym] = MS[sym] || {}; if (MS[sym][d] == null) MS[sym][d] = q.px; } }
+for (const f of Dv.FUT) { const c = mk.fut && mk.fut[f.key] && mk.fut[f.key].c1, k = f.cnbc + '.1'; if (c && c.settle > 0 && c.settleDate) { MS[k] = MS[k] || {}; if (MS[k][c.settleDate] == null) MS[k][c.settleDate] = c.settle; } }
+// the allocator's ledger: its last decision, the stock engine's tilts by day, and money moved between the parts
+const allocRaw = readJSON('data/alloc.json', null);
+let alloc = !allocRaw ? { v: 2, cio: null, tilts: [], transfers: [], history: [] }
+  : allocRaw.v === 2 ? allocRaw : { v: 2, cio: null, tilts: [], transfers: (allocRaw.transfers || []).map((t) => Object.assign({ from: 'core' }, t)), history: [], first: { why: allocRaw.why, target: allocRaw.target } };
+let allocChanged = !allocRaw || allocRaw.v !== 2;
+const tiltAt = (date) => { let t = null; for (const x of alloc.tilts) { if (x.from < date) t = x.core; else break; } return t; };
+// RP rate for each trading day: the 1-month T-bill yield less 0.25%p
+const rpFor = (dates) => {
+  const y = MS.US1M || {}, ks = Object.keys(y).sort();
+  let j = 0, last = null;
+  return dates.map((d) => { while (j < ks.length && ks[j] <= d) last = y[ks[j++]]; return last == null ? null : Math.max(0, last - Dv.CFG.rpSpread * 100) / 100; });
+};
+const D = E.prepare(seed, L, intra, { instruments: bondsHist ? (dates) => Bonds.build(bondsHist, L.days, dates) : null, rp: rpFor });
 const T = D.dates.length;
 // days whose closing prices are final go into the book
-const adv = warm || book ? E.advanceBook(D, { book, warm, capital, liveStart, btStart: settings.btStart }) : { book: null, added: [] };
+const adv = warm || book ? E.advanceBook(D, { book, warm, capital, liveStart, btStart: settings.btStart, tilt: tiltAt }) : { book: null, added: [] };
 book = adv.book;
 let bookChanged = adv.added.length > 0;
 // the evolution lab, once for each evening (a failure is noted once for that day and does not stop the account)
@@ -44,7 +68,7 @@ let evo = readJSON('data/evolution.json', null), evoChanged = false, labMs = nul
 if (book && (!evo || !evo.lastRun || evo.lastRun < book.date) && !(evo && evo.lastError && evo.lastError.date === book.date)) {
   const t1 = Date.now();
   try {
-    const r = Lab.night(E, D, book, evo);
+    const r = Lab.night(E, D, book, evo, { tilt: tiltAt });
     if (r.changed) { evo = r.evo; evoChanged = true; }
     if (r.book !== book) { book = r.book; bookChanged = true; promoted = r.promoted; }
   } catch (e) {
@@ -54,27 +78,90 @@ if (book && (!evo || !evo.lastRun || evo.lastRun < book.date) && !(evo && evo.la
   }
   labMs = Date.now() - t1;
 }
-// money for the crypto account (data/alloc.json): the AI's first allocation is a tenth of the account, because the
-// crypto strategies swing about four times as much as the stock strategies; it leaves the book after its last close
-// and the crypto loop (tools/crypto_loop.mjs) takes it in
-let alloc = readJSON('data/alloc.json', null);
-if (book && !alloc && !(book.flows || []).length) {
-  const last = book.hist.equity[book.hist.equity.length - 1], amount = Math.round(last.eq * 0.10 * 100) / 100;
-  if (book.state.cash >= amount) {
-    const id = 't1';
-    book = JSON.parse(JSON.stringify(book));
-    book.state.cash -= amount; book.state.peak -= amount; book.state.prevEq -= amount;
-    book.flows = [{ id, date: book.date, amount: -amount, to: 'crypto' }];
-    bookChanged = true;
-    alloc = { v: 1, target: { crypto: 0.1 }, why: '코인 전략의 변동성이 주식 전략의 약 4배라 위험을 비슷하게 맞추려고 계좌의 10%로 시작합니다.',
-      transfers: [{ id, at: new Date().toISOString(), date: book.date, to: 'crypto', amount, stockDone: true }] };
-    fs.writeFileSync('data/alloc.json', JSON.stringify(alloc, null, 1));
+// ── the allocator and the other two parts of the account
+const r2 = (v) => Math.round(v * 100) / 100;
+const etToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+const cv = readJSON('data/crypto/view.json', null);
+let dst = readJSON('data/deriv/state.json', null), derivChanged = false;
+const moveCore = (amount, id, other) => {          // money into (+) or out of (−) the stock book, after its last close
+  book = JSON.parse(JSON.stringify(book));
+  book.state.cash += amount; book.state.peak += amount; book.state.prevEq += amount;
+  book.flows = (book.flows || []).concat([amount < 0 ? { id, date: book.date, amount: r2(amount), to: other } : { id, date: book.date, amount: r2(amount), from: other }]);
+  bookChanged = true;
+};
+// money the 24-hour part has sent out: the book takes it in now
+for (const tr of alloc.transfers) {
+  if (tr.from === 'crypto' && !tr.stockDone && book && cv && (cv.transfers || []).some((x) => x.id === tr.id)) { moveCore(tr.amount, tr.id, 'crypto'); tr.stockDone = true; tr.doneAt = new Date().toISOString(); allocChanged = true; }
+}
+const coreNow = () => { const e = book.hist.equity, l = e[e.length - 1]; return l.eq + (book.flows || []).filter((f) => f.date >= l.date).reduce((a, f) => a + f.amount, 0); };
+const cryptoSeen = new Set(((cv && cv.transfers) || []).map((x) => x.id));
+const transit = () => alloc.transfers.reduce((a, t) => a + (t.to === 'crypto' && t.stockDone && !cryptoSeen.has(t.id) ? t.amount : t.from === 'crypto' && !t.stockDone && cryptoSeen.has(t.id) ? t.amount : 0), 0);
+const valAt = (sym, d) => { const m = MS[sym] || {}; if (m[d] != null) return m[d]; const q = (mk.ix || {})[sym]; if (q && q.time && q.time.slice(0, 10) === d) return q.px; const ks = Object.keys(m).filter((k) => k <= d).sort(); return ks.length ? m[ks[ks.length - 1]] : null; };
+let decided = false;
+if (book && MS['.SPX'] && (!alloc.cio || alloc.cio.date < book.date)) {
+  const pic = CIO.picture(MS, book.date);
+  // what the allocator needs to know about the account: the stocks it would protect, and today's ELS coupon
+  const expo = book.state.positions.filter((p) => p.pb !== 'bd').reduce((a, p) => a + p.qty * (p.lastPx || p.fill || 0), 0)
+    + (dst ? Object.values(dst.fut).filter((p) => (p.g === 'eq' || p.g === 'sc') && p.qty > 0).reduce((a, p) => a + p.qty * p.px * p.mult, 0) : 0)
+    + (((cv && cv.toks) || []).reduce((a, t) => a + (t.value || 0), 0));
+  let elsCoupon = null;
+  if (pic.vix > 0) {
+    const E2 = Dv.CFG.els, obs = E2.obs.map((b, i) => [0.5 * (i + 1), b]);
+    const v = Dv.elsValue({ perf: [1, 1], t0: 0, obs, ki: E2.ki, kiHit: false, T: 3, paths: 3000, seed: 11, sig: [0.5 * pic.vix / 100 + 0.09, 0.5 * (pic.vxn || pic.vix * 1.3) / 100 + 0.115], rho: pic.rho || 0.9, r: (pic.y2 || 4) / 100, q: [E2.qSpx, E2.qNdx] });
+    elsCoupon = (E2.fvTarget - v.A) / v.B;
+  }
+  const dec = CIO.decide(pic, { exposure: expo, elsCoupon });
+  alloc.cio = dec; decided = true; allocChanged = true;
+  alloc.history = (alloc.history || []).concat([{ date: book.date, key: dec.regime.key, label: dec.regime.label, headline: dec.headline, target: dec.target }]).slice(-250);
+  const lt = alloc.tilts[alloc.tilts.length - 1];
+  if (!lt || JSON.stringify(lt.core) !== JSON.stringify(dec.tilt.core)) alloc.tilts.push({ from: book.date, core: dec.tilt.core });
+}
+// each part toward its share of the account (moves of at least 2%p of the account and $1,000)
+if (decided && book) {
+  const coreV = coreNow(), derivV = dst ? Dv.equity(dst) : 0, cryptoV = (cv && cv.eq) || 0, tr0 = transit();
+  const total = coreV + derivV + cryptoV + tr0, T = alloc.cio.target, seq = () => 't' + (alloc.transfers.length + 1) + '-' + book.date.replace(/-/g, '');
+  const gap = (v, k) => T[k] * total - v;
+  // the derivatives part (same run, both sides at once)
+  let g = gap(derivV, 'deriv');
+  if (Math.abs(g) >= Math.max(1000, 0.02 * total)) {
+    const amt = g > 0 ? Math.min(g, Math.max(0, book.state.cash - 1000)) : -Math.min(-g, Math.max(0, dst ? Dv.free(dst) - 500 : 0));
+    if (Math.abs(amt) >= 1000) {
+      const id = seq();
+      if (!dst) dst = Dv.init(Date.now(), book.date);
+      moveCore(-amt, id, 'deriv'); Dv.fund(dst, amt, Date.now(), id); dst.transfers[dst.transfers.length - 1].date = book.date; derivChanged = true;
+      alloc.transfers.push({ id, at: new Date().toISOString(), date: book.date, from: amt > 0 ? 'core' : 'deriv', to: amt > 0 ? 'deriv' : 'core', amount: r2(Math.abs(amt)), stockDone: true, derivDone: true, why: alloc.cio.headline });
+    }
+  }
+  // the 24-hour part (money in: the book pays now; money out: the 24-hour loop sends it first)
+  g = gap(cryptoV + tr0, 'h24');
+  const pend = alloc.transfers.some((t) => (t.to === 'crypto' && !cryptoSeen.has(t.id)) || (t.from === 'crypto' && !t.stockDone));
+  if (!pend && Math.abs(g) >= Math.max(1000, 0.02 * total)) {
+    const id = seq();
+    if (g > 0) { const amt = Math.min(g, Math.max(0, book.state.cash - 1000)); if (amt >= 1000) { moveCore(-amt, id, 'crypto'); alloc.transfers.push({ id, at: new Date().toISOString(), date: book.date, from: 'core', to: 'crypto', amount: r2(amt), stockDone: true, why: alloc.cio.headline }); } }
+    else alloc.transfers.push({ id, at: new Date().toISOString(), date: book.date, from: 'crypto', to: 'core', amount: r2(-g), stockDone: false, why: alloc.cio.headline });
   }
 }
+// the derivatives part: one closed day (settle, decide), or a session pass (marks, options)
+if (dst && book) {
+  const d = book.date, coreV = coreNow(), derivV = Dv.equity(dst), cryptoV = (cv && cv.eq) || 0, total = coreV + derivV + cryptoV + transit();
+  const stocksLong = book.state.positions.filter((p) => p.pb !== 'bd').reduce((a, p) => a + p.qty * (p.lastPx || p.fill || 0), 0);
+  const futLong = Object.values(dst.fut).filter((p) => (p.g === 'eq' || p.g === 'sc') && p.qty > 0).reduce((a, p) => a + p.qty * p.px * p.mult, 0);
+  const toksLong = ((cv && cv.toks) || []).reduce((a, t) => a + (t.value || 0), 0);
+  let rho = null;
+  if (alloc.cio && alloc.cio.pic) rho = alloc.cio.pic.rho;
+  const ctx = { date: d, now: Date.now(), fut: mk.fut || {}, hist: MS, chain: mk.chain || null, cio: alloc.cio ? alloc.cio.tilt : null, account: total,
+    exposure: stocksLong + futLong + toksLong, spx: valAt('.SPX', d), ndx: valAt('.NDX', d), vix: valAt('.VIX', d), vxn: valAt('.VXN', d), y2: valAt('US2Y', d), rp: valAt('US1M', d), rho,
+    spy: mk.chain && mk.chain.SPY ? mk.chain.SPY.spot : null, today: etToday };
+  if (!dst.date || dst.date < d) { Dv.nightly(dst, ctx); const h = dst.hist[dst.hist.length - 1]; if (h) h.pre = r2(h.eq - (dst.transfers || []).filter((x) => x.date === d).reduce((a, x) => a + x.amount, 0)); }
+  else Dv.session(dst, ctx);
+  derivChanged = true;
+}
+if (derivChanged && dst) { fs.mkdirSync('data/deriv', { recursive: true }); fs.writeFileSync('data/deriv/state.json', JSON.stringify(dst)); }
+if (allocChanged) fs.writeFileSync('data/alloc.json', JSON.stringify(alloc, null, 1));
 if (bookChanged) fs.writeFileSync('data/book.json', JSON.stringify(book));
 if (evoChanged) fs.writeFileSync('data/evolution.json', JSON.stringify(evo));
 // what the page shows: the book, plus today while the market is open
-const lv = book ? E.simulate(D, { resume: book, to: T - 1, adaptive: true, log: true }) : null;
+const lv = book ? E.simulate(D, { resume: book, to: T - 1, adaptive: true, log: true, tilt: tiltAt }) : null;
 const mv = E.marketView(D, lv ? lv.params : null);
 const res = { D: { last: D.dates[T - 1], lastTime: D.times[T - 1] || null, prov: D.prov ? { date: D.dates[D.prov.t], time: D.prov.time } : null },
   regime: mv.regime, gate: mv.gate, capital, liveStart, live: lv };
@@ -147,10 +234,12 @@ const state = {
   regime: res.regime, gate: res.gate, capital: res.capital, liveStart: res.liveStart,
   account: lv ? { equity: lv.equity, intraday: lv.intraday, open: lv.open, stats: fin(lv.stats), mults: lv.mults, dtPaused: lv.dtPaused, risk: lv.risk,
     hedge: lv.hedge, hedgeFees: Math.round((lv.hedgeFills || []).reduce((a, h) => a + (h.fee || 0), 0) * 100) / 100, lockedThrough: book ? book.date : null,
-    marginPaid: lv.marginPaid || 0, lev: lv.lev || 1, flows: (book && book.flows) || [],
+    marginPaid: lv.marginPaid || 0, rpGot: lv.rpGot || 0, lev: lv.lev || 1, flows: (book && book.flows) || [],
     // money moved out after the last row (the row is before the move): the stock account's value now
     flowsAfter: Math.round(((book && book.flows) || []).filter((f) => lv.equity.length && f.date >= lv.equity[lv.equity.length - 1].date).reduce((a, f) => a + f.amount, 0) * 100) / 100 } : null,
-  alloc: alloc ? { target: alloc.target, why: alloc.why, transfers: alloc.transfers } : null,
+  alloc: { cio: alloc.cio ? Object.assign({}, alloc.cio, { pic: undefined }) : null, transfers: alloc.transfers.slice(-40), history: (alloc.history || []).slice(-60), first: alloc.first || null },
+  deriv: dst ? Dv.view(dst) : null,
+  rates: { rp: (() => { const r = rpFor([res.D.last])[0]; return r == null ? null : Math.round(r * 1e5) / 1e5; })(), y1m: valAt('US1M', res.D.last) },
   macro: lv ? E.macroView(D, lv) : null,
   teams: lv ? teamsView(lv) : null,
   evolution: Lab.view(E, evo),

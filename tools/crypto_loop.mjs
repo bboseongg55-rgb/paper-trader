@@ -1,8 +1,10 @@
-// The crypto account's loop, run by .github/workflows/crypto.yml around the clock (one job of up to about 6 hours,
-// the hourly schedule starts the next). About every 15 seconds it reads the best bid and ask for BTC, ETH and SOL at five
-// US exchanges (public order-book endpoints, no keys), runs crypto.js, and every 2 minutes saves what the page shows
-// (data/crypto/view.json) and pushes it; the full state (data/crypto/state.json) is saved every 10 minutes and at the end.
-// Money comes from the main account through data/alloc.json (written by tools/run.mjs).
+// The 24-hour part of the combined account, run by .github/workflows/crypto.yml around the clock (one job of up to about
+// 6 hours, the hourly schedule starts the next). About every 15 seconds it reads the best bid and ask for BTC, ETH and SOL
+// at five US exchanges and for the tokenized stocks at Kraken (public endpoints, no keys), runs crypto.js, and every 2
+// minutes saves what the page shows (data/crypto/view.json) and pushes it; the full state (data/crypto/state.json) is
+// saved every 10 minutes and at the end. The allocator (tools/run.mjs → data/alloc.json) moves money in and out and sets
+// this part's risk tilts: money in arrives once the main book has paid it; money out leaves here first, when dollars
+// are free, and the main book takes it in at its next run.
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -30,9 +32,17 @@ const FETCH = {
   gemini: async () => { const o = {}; await Promise.all(COINS.map(async (c) => { const j = await getJ(`https://api.gemini.com/v1/book/${c.toLowerCase()}usd?limit_bids=1&limit_asks=1`); const b = j.bids && j.bids[0], a = j.asks && j.asks[0]; if (b && a) o[c] = { bid: n(b.price), bidSz: n(b.amount), ask: n(a.price), askSz: n(a.amount) }; })); return o; },
   binanceus: async () => { const o = {}; await Promise.all(COINS.map(async (c) => { const j = await getJ(`https://api.binance.us/api/v3/ticker/bookTicker?symbol=${c}USD`); o[c] = { bid: n(j.bidPrice), bidSz: n(j.bidQty), ask: n(j.askPrice), askSz: n(j.askQty) }; })); return o; },
 };
+const TOKS = Object.keys(C.TOKS);
+const krakenTok = async () => {
+  const j = await getJ(`https://api.kraken.com/0/public/Ticker?pair=${TOKS.map((k) => k + 'USD').join(',')}&asset_class=tokenized_asset`), o = {};
+  for (const [k, r] of Object.entries(j.result || {})) { const s = k.replace(/USD$/, ''); if (TOKS.includes(s) && r.a && r.b) o[s] = { bid: n(r.b[0]), ask: n(r.a[0]) }; }
+  return o;
+};
 const errs = {};
 async function poll() {
   const books = {}, t0 = Date.now();
+  let toks = {};
+  try { toks = await krakenTok(); } catch (e) { errs.toks = (errs.toks || 0) + 1; }
   await Promise.all(Object.entries(FETCH).map(async ([k, f]) => {
     try {
       const o = await f();
@@ -40,7 +50,7 @@ async function poll() {
       if (Object.keys(ok).length) books[k] = ok;
     } catch (e) { errs[k] = (errs[k] || 0) + 1; }
   }));
-  return { at: Date.now(), ms: Date.now() - t0, books };
+  return { at: Date.now(), ms: Date.now() - t0, books, toks };
 }
 // hourly and minute candles from Coinbase, so the strategies start with history
 async function seedBars(st) {
@@ -50,6 +60,16 @@ async function seedBars(st) {
       try { const j = await getJ(`https://api.exchange.coinbase.com/products/${c}-USD/candles?granularity=${g}`); C.seed(st, c, kind, j.map((r) => [r[0] * 1000, r[3], r[2], r[1], r[4]]).filter((r) => r[0] < Math.floor(Date.now() / (g * 1000)) * g * 1000)); }
       catch (e) { console.log('seed failed', c, kind, String(e.message || e).slice(0, 120)); }
     }
+  }
+}
+async function seedToks(st) {
+  for (const k of TOKS) {
+    if (((st.tok && st.tok.bars[k]) || []).length >= 120) continue;
+    try {
+      const j = await getJ(`https://api.kraken.com/0/public/OHLC?pair=${k}USD&interval=60&asset_class=tokenized_asset`);
+      const key = Object.keys(j.result || {}).find((x) => x !== 'last'), rows = (j.result || {})[key] || [];
+      C.seedTok(st, k, rows.map((r) => [r[0] * 1000, n(r[1]), n(r[2]), n(r[3]), n(r[4])]).filter((r) => r[0] < Math.floor(Date.now() / 3600e3) * 3600e3));
+    } catch (e) { console.log('token seed failed', k, String(e.message || e).slice(0, 120)); }
   }
 }
 const sh = (cmd) => { try { return execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim(); } catch (e) { return 'ERR ' + String(e.stderr || e.message || e).slice(0, 200); } };
@@ -63,7 +83,7 @@ const save = (full) => {
 };
 
 let st = readJSON('data/crypto/state.json', null);
-let lastView = 0, lastState = Date.now(), lastPull = 0, ticks = 0;
+let lastView = 0, lastState = Date.now(), lastPull = 0, ticks = 0, seeded = false;
 sh('git config user.name "paper-trader-bot"');
 sh('git config user.email "41898282+github-actions[bot]@users.noreply.github.com"');
 console.log('crypto loop start', new Date().toISOString(), st ? `equity ${st.eq}` : 'no account yet');
@@ -72,17 +92,19 @@ while (Date.now() < END) {
   if (now - lastPull >= PULL) { pull(); lastPull = now; }
   const q = await poll();
   if (Object.keys(q.books).length >= 3) {
-    // money from the main account (each transfer once; the main account has already taken it out)
+    // the allocator: money in (already paid by the main book), money out (when the dollars are free), and the tilts
     const alloc = readJSON('data/alloc.json', null);
     for (const tr of (alloc && alloc.transfers) || []) {
-      if (!tr.stockDone || tr.to !== 'crypto' && tr.from !== 'crypto') continue;
       if (st && (st.transfers || []).some((x) => x.id === tr.id)) continue;
-      const amt = tr.to === 'crypto' ? tr.amount : -tr.amount;
-      if (!st) { st = C.init(0, q, q.at); await seedBars(st); }
-      C.fund(st, amt, q, q.at, tr.id);
-      console.log('funded', tr.id, amt);
-      lastView = 0;
+      if (tr.to === 'crypto' && tr.stockDone) {
+        if (!st) { st = C.init(0, q, q.at); await seedBars(st); }
+        C.fund(st, tr.amount, q, q.at, tr.id); console.log('in', tr.id, tr.amount); lastView = 0;
+      } else if (tr.from === 'crypto' && st && C.freeUsd(st) >= tr.amount) {
+        C.fund(st, -tr.amount, q, q.at, tr.id); console.log('out', tr.id, tr.amount); lastView = 0;
+      }
     }
+    if (st) st.tilt = (alloc && alloc.cio && alloc.cio.tilt && alloc.cio.tilt.h24) || null;
+    if (st && !seeded) { await seedToks(st); seeded = true; }
     if (st) { C.step(st, q, q.at); ticks++; }
   }
   if (st && Date.now() - lastView >= SAVE_VIEW) {
@@ -90,7 +112,7 @@ while (Date.now() < END) {
     const r = save(full);
     if (full) lastState = Date.now();
     lastView = Date.now();
-    console.log(new Date().toISOString().slice(11, 19), `eq ${st.eq}`, `ticks ${ticks}`, `venues ${Object.keys(q.books).join(',')}`, `poll ${q.ms}ms`, `fills ${st.fills.length}`, r.split('\n').pop(), Object.keys(errs).length ? 'errors ' + JSON.stringify(errs) : '');
+    console.log(new Date().toISOString().slice(11, 19), `eq ${st.eq}`, `ticks ${ticks}`, `venues ${Object.keys(q.books).join(',')}`, `tokens ${Object.keys(q.toks || {}).length}`, `poll ${q.ms}ms`, `fills ${st.fills.length}`, full ? 'state saved' : '', r.split('\n').pop(), Object.keys(errs).length ? 'errors ' + JSON.stringify(errs) : '');
   }
   const wait = TICK - (Date.now() % TICK);
   await new Promise((r) => setTimeout(r, Math.max(1000, wait)));

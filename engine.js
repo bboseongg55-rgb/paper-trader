@@ -205,6 +205,7 @@
       for (const a of splitAdj) { const i = symIdx.get(a.sym); for (let j = 0; j < a.t; j++) if (snap[j]) for (const sm of snap[j]) { if (isNum(sm.px[i])) sm.px[i] *= a.factor; if (sm.hi && isNum(sm.hi[i])) sm.hi[i] *= a.factor; } }
     }
     const D = { dates, spx, S, notes, liveDays: days.length, snap, times, prov, bond0, splits: splitAdj.map((a) => ({ sym: a.sym, t: a.t, date: dates[a.t], factor: a.factor })) };
+    if (extra && typeof extra.rp === 'function') D.rp = extra.rp(dates);    // RP rate on idle cash per trading day
     indicators(D);
     return D;
   }
@@ -360,12 +361,15 @@
     const scores = Object.assign({ bo: 0, pb: 0, dt: 0 }, (BS ? BS.scores : opts.scores) || {});
     // share of the normal 1-trade risk each playbook may use, set by the strategy tournament
     let M = Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM, bd: FIXED.selectTrialM }, (BS ? BS.M : opts.mults) || {});
-    const riskMul = (k) => M[k];
+    // the allocator's tilt for each method on each day (data/alloc.json), the same in every replay of that day
+    let tiltNow = null;
+    const riskMul = (k) => M[k] * (tiltNow && isNum(tiltNow[k]) ? tiltNow[k] : 1);
     const only = opts.only || null;                               // tournament runs: one playbook alone
     let lastSelect = -1e9, dtPausedUntil = -1, dtCount = 0;
     let streak = 0, blockUntil = -1, ddStopOn = false, lastMarketLoss = -1e9, lastValidate = from, prevEq = capital;
     let riskState = { mult: 1, why: [], blocked: [] }, lastRiskKey = '1|0';
     let mInt = 0;                                   // margin interest paid
+    let rpInt = 0;                                  // RP interest received on idle cash
     const isBond = (i) => D.S[i].kind === 'bond';
     const bpow = (eq) => Math.max(0, cash + (P.lev - 1) * eq);   // buying power: cash, plus margin when leverage is allowed
     const ev0 = BS ? BS.ev : opts.evidence;
@@ -378,7 +382,7 @@
       cash = BS.cash; peak = BS.peak; idSeq = BS.idSeq; prevEq = BS.prevEq;
       lastSelect = at(BS.lastSelect); dtPausedUntil = at(BS.dtPausedUntil); dtCount = BS.dtCount; streak = BS.streak;
       blockUntil = at(BS.blockUntil); ddStopOn = BS.ddStopOn; lastMarketLoss = at(BS.lastMarketLoss); lastValidate = at(BS.lastValidate);
-      riskState = JSON.parse(JSON.stringify(BS.riskState)); lastRiskKey = BS.lastRiskKey; mInt = BS.mInt || 0;
+      riskState = JSON.parse(JSON.stringify(BS.riskState)); lastRiskKey = BS.lastRiskKey; mInt = BS.mInt || 0; rpInt = BS.rpInt || 0;
       const need = (s) => { const k = symIdx(s); if (k == null) throw new Error('book symbol missing from the price data: ' + s); return k; };
       for (const p of BS.positions) { const q = Object.assign({}, p, { i: need(p.sym), t0: at(p.t0) }); delete q.sym; positions.push(q); }
       for (const r of BS.reviews) reviews.push({ due: at(r.due), tr: r.tr, i: need(r.sym) });
@@ -548,7 +552,12 @@
         const days = Math.max(1, Math.round((Date.parse(D.dates[t] + 'T12:00:00Z') - Date.parse(D.dates[t - 1] + 'T12:00:00Z')) / 864e5));
         const due = owed * rate / 360 * days;
         cash -= due; mInt += due;
+      } else if (cash > FIXED.marginMin && t > 0 && D.rp && isNum(D.rp[t]) && D.rp[t] > 0) {   // RP on idle cash, 365-day basis
+        const days = Math.max(1, Math.round((Date.parse(D.dates[t] + 'T12:00:00Z') - Date.parse(D.dates[t - 1] + 'T12:00:00Z')) / 864e5));
+        const got = cash * D.rp[t] / 365 * days;
+        cash += got; rpInt += got;
       }
+      tiltNow = opts.tilt ? opts.tilt(D.dates[t]) : null;
       // ── intraday: prices sampled about every 15 minutes during the session
       const snaps = D.snap && D.snap[t];
       if (snaps && snaps.length) {
@@ -945,7 +954,7 @@
       snapshot = {
         P: Object.assign({}, P), base: Object.assign({}, B), scores: Object.assign({}, scores), M: Object.assign({}, M),
         ev: Object.assign(JSON.parse(JSON.stringify(ev)), { mkt: ev.mkt.map(off) }),
-        cash, peak, idSeq, prevEq, dtCount, streak, ddStopOn, lastRiskKey, riskState: JSON.parse(JSON.stringify(riskState)), mInt,
+        cash, peak, idSeq, prevEq, dtCount, streak, ddStopOn, lastRiskKey, riskState: JSON.parse(JSON.stringify(riskState)), mInt, rpInt,
         lastSelect: off(lastSelect), dtPausedUntil: off(dtPausedUntil), blockUntil: off(blockUntil), lastMarketLoss: off(lastMarketLoss), lastValidate: off(lastValidate),
         positions: positions.map((p) => { const q = Object.assign({}, p, { sym: nm(p.i), t0: off(p.t0) }); delete q.i; return q; }),
         reviews: reviews.filter((r) => r.due > lastT).map((r) => ({ due: off(r.due), tr: r.tr, sym: nm(r.i) })),
@@ -956,7 +965,7 @@
     }
     // a run that only reads a book back (no new day) shows the book's own last-day curve and signals
     const lastX = BK && BK.last && BK.last.date === D.dates[lastT] && from > to ? BK.last : null;
-    return { from: base0, to: lastT, capital, equity, trades, open, changes, params: P, base: B, scores, mults: M, weights: normW(M), marginPaid: round(mInt, 2), lev: P.lev, dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState,
+    return { from: base0, to: lastT, capital, equity, trades, open, changes, params: P, base: B, scores, mults: M, weights: normW(M), marginPaid: round(mInt, 2), rpGot: round(rpInt, 2), lev: P.lev, dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState,
       signals: lastX ? lastX.signals || [] : signals, intraday: lastX ? lastX.intraday || [] : intraday, watch, snapshot, hedge: hedge ? { value: round(hedge.value, 2), since: D.dates[hedge.t0], paid: round(hedge.paid, 2), got: round(hedge.got, 2), ratio: hedge.ratio, spx0: round(hedge.spx0, 2) } : null, hedgeFills, hedgeEpisodes, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
   }
 
@@ -1066,7 +1075,7 @@
       const tb = D.dates.indexOf(o.book.date);
       if (tb < 0) throw new Error('book day missing from the price data: ' + o.book.date);
       if (tb >= lf) return { book: o.book, added: [] };
-      const res = simulate(D, { resume: o.book, to: lf, adaptive: true, log: true, snapshot: true });
+      const res = simulate(D, { resume: o.book, to: lf, adaptive: true, log: true, snapshot: true, tilt: o.tilt || null });
       return { book: bookOf(D, res, o.book.from0, o.book.capital), added: D.dates.slice(tb + 1, lf + 1) };
     }
     // first book: the account from its first day, starting from the fixed snapshot of what the past test learned

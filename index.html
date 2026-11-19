@@ -184,6 +184,15 @@ ul.list > li > details > summary::-webkit-details-marker { display: none; }
 .sig span { font-size: 14px; color: var(--muted); word-break: keep-all; }
 .sig b { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .sig small { font-size: 14px; color: var(--muted); line-height: 1.4; word-break: keep-all; }
+.abar { list-style: none; margin: 0; padding: 12px 20px 0; display: grid; gap: 14px; }
+.abar li { display: grid; gap: 6px; }
+.abar .t { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; }
+.abar .t b { font-weight: 600; min-width: 0; word-break: keep-all; }
+.abar .t span { color: var(--sub); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.abar .track { position: relative; height: 10px; border-radius: 5px; background: var(--band); }
+.abar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--s1); }
+.abar .goal { position: absolute; top: -4px; bottom: -4px; width: 3px; border-radius: 2px; background: var(--ink); }
+.grp { margin: 16px 20px 0; font-size: 15px; font-weight: 700; color: var(--muted); }
 .why { margin: -4px 20px 0; padding: 0 0 14px; font-size: 15px; color: var(--sub); line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
 .why b { font-weight: 600; color: var(--ink); margin-right: 6px; }
 @media (max-width: 350px) { .sig { grid-template-columns: minmax(0, 1fr); } }
@@ -257,7 +266,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   <a href="#fills" data-v="fills"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2v-17z"/><path d="M9 8.5h6M9 12.5h6"/></svg><span>체결내역</span></a>
   <a href="#profit" data-v="profit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 17.5 9 12l4 4 7.5-7.5"/><path d="M15 8.5h5.5V14"/></svg><span>수익</span></a>
   <a href="#team" data-v="team"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19.5c0-3.1 2.4-5.3 5.5-5.3s5.5 2.2 5.5 5.3"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.8 14.3c2.5.3 4.4 2.2 4.4 5"/></svg><span>AI팀</span></a>
-  <a href="#coin" data-v="coin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10 7.5v9M12.5 7.5v1.2M12.5 15.3v1.2M9 9h4.2a1.8 1.8 0 0 1 0 3.6H9h4.6a1.9 1.9 0 0 1 0 3.8H9"/></svg><span>코인</span></a>
+  <a href="#coin" data-v="coin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10 7.5v9M12.5 7.5v1.2M12.5 15.3v1.2M9 9h4.2a1.8 1.8 0 0 1 0 3.6H9h4.6a1.9 1.9 0 0 1 0 3.8H9"/></svg><span>24시간</span></a>
 </nav>
 <script>
 (function () {
@@ -275,7 +284,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const PB = { bo: '돌파', pb: '눌림목', dt: '단타', bd: '채권', hedge: '헷지' };
   const PB_LONG = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', hedge: 'S&P 500 인버스 헷지' };
   const VIEWS = ['account', 'fills', 'profit', 'team', 'coin'];
-  const TITLES = { account: '계좌', fills: '체결내역', profit: '수익', team: 'AI팀', coin: '코인' };
+  const TITLES = { account: '통합계좌', fills: '체결내역', profit: '수익', team: 'AI팀', coin: '24시간' };
   const HOLIDAYS = ['2026-11-26', '2026-12-25', '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24'];
   const EARLY_CLOSE = ['2026-11-27', '2026-12-24', '2027-11-26'];
   let S = null, period = 'day', filter = 'all', range = null;
@@ -294,7 +303,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const on = marketOpen();
     const coin = (location.hash || '').slice(1) === 'coin';
     $('live').className = 'live' + (coin ? (funded() && CV.at && Date.now() - CV.at < 6 * 60e3 ? ' on' : '') : on ? ' on' : '');
-    $('live').lastElementChild.textContent = coin ? (funded() ? `24시간 · ${clock(new Date(CV.at).toISOString())} 매매 확인` : '코인 계좌 준비 중') : S ? `${on ? '장중' : '장 마감'} · ${clock(S.built)} 업데이트` : '불러오는 중';
+    $('live').lastElementChild.textContent = coin ? (funded() ? `24시간 · ${clock(new Date(CV.at).toISOString())} 매매 확인` : '24시간 운용 준비 중') : S ? `${on ? '장중' : '장 마감'} · ${clock(S.built)} 업데이트` : '불러오는 중';
   }
 
   // ── tabs
@@ -332,10 +341,19 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   const rowMs = (e) => etMs(e.date, e.time || '16:00');
   const stockNow = () => { const a = S.account, l = a.equity[a.equity.length - 1]; return l.eq + (a.flowsAfter || 0); };
-  const inTransit = () => { const got = new Set(((CV && CV.transfers) || []).map((t) => t.id)); return ((S && S.alloc && S.alloc.transfers) || []).filter((t) => t.stockDone && t.to === 'crypto' && !got.has(t.id)).reduce((x, t) => x + t.amount, 0); };
-  const hasCoin = () => funded() || inTransit() > 0;
+  // money between the parts of the account: left the stock book but not yet in the 24-hour part, or the reverse
+  const inTransit = () => { const got = new Set(((CV && CV.transfers) || []).map((t) => t.id)); return ((S && S.alloc && S.alloc.transfers) || []).reduce((x, t) => x + (t.to === 'crypto' && t.stockDone && !got.has(t.id) ? t.amount : t.from === 'crypto' && !t.stockDone && got.has(t.id) ? t.amount : 0), 0); };
+  const derivNow = () => (S && S.deriv ? S.deriv.eq : 0);
+  function derivAt(date) {               // futures, options and ELS at a day's close (before that evening's money moves)
+    const h = (S && S.deriv && S.deriv.hist) || [];
+    let v = 0;
+    for (const r of h) { if (r.date < date) v = r.eq; else { if (r.date === date) v = r.pre != null ? r.pre : r.eq; break; } }
+    return v;
+  }
+  const hasCoin = () => funded() || inTransit() > 0 || derivNow() > 0;
   const coinTotal = () => cryptoLive() + inTransit();
-  const totalNow = () => stockNow() + coinTotal();
+  const totalNow = () => stockNow() + derivNow() + coinTotal();
+  const otherAt = (e) => cryptoAt(rowMs(e)) + derivAt(e.date);   // the parts other than the stock book at a row's time
   const md = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일`;
   const rowLabel = (e) => (e.prov ? `${dLabel(e.date)} ${e.time} 기준` : dLabel(e.date));
   const periodName = () => (period === 'custom' && range ? (range.from === range.to ? md(range.from) : `${md(range.from)}~${md(range.to)}`) : { day: '최근 거래일', week: '1주', month: '1개월', all: '시작 후' }[period]);
@@ -356,16 +374,16 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   function series() {
     const a = S.account, eqs = a.equity;
     const prevClose = eqs.length > 1 ? eqs[eqs.length - 2].eq : S.capital;
-    const nowPt = (pts) => { if (funded() && (period !== 'custom' || !range || range.to >= eqs[eqs.length - 1].date)) pts.push({ label: '지금', v: totalNow() }); return pts; };
+    const nowPt = (pts) => { if (hasCoin() && (period !== 'custom' || !range || range.to >= eqs[eqs.length - 1].date)) pts.push({ label: '지금', v: totalNow() }); return pts; };
     if (period === 'day') {
-      const pts = (a.intraday || []).map((x) => ({ label: `${dLabel(S.asOf.date)} ${x.t}`, v: x.eq + cryptoAt(etMs(S.asOf.date, x.t)) }));
+      const pts = (a.intraday || []).map((x) => ({ label: `${dLabel(S.asOf.date)} ${x.t}`, v: x.eq + (cryptoAt(etMs(S.asOf.date, x.t)) + derivAt(S.asOf.date)) }));
       const lastRow = eqs[eqs.length - 1];
-      if (pts.length >= 2 && !S.asOf.prov && lastRow.date === S.asOf.date) pts.push({ label: `${dLabel(lastRow.date)} 종가`, v: lastRow.eq + cryptoAt(rowMs(lastRow)) });
-      if (pts.length >= 2) return { pts: nowPt(pts), base: prevClose + (eqs.length > 1 ? cryptoAt(rowMs(eqs[eqs.length - 2])) : 0), name: S.asOf.prov ? '오늘' : '최근 거래일' };
+      if (pts.length >= 2 && !S.asOf.prov && lastRow.date === S.asOf.date) pts.push({ label: `${dLabel(lastRow.date)} 종가`, v: lastRow.eq + otherAt(lastRow) });
+      if (pts.length >= 2) return { pts: nowPt(pts), base: prevClose + (eqs.length > 1 ? otherAt(eqs[eqs.length - 2]) : 0), name: S.asOf.prov ? '오늘' : '최근 거래일' };
     }
     const w = dailyWindow();
     if (!w) return { pts: [], base: 0, name: periodName(), none: true };
-    const pts = [w.before ? { label: `${dLabel(w.before.date)} 종가`, v: w.before.eq + cryptoAt(rowMs(w.before)) } : { label: '시작', v: S.capital }].concat(w.rows.map((e) => ({ label: rowLabel(e), v: e.eq + cryptoAt(rowMs(e)) })));
+    const pts = [w.before ? { label: `${dLabel(w.before.date)} 종가`, v: w.before.eq + otherAt(w.before) } : { label: '시작', v: S.capital }].concat(w.rows.map((e) => ({ label: rowLabel(e), v: e.eq + otherAt(e) })));
     return { pts: nowPt(pts), base: pts[0].v, name: periodName() };
   }
   function heroChange(v, base, when) {
@@ -385,16 +403,16 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       if (rows.length >= 2) {
         const byT = new Map((C.intraday || []).map((r) => [r.t, r]));
         const daily = C.daily || [], prevRow = daily.length > 1 ? daily[daily.length - 2] : null;
-        const base = { acct: eqs.length > 1 ? eqs[eqs.length - 2].eq + cryptoAt(rowMs(eqs[eqs.length - 2])) : S.capital };
+        const base = { acct: eqs.length > 1 ? eqs[eqs.length - 2].eq + otherAt(eqs[eqs.length - 2]) : S.capital };
         keys.forEach((k) => { base[k] = pick(C.prev, k) || pick(prevRow, k); });
-        const pts = rows.map((r) => { const o = { label: `${dLabel(S.asOf.date)} ${r.t}`, acct: r.eq + cryptoAt(etMs(S.asOf.date, r.t)) }; keys.forEach((k) => { o[k] = pick(byT.get(r.t), k); }); return o; });
+        const pts = rows.map((r) => { const o = { label: `${dLabel(S.asOf.date)} ${r.t}`, acct: r.eq + (cryptoAt(etMs(S.asOf.date, r.t)) + derivAt(S.asOf.date)) }; keys.forEach((k) => { o[k] = pick(byT.get(r.t), k); }); return o; });
         return { pts, base, name: S.asOf.prov ? '오늘' : '최근 거래일', baseLabel: '전일 종가' };
       }
     }
     const w = dailyWindow();
     if (!w) return { pts: [], base: {}, name: periodName(), none: true };
     const byD = new Map((C.daily || []).map((r) => [r.date, r]));
-    const mk = (e, label) => { const o = { label: label || rowLabel(e), acct: e.eq + cryptoAt(rowMs(e)) }; keys.forEach((k) => { o[k] = pick(byD.get(e.date), k); }); return o; };
+    const mk = (e, label) => { const o = { label: label || rowLabel(e), acct: e.eq + otherAt(e) }; keys.forEach((k) => { o[k] = pick(byD.get(e.date), k); }); return o; };
     const all = (w.before ? [mk(w.before, `${dLabel(w.before.date)} 종가`)] : []).concat(w.rows.map((e) => mk(e)));
     // one common start: the first point where the account and every chosen index have a value
     let b = all.findIndex((p) => keys.every((k) => p[k] != null));
@@ -515,52 +533,38 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const kv = (rows) => '<div class="kv">' + rows.map(([k, v, c]) => `<div><span>${k}</span><b class="${c || ''}">${v}</b></div>`).join('') + '</div>';
   const more = (rows) => '<div class="more">' + rows.filter(Boolean).map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('') + '</div>';
 
-  // ── portfolio ring: up to five stocks by value (colours in fixed order), the rest as one, then cash, then the hedge
+  // ── portfolio ring by asset class (colours fixed per class)
   function allocation() {
-    const a = S.account, last = a.equity[a.equity.length - 1];
-    const st = a.open.map((p) => ({ name: p.sym, sub: p.name, v: p.value })).sort((p, q) => q.v - p.v);
-    const top = st.slice(0, 5), rest = st.slice(5), segs = [];
-    top.forEach((x, i) => segs.push({ name: x.name, sub: x.sub, v: x.v, col: `var(--s${i + 1})` }));
-    if (rest.length) segs.push({ name: `기타 ${rest.length}종목`, sub: rest.map((x) => x.name).join(', '), v: rest.reduce((t, x) => t + x.v, 0), col: 'var(--s-other)' });
-    if (hasCoin()) segs.push({ name: '코인', sub: inTransit() > 0 ? '코인 계좌 (이체 중 포함)' : '코인 계좌', v: coinTotal(), col: 'var(--s7)' });
-    const cash = last.cash + (a.flowsAfter || 0);
-    if (cash > 0.5) segs.push({ name: '현금', sub: '주문 가능 현금', v: cash, col: 'var(--s-cash)' });
-    if (a.hedge && a.hedge.value > 0) segs.push({ name: 'SH', sub: 'S&P 500 인버스 헷지', v: a.hedge.value, col: 'var(--s6)' });
-    const total = segs.reduce((t, x) => t + x.v, 0);
-    segs.forEach((x) => { x.share = total > 0 ? x.v / total : 0; });
-    return { segs, total };
+    const a = S.account, dv = S.deriv, segs = [];
+    const sum = (xs, f) => xs.reduce((t, x) => t + f(x), 0);
+    const stocks = sum(a.open.filter((p) => p.kind !== 'bond'), (p) => p.value), bonds = sum(a.open.filter((p) => p.kind === 'bond'), (p) => p.value);
+    const coins = funded() ? sum(CV.hold || [], (h) => h.qty * coinPx(h.c)) : 0, toks = funded() ? sum(CV.toks || [], (x) => x.value || 0) : 0;
+    const fut = dv ? dv.margin : 0, opt = dv ? dv.optRisk + sum(dv.opt.filter((o) => o.side !== 'credit'), (o) => o.value) : 0, els = dv ? sum(dv.els, (e) => e.value) : 0;
+    const add = (name, sub, v, col) => { if (v > 0.5) segs.push({ name, sub, v, col }); };
+    add('주식', '미국 주식', stocks, 'var(--s1)'); add('채권', '각국 국채·회사채', bonds, 'var(--s2)'); add('코인', '24시간 코인', coins, 'var(--s3)');
+    add('선물', '선물 증거금', fut, 'var(--s4)'); add('옵션', '옵션 손실 한도·매수 가치', opt, 'var(--s5)'); add('ELS', 'ELS 평가액', els, 'var(--s6)');
+    add('토큰화 주식', '코인 거래소의 미국 주식', toks, 'var(--s7)'); add('헷지', 'S&P 500 인버스', a.hedge ? a.hedge.value : 0, 'var(--s-other)');
+    const total = totalNow();
+    add('현금·RP', S.rates && S.rates.rp != null ? `RP 연 ${fmt(S.rates.rp * 100, 2)}%` : '현금', total - segs.reduce((t, x) => t + x.v, 0), 'var(--s-cash)');
+    const all = segs.reduce((t, x) => t + x.v, 0);
+    segs.forEach((x) => { x.share = all > 0 ? x.v / all : 0; });
+    return { segs, total: all };
   }
-  // what the account leans on now and why: the engine's own order (S.macro), the crypto account's strategies, the split
-  // between the two accounts, and the macro numbers behind it
-  function coinPrio() {
-    const w = CV.w || {}, br = CV.brake || {}, mk = CV.mkt || null, pos = CV.pos || {}, cf = CV.cfg || {};
-    const ups = mk ? Object.keys(mk).filter((c) => mk[c].up) : null;
-    const heldT = Object.keys(pos.trend || {}), heldS = Object.keys(pos.scalp || {});
-    const sp = Object.entries(CV.spreads || {}).sort((a, b) => b[1].net - a[1].net)[0];
-    const minE = cf.arbMinEdge || 0;
-    const stop = !!br.stopNew;
-    const items = [
-      { k: 'trend', name: '코인 추세(1시간)', w: w.trend || 0, on: !stop,
-        why: stop ? '손실 브레이크로 새 매매를 잠시 멈췄습니다.' : `${mk ? (ups.length ? `100시간 평균 위(상승 추세): ${ups.join('·')}. 이 코인이 20시간 신고가를 넘으면 삽니다.` : '모든 코인이 100시간 평균 아래(하락 추세)라 새 매수는 기다립니다.') : '100시간 평균 위에서 20시간 신고가를 넘으면 삽니다.'}${heldT.length ? ` 보유 중: ${heldT.join('·')}.` : ''}` },
-      { k: 'scalp', name: '코인 초단타(1분)', w: w.scalp || 0, on: !stop,
-        why: stop ? '손실 브레이크로 새 매매를 잠시 멈췄습니다.' : `15분 고점을 넘고 5분 새 ${((cf.scalp && cf.scalp.mom) || 0.003) * 100}% 넘게 오르면 짧게 사고팝니다.${heldS.length ? ` 보유 중: ${heldS.join('·')}.` : ''}` },
-      { k: 'arb', name: '거래소 간 차익거래', w: null, on: !!sp && sp[1].net > minE,
-        why: sp ? (sp[1].net > minE ? `${sp[0]} 가격 차이가 수수료를 빼고도 ${pct(sp[1].net, 2)}라 사고팔 수 있습니다.` : `수수료를 빼면 가장 큰 가격 차이가 ${pct(sp[1].net, 2)}(${sp[0]})라 기다립니다. 기준은 +${fmt(minE * 100, 2)}%입니다.`) : '거래소 호가를 기다리는 중입니다.' },
-    ];
-    items.sort((a, b) => (b.on - a.on) || ((b.w == null ? -1 : b.w) - (a.w == null ? -1 : a.w)));
-    let r = 0;
-    return `<h3 class="sub-h">코인 계좌</h3><ol class="prio">` + items.map((it) => `<li class="${it.on ? '' : 'off'}"><span class="rk">${it.on ? ++r + '순위' : '대기'}</span><div class="bd"><b>${esc(it.name)}${it.on && it.w != null ? `<span class="tag">AI 위험 배분 ${Math.round(it.w * 100)}%</span>` : ''}</b><p>${esc(it.why)}</p></div></li>`).join('') + '</ol>';
-  }
+  const PART = { core: '주식·채권', deriv: '선물·옵션·ELS', crypto: '24시간(코인·토큰)' };
   function prioHTML() {
-    const mc = S.macro;
-    if (!mc) return '';
-    let h = `<div class="band"></div><h2>지금 우선할 매매</h2><div class="mac"><p class="mac-head">${esc(mc.headline)}</p><span class="mac-sub">${md(mc.date)} 종가 기준 · AI가 실제로 위험을 싣는 순서입니다</span></div>`;
-    h += `${hasCoin() ? '<h3 class="sub-h">주식·채권 계좌</h3>' : ''}<ol class="prio">` + mc.items.map((it) => `<li class="${it.on ? '' : 'off'}"><span class="rk">${it.on ? it.rank + '순위' : '쉼'}</span><div class="bd"><b>${esc(it.name)}${it.on ? `<span class="tag">AI 위험 배분 ${Math.round(it.budget * 100)}%</span>` : ''}</b><p>${esc(it.why)}</p></div></li>`).join('')
-      + (S.account.hedge ? `<li><span class="rk">헷지</span><div class="bd"><b>S&amp;P 500 인버스</b><p>하락 추세에서 들고 있는 주식의 위험을 줄이려고 보유 중입니다.</p></div></li>` : '') + '</ol>';
-    if (funded()) h += coinPrio();
-    if (hasCoin() && S.alloc) { const t = totalNow(); h += `<p class="sumline" style="padding-top:10px">계좌 배분: 주식·채권 ${fmt(stockNow() / t * 100, 0)}% · 코인 ${fmt(coinTotal() / t * 100, 0)}%. ${esc(S.alloc.why)}</p>`; }
-    h += `<h3 class="sub-h">매크로 지표</h3><div class="sig">${mc.signals.map((g) => `<div><span>${esc(g.k)}</span><b class="${g.c || ''}">${esc(g.v)}</b><small>${esc(g.sub)}</small></div>`).join('')}</div>`;
-    h += `<p class="sumline" style="padding-top:12px">판단 기준: S&amp;P 500이 200일선 아래면 돌파·눌림목 새 매수를 쉽니다. 방법별 위험 배분은 20거래일마다 최근 120거래일 성과로 다시 정합니다. 채권은 가격이 100일 평균 위이고 3개월 수익이 플러스일 때만 삽니다. 변동성과 금리는 지금 국면을 설명하는 참고 지표로, 매매 규칙을 직접 바꾸지는 않습니다. 금리 방향은 3개월 0.25%p 이상 움직였을 때 하락·상승으로 봅니다.</p>`;
+    const c = S.alloc && S.alloc.cio;
+    if (!c) return '';
+    let h = `<div class="band"></div><h2>AI 운용 방향</h2><div class="mac"><p class="mac-head">${esc(c.headline)}</p><span class="mac-sub">${md(c.date)} 종가 기준 · 매일 장 마감 뒤 다시 정합니다</span></div>`;
+    h += '<ol class="prio">' + c.items.map((it) => `<li class="${it.on ? '' : 'off'}"><span class="rk">${it.on ? it.rank + '순위' : '쉼'}</span><div class="bd"><b>${esc(it.name)}${it.on ? `<span class="tag">${esc(it.lean)}${it.k === 'rp' ? '' : ' ' + Math.round(it.w * 100) + '%'}</span>` : ''}</b><p>${esc(it.why)}</p></div></li>`).join('') + '</ol>';
+    const t = totalNow() || 1, now = { core: stockNow() / t, deriv: derivNow() / t, h24: coinTotal() / t };
+    h += `<h3 class="sub-h">자산 배분 (지금 / AI 목표)</h3><ul class="abar">` + [['core', '주식·채권 (현금·RP 포함)'], ['deriv', '선물·옵션·ELS'], ['h24', '코인·토큰화 주식 (24시간)']].map(([k, nm]) => {
+      const v = Math.max(0, Math.min(1, now[k])), g = Math.max(0, Math.min(1, c.target[k]));
+      return `<li><div class="t"><b>${nm}</b><span>${fmt(v * 100, 0)}% / ${fmt(g * 100, 0)}%</span></div><div class="track" role="img" aria-label="${nm} 지금 ${fmt(v * 100, 0)}%, 목표 ${fmt(g * 100, 0)}%"><div class="fill" style="width:${(v * 100).toFixed(1)}%"></div><div class="goal" style="left:calc(${(g * 100).toFixed(1)}% - 1px)"></div></div></li>`;
+    }).join('') + '</ul><p class="sumline" style="padding-top:8px">목표와 2%p 넘게 벌어지면 매일 저녁 계좌 안에서 옮깁니다(수수료 없음).</p>';
+    h += `<h3 class="sub-h">매크로 지표</h3><div class="sig">${c.signals.map((g) => `<div><span>${esc(g.k)}</span><b class="${g.c || ''}">${esc(g.v)}</b><small>${esc(g.sub)}</small></div>`).join('')}</div>`;
+    h += `<details class="teamlog"><summary>판단 기준</summary>${c.rules.map((r) => `<div class="logitem"><p>${esc(r)}</p></div>`).join('')}</details>`;
+    const trs = ((S.alloc && S.alloc.transfers) || []).slice().reverse();
+    if (trs.length) h += `<details class="teamlog"><summary>계좌 안 자금 이동 ${trs.length}건</summary>${trs.map((x) => `<div class="logitem"><span class="d">${dLabel(x.date)}</span><b>${esc(PART[x.from] || x.from)} → ${esc(PART[x.to] || x.to)} ${usd(x.amount)}${x.from === 'crypto' && !x.stockDone ? ' (진행 중)' : ''}</b>${x.why ? `<p>${esc(x.why)}</p>` : ''}</div>`).join('')}</details>`;
     return h;
   }
   function arcPath(c, r0, r1, a0, a1) {
@@ -608,9 +612,10 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     if (!a) { $('v-account').innerHTML = '<p class="empty-row">연습 계좌가 아직 시작되지 않았습니다.</p>'; return; }
     const eqs = a.equity, last = eqs[eqs.length - 1];
     const prevClose = eqs.length > 1 ? eqs[eqs.length - 2].eq : S.capital;
-    const invested = last.eq - last.cash, cashNow = last.cash + (a.flowsAfter || 0), total = totalNow();
-    const prevTotal = prevClose + (eqs.length > 1 ? cryptoAt(rowMs(eqs[eqs.length - 2])) : 0);
-    let h = `<div class="hero"><div class="hero-label">총 자산${hasCoin() ? ' (주식·채권 + 코인)' : ''}</div><div class="hero-value num" id="heroValue">${usd(total)}</div><div class="hero-change num" id="heroChange"></div></div>
+    const cashNow = last.cash + (a.flowsAfter || 0), total = totalNow();
+    const dv = S.deriv, cashAll = cashNow + (dv ? dv.cash - dv.margin - dv.optRisk : 0) + (funded() ? CV.usd : 0) + inTransit();
+    const prevTotal = prevClose + (eqs.length > 1 ? otherAt(eqs[eqs.length - 2]) : 0);
+    let h = `<div class="hero"><div class="hero-label">총 자산${hasCoin() ? ' (통합계좌)' : ''}</div><div class="hero-value num" id="heroValue">${usd(total)}</div><div class="hero-change num" id="heroChange"></div></div>
       <div class="chart"></div><ul class="legend" id="cmpLegend" hidden></ul>
       <div class="periods" role="group" aria-label="기간">${[['day', '1일'], ['week', '1주'], ['month', '1개월'], ['all', '전체'], ['custom', '직접']].map(([k, t]) => `<button type="button" data-p="${k}" aria-pressed="${period === k}">${t}</button>`).join('')}</div>`;
     const d0 = eqs[0].date, d1 = eqs[eqs.length - 1].date, inR = (d) => (d < d0 ? d0 : d > d1 ? d1 : d);
@@ -619,41 +624,30 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const avail = IDX.filter(([k]) => hasIdx(k));
     if (avail.length) h += `<div class="cmp" role="group" aria-label="지수와 수익률 비교"><span class="cmp-label">비교</span>${avail.map(([k, nm, col, chip]) => `<button type="button" data-k="${k}" aria-pressed="${cmp.includes(k)}" aria-label="${esc(nm)}와 비교"><i class="key" style="background:${col}"></i>${esc(chip)}</button>`).join('')}</div>`;
     h += kv([
-      cashNow < 0 ? ['증거금 대출', usd(-cashNow)] : ['주문 가능 현금', usd(cashNow)],
-      ['투자 중', usd(invested)],
-    ].concat(hasCoin() ? [['주식·채권 계좌', usd(stockNow())], [funded() ? '코인 계좌' : '코인 계좌 (이체 중)', `<span id="kvCoin">${usd(coinTotal())}</span>`]] : []).concat([
+      cashNow < 0 ? ['증거금 대출(주식)', usd(-cashNow)] : [S.rates && S.rates.rp != null ? `현금(RP 연 ${fmt(S.rates.rp * 100, 2)}%)` : '현금', usd(cashAll)],
+      ['투자 중', `<span id="kvInv">${usd(total - cashAll)}</span>`],
+    ].concat(hasCoin() ? [['주식·채권', usd(stockNow())], ['선물·옵션·ELS', usd(derivNow())], ['코인·토큰(24시간)', `<span id="kvCoin">${usd(coinTotal())}</span>`]] : []).concat([
       [S.asOf.prov ? '오늘 손익' : '마지막 거래일 이후', `<span id="kvDay" class="${cls(total - prevTotal)}">${sgnUsd(total - prevTotal)}</span>`],
       ['총 손익', `<span id="kvAll" class="${cls(total - S.capital)}">${sgnUsd(total - S.capital)}</span>`],
     ]));
     acctPrev = prevTotal;
     // why the account may not be buying
     const notes = [];
-    const onNames = S.macro ? S.macro.items.filter((x) => x.on).map((x) => x.name) : null;
+    const onNames = S.alloc && S.alloc.cio ? S.alloc.cio.items.filter((x) => x.on && x.w >= 1 && x.k !== 'rp').map((x) => x.name.replace(/\(.*\)/, '')) : null;
     if (S.gate && !S.gate.ok) notes.push(onNames ? `시장이 하락 추세라 돌파·눌림목 새 매수는 쉽니다. ${onNames.length ? `지금은 ${onNames.join('·')} 위주로 매매합니다.` : '다른 매매도 지금은 쉽니다.'}` : `시장이 하락 추세라 돌파·눌림목 새 매수는 쉬고 ${a.dtPaused ? '있습니다. 단타도 성과가 나빠 쉬는 중입니다.' : '단타만 합니다.'}`);
     else if (a.dtPaused) notes.push('단타는 최근 성과가 나빠 잠시 쉬는 중입니다.');
     if (a.risk && a.risk.blocked && a.risk.blocked.length) notes.push(a.risk.blocked.join(' '));
     else if (a.risk && a.risk.mult < 1) notes.push(`손실 관리: ${a.risk.why.join(' ')}`);
     h += notes.map((n) => `<p class="note"><i aria-hidden="true"></i><span>${esc(n)}</span></p>`).join('');
     h += `<div class="band"></div><h2>포트폴리오 구성</h2>` + allocHTML() + prioHTML();
-    const hg = a.hedge;
-    h += `<div class="band"></div><h2>보유 종목 <span class="count num">${a.open.length + (hg ? 1 : 0)}</span></h2>`;
-    if (!a.open.length && !hg) h += '<p class="empty-row">보유 종목이 없습니다. 전부 현금입니다.</p>';
-    if (hg) {
-      const hp = hg.value + hg.got - hg.paid;
-      h += `<ul class="list"><li><details><summary class="row"><span class="l"><b>SH<span class="tag">헷지</span></b><span>S&amp;P 500 인버스(−1배)</span></span>
-        <span class="r"><b>${usd(hg.value)}</b><span class="${cls(hp)}">${sgnUsd(hp)}</span></span></summary>
-        ${more([['하는 일', 'S&amp;P 500이 내리면 오르고, 오르면 내립니다'], ['시작', dLabel(hg.since)], ['시작 때 S&amp;P 500', hg.spx0.toLocaleString('en-US')], ['헷지 비율', `보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%`], ['담당', '리스크·헷지팀']])}</details>
-        <p class="why"><b>편입 이유</b>S&amp;P 500이 하락 추세라, 들고 있는 주식의 위험을 줄이려고 보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%만큼 샀습니다.</p></li></ul>`;
-    }
-    if (a.open.length) h += '<ul class="list">' + a.open.slice().sort((p, q) => q.value - p.value).map((p) => `<li><details><summary class="row">
-        <span class="l"><b>${esc(p.sym)}</b><span>${esc(p.name)}${p.kind === 'bond' ? (p.yld != null ? ` · 금리 ${p.yld}%` : '') : ` · ${p.qty.toLocaleString()}주`}</span></span>
-        <span class="r"><b>${usd(p.value)}</b><span class="${cls(p.pnl)}">${sgnUsd(p.pnl)} (${pct(p.pct)})</span></span></summary>
-        ${more((p.kind === 'bond' ? [['평가액', usd(p.value)], ['손익', `${sgnUsd(p.pnl)} (${pct(p.pct)})`], ['손절 기준', `지수 ${fmt(p.stop, 2)} (지금 ${fmt(p.price, 2)})`], ['매수', `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]]
-          : [['평균 매수가', usd(p.entry)], ['현재가', usd(p.price)], ['손절가', usd(p.stop)], ['매수', p.pb === 'dt' ? `오늘 ${esc(p.et || '')}` : `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]]).concat(p.ctx ? [['편입 당시 시장', esc(p.ctx)]] : []))}</details>${p.why ? `<p class="why"><b>편입 이유</b>${esc(p.why)}</p>` : ''}</li>`).join('') + '</ul>';
-    // the latest fills
-    const recent = (S.orders || []).slice(0, 3);
+    const groups = holdGroups(), nHold = groups.reduce((t, g) => t + g[1].length, 0);
+    h += `<div class="band"></div><h2>보유 자산 <span class="count num">${nHold}</span></h2>`;
+    if (!nHold) h += '<p class="empty-row">보유 자산이 없습니다. 전부 현금(RP)입니다.</p>';
+    for (const [title, rows] of groups) h += `<h3 class="grp">${esc(title)}</h3><ul class="list">${rows.join('')}</ul>`;
+    // the latest fills, every part of the account
+    const recent = allFills().slice(0, 4);
     h += `<div class="band"></div><h2>최근 체결</h2>`;
-    h += recent.length ? '<ul class="list">' + recent.map(fillRow).join('') + '</ul><p class="sumline"><a href="#fills" style="color:inherit">체결내역 전체 보기</a></p>' : '<p class="empty-row">아직 체결된 매매가 없습니다.</p>';
+    h += recent.length ? '<ul class="list">' + recent.map((x) => x.html).join('') + '</ul><p class="sumline"><a href="#fills" style="color:inherit">체결내역 전체 보기</a></p>' : '<p class="empty-row">아직 체결된 매매가 없습니다.</p>';
     $('v-account').innerHTML = h;
     const rg = $('v-account').querySelector('.range');
     $('v-account').querySelectorAll('.periods button').forEach((b) => b.addEventListener('click', () => {
@@ -681,6 +675,77 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     wireAlloc();
   }
 
+  const byVal = (p, q) => q.value - p.value;
+  function holdGroups() {
+    const a = S.account, g = [], dv = S.deriv;
+    const coreRow = (p) => `<li><details><summary class="row">
+        <span class="l"><b>${esc(p.sym)}</b><span>${esc(p.name)}${p.kind === 'bond' ? (p.yld != null ? ` · 금리 ${p.yld}%` : '') : ` · ${p.qty.toLocaleString()}주`}</span></span>
+        <span class="r"><b>${usd(p.value)}</b><span class="${cls(p.pnl)}">${sgnUsd(p.pnl)} (${pct(p.pct)})</span></span></summary>
+        ${more((p.kind === 'bond' ? [['평가액', usd(p.value)], ['손익', `${sgnUsd(p.pnl)} (${pct(p.pct)})`], ['손절 기준', `지수 ${fmt(p.stop, 2)} (지금 ${fmt(p.price, 2)})`], ['매수', `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]]
+          : [['평균 매수가', usd(p.entry)], ['현재가', usd(p.price)], ['손절가', usd(p.stop)], ['매수', p.pb === 'dt' ? `오늘 ${esc(p.et || '')}` : `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb]]]).concat(p.ctx ? [['편입 당시 시장', esc(p.ctx)]] : []))}</details>${p.why ? `<p class="why"><b>편입 이유</b>${esc(p.why)}</p>` : ''}</li>`;
+    const stocks = a.open.filter((p) => p.kind !== 'bond').sort(byVal), bonds = a.open.filter((p) => p.kind === 'bond').sort(byVal);
+    if (stocks.length) g.push(['주식', stocks.map(coreRow)]);
+    if (bonds.length) g.push(['채권', bonds.map(coreRow)]);
+    const hg = a.hedge;
+    if (hg) {
+      const hp = hg.value + hg.got - hg.paid;
+      g.push(['헷지', [`<li><details><summary class="row"><span class="l"><b>SH<span class="tag">헷지</span></b><span>S&amp;P 500 인버스(−1배)</span></span>
+        <span class="r"><b>${usd(hg.value)}</b><span class="${cls(hp)}">${sgnUsd(hp)}</span></span></summary>
+        ${more([['하는 일', 'S&amp;P 500이 내리면 오르고, 오르면 내립니다'], ['시작', dLabel(hg.since)], ['시작 때 S&amp;P 500', hg.spx0.toLocaleString('en-US')], ['헷지 비율', `보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%`], ['담당', '리스크·헷지팀']])}</details>
+        <p class="why"><b>편입 이유</b>S&amp;P 500이 하락 추세라, 들고 있는 주식의 위험을 줄이려고 보유 주식의 ${Math.round((hg.ratio || 0) * 100)}%만큼 샀습니다.</p></li>`]]);
+    }
+    if (dv && dv.fut.length) g.push(['선물', dv.fut.map((p) => `<li><details><summary class="row"><span class="l"><b>${esc(p.key)}<span class="tag">${p.qty > 0 ? '매수' : '매도'}</span></b><span>${esc(p.name)} · ${Math.abs(p.qty)}계약</span></span>
+        <span class="r"><b class="${cls(p.pnl)}">${sgnUsd(p.pnl)}</b><span class="muted">증거금 ${usd(p.margin, 0)}</span></span></summary>
+        ${more([['계약', `${esc(p.contract || '')}${p.exp ? ` (만기 ${esc(p.exp)})` : ''}`], ['진입가 / 지금', `${fmt(p.entry, 2)} / ${fmt(p.px, 2)}`], ['명목 금액', usd(p.notional, 0)], ['증거금', usd(p.margin, 0) + ' (확인필요)'], ['진입', dLabel(p.date)], ['방법', '선물 추세추종']])}</details>
+        <p class="why"><b>편입 이유</b>${esc(p.why)}</p></li>`)]);
+    if (dv && dv.opt.length) g.push(['옵션', dv.opt.map((o) => `<li><details><summary class="row"><span class="l"><b>SPY ${esc(o.exp.slice(5).replace('-', '/'))} ${o.kLong}/${o.kShort}<span class="tag">${o.side === 'credit' ? '풋 스프레드 매도' : '보호 풋 스프레드'}</span></b><span>${o.n}계약 · 최대 손실 ${usd(o.maxLoss, 0)}</span></span>
+        <span class="r"><b class="${cls(o.pnl)}">${sgnUsd(o.pnl)}</b><span class="muted">${o.side === 'credit' ? '되사는 값' : '평가액'} ${usd(Math.abs(o.value), 0)}</span></span></summary>
+        ${more([['만기', esc(o.exp)], ['행사가', o.side === 'credit' ? `${o.kShort} 매도 · ${o.kLong} 매수` : `${o.kLong} 매수 · ${o.kShort} 매도`], [o.side === 'credit' ? '받은 값' : '낸 값', `계약당 $${fmt(Math.abs(o.cost) * 100, 0)}`], ['진입', dLabel(o.date)], ['방법', o.side === 'credit' ? '옵션 프리미엄 매도' : '하락 대비 보호']])}</details>
+        <p class="why"><b>편입 이유</b>${esc(o.why)}</p></li>`)]);
+    if (dv && dv.els.length) g.push(['ELS', dv.els.map((e) => `<li><details><summary class="row"><span class="l"><b>ELS 연 ${fmt(e.coupon * 100, 1)}%<span class="tag">${e.kiHit ? '낙인 발생' : '스텝다운'}</span></b><span>S&amp;P 500·나스닥 100 · 가입 ${usd(e.amount, 0)}</span></span>
+        <span class="r"><b>${usd(e.value)}</b><span class="${cls(e.value - e.amount)}">${sgnUsd(e.value - e.amount)}</span></span></summary>
+        ${more([['가입', dLabel(e.date)], ['시작 지수', `S&amp;P ${fmt(e.s0[0], 0)} · 나스닥 ${fmt(e.s0[1], 0)}`], ['지금(낮은 쪽)', e.w != null ? `시작의 ${fmt(e.w * 100, 1)}%` : '-'], ['다음 조기상환 평가', e.next ? esc(e.next) : '-'], ['낙인', `시작의 ${Math.round(e.ki * 100)}%${e.kiHit ? ` (발생 ${esc(e.kiHit)})` : ''}`], ['모형 확률', `조기상환 ${Math.round((e.pCall || 0) * 100)}% · 낙인 ${Math.round((e.pKi || 0) * 100)}%`]])}</details>
+        <p class="why"><b>편입 이유</b>${esc(e.why)}</p></li>`)]);
+    if (funded() && (CV.hold || []).length) g.push(['코인', CV.hold.map((x) => {
+      const ps = ['trend', 'scalp'].map((k) => CV.pos && CV.pos[k] && CV.pos[k][x.c] ? [k, CV.pos[k][x.c]] : null).filter(Boolean);
+      const why = ps.length ? ps.map(([k, p]) => `${SNAME[k]}: ${p.why || ''}`).join(' / ') : '거래소 간 가격 차이가 수수료보다 커지면 바로 사고팔 수 있게 5개 거래소에 나눠 둔 차익거래용 재고입니다.';
+      return `<li><details><summary class="row"><span class="l"><b>${esc(x.c)}</b><span>${fmt(x.qty, 6)}개</span></span>
+        <span class="r"><b data-coinv="${esc(x.c)}">${usd(x.qty * coinPx(x.c))}</b><span class="muted" data-coinp="${esc(x.c)}">${usd(coinPx(x.c))}</span></span></summary>
+        ${more([['차익거래용', `${fmt(x.arb, 6)}개`], ['추세·초단타용', `${fmt(x.trade, 6)}개`]].concat(ps.map(([k, p]) => [SNAME[k], `${usd(p.entry)}에 매수${p.stop ? ` · 손절 ${usd(p.stop)}` : ''}`])))}</details>
+        <p class="why"><b>편입 이유</b>${esc(why)}</p></li>`;
+    })]);
+    if (funded() && (CV.toks || []).length) g.push(['토큰화 주식 (코인 거래소, 24시간)', CV.toks.map((t) => `<li><details><summary class="row"><span class="l"><b>${esc(t.s)}</b><span>${esc(t.name)} · ${fmt(t.qty, 4)}주</span></span>
+        <span class="r"><b>${usd(t.value)}</b>${t.pnl != null ? `<span class="${cls(t.pnl)}">${sgnUsd(t.pnl)}</span>` : ''}</span></summary>
+        ${more([['매수가', t.entry ? usd(t.entry) : '-'], ['매수·매도 호가', t.bid ? `${usd(t.bid)} / ${usd(t.ask)}` : '-'], ['손절', t.stop ? usd(t.stop) : '-'], ['거래소', 'Kraken xStocks (수수료 0.08%, 확인필요)']])}</details>
+        ${t.why ? `<p class="why"><b>편입 이유</b>${esc(t.why)}</p>` : ''}</li>`)]);
+    return g;
+  }
+  const etDate = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(ms));
+  function derivFillRow(f) {
+    const sideTxt = f.side === 'buy' ? '매수' : f.side === 'sell' ? '매도' : '교체', sideCls = f.side === 'buy' || f.side === 'sell' ? f.side : '';
+    const kind = f.kind === 'fut' ? '선물' : f.kind === 'opt' ? '옵션' : 'ELS';
+    const sub = f.kind === 'fut' ? `${Math.abs(f.qty)}계약 · ${fmt(f.px, 2)}${f.contract ? ' · ' + esc(f.contract) : f.to ? ' · ' + esc(f.from) + '→' + esc(f.to) : ''}` : f.kind === 'opt' ? `${f.qty}계약 · $${fmt(f.px, 2)}` : usd(f.px);
+    const right = f.pnl != null ? `<b class="${cls(f.pnl)}">${sgnUsd(f.pnl)}</b>` : f.kind === 'els' ? `<b>${usd(f.px)}</b>` : `<b>수수료 ${usd(f.fee || 0)}</b>`;
+    return `<li><details><summary class="row"><span class="side ${sideCls}">${sideTxt}</span><span class="l"><b>${esc(f.key || f.name)}<span class="tag">${kind}</span></b><span>${sub}</span></span><span class="r">${right}<span class="muted">${esc(etTime(f.t))}</span></span></summary>
+      ${more([['종목', esc(f.name)], ['체결가', f.kind === 'fut' ? fmt(f.px, 4) : usd(f.px)], ['수량', f.kind === 'els' ? '1건' : `${Math.abs(f.qty)}계약`], ['수수료·슬리피지', usd(f.fee || 0)], f.why ? ['이유', esc(f.why)] : null, f.pnl != null ? ['손익', sgnUsd(f.pnl)] : null])}</details></li>`;
+  }
+  function coinFillRow(f) {
+    const sideTxt = f.side === 'arb' ? '차익' : f.side === 'move' ? '이동' : f.side === 'buy' ? '매수' : '매도', sideCls = f.side === 'sell' ? 'sell' : f.side === 'buy' ? 'buy' : '';
+    const unit = f.s === 'tok' ? '주' : '개';
+    const sub = f.side === 'arb' ? `${esc(VN(f.buyAt))} → ${esc(VN(f.sellAt))}` : f.side === 'move' ? `${esc(VN(f.from))} → ${esc(VN(f.to))}` : `${fmt(f.qty, 6)}${unit} · ${usd(f.px)}`;
+    const right = f.pnl != null ? `<b class="${cls(f.pnl)}">${sgnUsd(f.pnl)}</b>` : f.side === 'move' ? `<b>−${usd(f.fee)}</b>` : `<b>${usd(f.qty * f.px)}</b>`;
+    const rows = f.side === 'arb' ? [['방법', SNAME.arb], ['수량', `${fmt(f.qty, 6)}개`], ['산 곳', `${esc(VN(f.buyAt))} ${usd(f.buy)}`], ['판 곳', `${esc(VN(f.sellAt))} ${usd(f.sell)}`], ['수수료 뺀 가격 차이', pct(f.edge || 0, 2)], ['수수료', usd(f.fee || 0)], ['손익', sgnUsd(f.pnl)]]
+      : f.side === 'move' ? [['방법', SNAME.move], ['수량', `${fmt(f.qty, 6)}개`], ['보낸 곳 → 받은 곳', `${esc(VN(f.from))} → ${esc(VN(f.to))}`], ['네트워크 수수료', usd(f.fee || 0)]]
+      : [['방법', SNAME[f.s] || f.s], ['체결가', usd(f.px)], ['수량', `${fmt(f.qty, 6)}${unit}`], ['체결 금액', usd(f.qty * f.px)], ['수수료', usd(f.fee || 0)], f.why ? ['이유', esc(f.why)] : null, f.pnl != null ? ['손익', sgnUsd(f.pnl)] : null];
+    return `<li><details><summary class="row"><span class="side ${sideCls}">${sideTxt}</span><span class="l"><b>${esc(f.c)}<span class="tag">${esc(SNAME[f.s] || f.s)}</span></b><span>${sub}</span></span><span class="r">${right}<span class="muted">${esc(etTime(f.t))}</span></span></summary>${more(rows)}</details></li>`;
+  }
+  function allFills() {
+    const out = [];
+    for (const o of S.orders || []) out.push({ ms: etMs(o.date, o.time || '16:00'), side: o.side, fee: o.fee || 0, html: fillRow(o) });
+    if (S.deriv) for (const f of S.deriv.fills || []) out.push({ ms: f.t, side: f.side, fee: f.fee || 0, html: derivFillRow(f) });
+    if (funded()) for (const f of CV.fills || []) out.push({ ms: f.t, side: f.side, fee: f.fee || 0, html: coinFillRow(f) });
+    return out.sort((x, y) => y.ms - x.ms);
+  }
   function fillRow(o) {
     if (o.pb === 'hedge') {
       return `<li><details><summary class="row"><span class="side ${o.side}">${o.side === 'buy' ? '매수' : '매도'}</span>
@@ -705,18 +770,19 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
 
   function renderFills() {
-    const all = S.orders || [];
+    const all = allFills();
     const list = all.filter((o) => filter === 'all' || o.side === filter);
-    const buys = all.filter((o) => o.side === 'buy').length, sells = all.length - buys;
-    const fees = all.reduce((s, o) => s + (o.fee || 0), 0);
+    const buys = all.filter((o) => o.side === 'buy').length, sells = all.filter((o) => o.side === 'sell').length, other = all.length - buys - sells;
+    const fees = all.reduce((t, o) => t + (o.fee || 0), 0);
     let h = `<div class="filters" role="group" aria-label="체결 종류">${[['all', '전체'], ['buy', '매수'], ['sell', '매도']].map(([k, t]) => `<button type="button" data-f="${k}" aria-pressed="${filter === k}">${t}</button>`).join('')}</div>
-      <p class="sumline num" style="padding-top:12px">매수 ${buys}건 · 매도 ${sells}건 · 수수료 합계 ${usd(fees)}</p>`
-      + (S.account && S.account.lockedThrough ? `<p class="sumline">장 마감으로 확정된 체결은 이후 규칙이 바뀌어도 그대로 남습니다.${S.asOf && S.asOf.prov ? ' 오늘 체결은 장 마감 때 확정됩니다.' : ''}</p>` : '');
+      <p class="sumline num" style="padding-top:12px">매수 ${buys}건 · 매도 ${sells}건${other ? ` · 차익·이동·교체 ${other}건` : ''} · 수수료 합계 ${usd(fees)}</p>`
+      + (S.account && S.account.lockedThrough ? `<p class="sumline">주식·채권, 선물·옵션·ELS, 코인·토큰 체결을 한곳에 모았습니다. 장 마감으로 확정된 주식 체결은 이후 규칙이 바뀌어도 그대로 남습니다.</p>` : '');
     if (!list.length) h += '<p class="empty-row">아직 체결된 매매가 없습니다.</p>';
     let day = '';
     for (const o of list) {
-      if (o.date !== day) { if (day) h += '</ul>'; day = o.date; h += `<h3 class="day">${dLabel(day)}</h3><ul class="list">`; }
-      h += fillRow(o);
+      const d = etDate(o.ms);
+      if (d !== day) { if (day) h += '</ul>'; day = d; h += `<h3 class="day">${dLabel(day)}</h3><ul class="list">`; }
+      h += o.html;
     }
     if (day) h += '</ul>';
     $('v-fills').innerHTML = h;
@@ -728,10 +794,11 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     if (!a) { $('v-profit').innerHTML = '<p class="empty-row">연습 계좌가 아직 시작되지 않았습니다.</p>'; return; }
     const last = a.equity[a.equity.length - 1], st = a.stats || {};
     const total = totalNow() - S.capital;
-    const rowsC = a.equity.map((e) => ({ date: e.date, time: e.time, prov: e.prov, eq: e.eq + cryptoAt(rowMs(e)) }));
+    const rowsC = a.equity.map((e) => ({ date: e.date, time: e.time, prov: e.prov, eq: e.eq + otherAt(e) }));
     let pk = S.capital, mddC = 0;
     for (const e of rowsC) { pk = Math.max(pk, e.eq); mddC = Math.max(mddC, 1 - e.eq / pk); }
     const coinPnl = funded() ? cryptoLive() - CV.funded : 0, coinFees = funded() ? Object.values(CV.stats || {}).reduce((t, x) => t + (x.fees || 0), 0) : 0;
+    const dv = S.deriv, derivPnl = dv ? dv.eq - dv.funded : 0, rpAll = (a.rpGot || 0) + (dv ? dv.rp || 0 : 0);
     const hb = (S.byPb || {}).hedge || { pnl: 0, open: 0 };
     const unreal = a.open.reduce((s, p) => s + p.pnl, 0) + (hb.open || 0);
     const realized = (st.realized || 0) + (hb.pnl || 0);
@@ -745,8 +812,9 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     h += kv([
       ['실현 손익(주식·채권)', sgnUsd(realized), cls(realized)],
       ['평가 손익(주식·채권)', sgnUsd(unreal), cls(unreal)],
-    ].concat(funded() ? [['코인 손익', sgnUsd(coinPnl), cls(coinPnl)], ['증거금 이자', usd(a.marginPaid || 0)]] : []).concat([
-      ['낸 수수료', usd((st.fees || 0) + feesOpen + (a.hedgeFees || 0) + coinFees)],
+    ].concat(dv ? [['선물·옵션·ELS 손익', sgnUsd(derivPnl), cls(derivPnl)]] : []).concat(funded() ? [['코인·토큰 손익', sgnUsd(coinPnl), cls(coinPnl)]] : []).concat([
+      ['RP 이자', usd(rpAll)], ['증거금 이자', usd(a.marginPaid || 0)],
+      ['낸 수수료', usd((st.fees || 0) + feesOpen + (a.hedgeFees || 0) + coinFees + (dv ? dv.fees : 0))],
       ['최대 낙폭', fmt(mddC * 100, 1) + '%'],
     ]));
     // by day (the whole account; money moved between the stock and crypto accounts is not a gain or loss)
@@ -761,7 +829,12 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         <span class="stat">매도 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''} · AI 위험 배분 ${Math.round((mm[k] == null ? 0 : mm[k]) * 100)}%${k === 'dt' && a.dtPaused ? ' · 쉬는 중' : ''}</span></li>`;
     }).join('') + (bp.hedge ? `<li><span class="name">S&amp;P 500 인버스 헷지</span><span class="pnl ${cls(bp.hedge.pnl + (bp.hedge.open || 0))}">${sgnUsd(bp.hedge.pnl + (bp.hedge.open || 0))}</span>
         <span class="stat">헷지 ${bp.hedge.n}번 정리${bp.hedge.open ? ' · 지금 보유 중' : ''} · 리스크·헷지팀 담당</span></li>` : '')
-      + (funded() ? `<li><span class="name">코인 계좌</span><span class="pnl ${cls(coinPnl)}">${sgnUsd(coinPnl)}</span><span class="stat">차익거래 ${CV.stats.arb.n}건 · 추세 ${CV.stats.trend.n}건 · 초단타 ${CV.stats.scalp.n}건 (코인 탭에서 자세히)</span></li>` : '') + '</ul>';
+      + (dv ? [['cta', '선물 추세추종'], ['credit', '옵션 프리미엄 매도'], ['hedge', '보호 풋 스프레드'], ['els', 'ELS']].map(([k, nm]) => { const b = (dv.by || {})[k] || { n: 0, wins: 0, pnl: 0 };
+          const open = k === 'cta' ? dv.fut.reduce((t, p) => t + p.pnl, 0) : k === 'els' ? dv.els.reduce((t, e) => t + e.value - e.amount, 0) : dv.opt.filter((o) => o.side === k).reduce((t, o) => t + o.pnl, 0);
+          const nOpen = k === 'cta' ? dv.fut.length : k === 'els' ? dv.els.length : dv.opt.filter((o) => o.side === k).length;
+          return `<li><span class="name">${nm}</span><span class="pnl ${cls(b.pnl + open)}">${sgnUsd(b.pnl + open)}</span><span class="stat">정리 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''}${nOpen ? ` · 보유 ${nOpen}건(평가 ${sgnUsd(open)})` : ''}</span></li>`; }).join('') : '')
+      + (funded() ? [['arb', '코인 거래소 간 차익거래'], ['trend', '코인 추세'], ['scalp', '코인 초단타'], ['tok', '토큰화 주식']].map(([k, nm]) => { const x = (CV.stats || {})[k] || { n: 0, pnl: 0, fees: 0 };
+          return `<li><span class="name">${nm}</span><span class="pnl ${cls(x.pnl)}">${sgnUsd(x.pnl)}</span><span class="stat">${x.n}건 · 수수료 ${usd(x.fees)}</span></li>`; }).join('') : '') + '</ul>';
     h += `<div class="band"></div><h2>매매 성적</h2>`;
     h += kv([
       ['승률', sells.length ? Math.round((wins.length / sells.length) * 100) + '%' : '-'],
@@ -769,7 +842,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       ['평균 이익', wins.length ? sgnUsd(avg(wins)) : '-', wins.length ? 'up' : ''],
       ['평균 손실', losses.length ? sgnUsd(avg(losses)) : '-', losses.length ? cls(avg(losses)) : ''],
     ]);
-    h += `<footer>가상 계좌입니다. 실제 돈이 아니며 투자 권유가 아닙니다. 체결은 받은 가격에서 0.1% 불리하게 잡았고, 수수료는 로빈후드 기준입니다: 위탁 수수료 없음, 매도 때 SEC 수수료(100만 달러당 $20.60, $500 이하 매도는 면제)와 FINRA 수수료(주당 $0.000195, 최대 $9.79, 50주 이하는 면제, 2026년 10~12월은 일시 중단), 매수·매도 때 CAT 수수료(주당 $0.000003, 1센트 미만은 면제). 배당과 세금은 넣지 않았습니다. 채권: 각국 국채는 그 나라 국채 금리와 환율로 계산한 합성 지수(이자 + 금리 변화 × 듀레이션 + 환율, 달러 기준, 실제 상품 아님)이고, 회사채·신흥국·해외 채권은 미국 상장 채권 ETF(분배금 포함 총수익)입니다. 증거금(레버리지)을 쓰면 로빈후드 기준 이자(빌린 금액 5만 달러까지 연 5%, 10만 달러까지 4.8%, 그 이상 4.5%, 하루 단위)를 냅니다. 시세: CNBC 공개 시세(약 5분 간격).</footer>`;
+    h += `<footer>가상 계좌입니다. 실제 돈이 아니며 투자 권유가 아닙니다. 체결은 받은 가격에서 0.1% 불리하게 잡았고, 수수료는 로빈후드 기준입니다: 위탁 수수료 없음, 매도 때 SEC 수수료(100만 달러당 $20.60, $500 이하 매도는 면제)와 FINRA 수수료(주당 $0.000195, 최대 $9.79, 50주 이하는 면제, 2026년 10~12월은 일시 중단), 매수·매도 때 CAT 수수료(주당 $0.000003, 1센트 미만은 면제). 배당과 세금은 넣지 않았습니다. 채권: 각국 국채는 그 나라 국채 금리와 환율로 계산한 합성 지수(이자 + 금리 변화 × 듀레이션 + 환율, 달러 기준, 실제 상품 아님)이고, 회사채·신흥국·해외 채권은 미국 상장 채권 ETF(분배금 포함 총수익)입니다. 증거금(레버리지)을 쓰면 로빈후드 기준 이자(빌린 금액 5만 달러까지 연 5%, 10만 달러까지 4.8%, 그 이상 4.5%, 하루 단위)를 냅니다. 시세: CNBC 공개 시세(약 5분 간격). 남는 현금은 RP 이자(미국 1개월 국채 금리 − 0.25%p, 365일 기준, 확인필요)를 받습니다. 선물: CME 마이크로 선물 등, CNBC 근월·차월물 시세와 정산가, 로빈후드 수수료(계약당 한쪽 $0.75 + NFA $0.02 + 거래소 수수료, 확인필요)와 체결 1틱 불리, 만기 12일 전 차월물로 교체, 증거금은 명목 금액의 일정 비율로 가정(확인필요). 옵션: CBOE 지연 시세의 매수·매도 호가로 체결, 계약당 약 $0.04 규제·청산 수수료(확인필요). ELS: 실제 상품이 아닌 합성 상품으로, 발행사가 쓰는 방식(몬테카를로)으로 공정 쿠폰을 계산하고 발행사 마진 2%를 뺐습니다(확인필요). 매일 같은 방식으로 평가하며 실제 중도환매 가격과 다를 수 있습니다.</footer>`;
     $('v-profit').innerHTML = h;
   }
 
@@ -847,7 +920,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     $('v-team').innerHTML = h;
   }
 
-  const SNAME = { arb: '거래소 간 차익거래', trend: '추세(1시간)', scalp: '초단타(1분)', move: '거래소 간 코인 이동' };
+  const SNAME = { arb: '거래소 간 차익거래', trend: '추세(1시간)', scalp: '초단타(1분)', tok: '토큰화 주식', move: '거래소 간 코인 이동' };
   const VN = (k) => (CV && CV.venues && CV.venues[k] ? CV.venues[k].name : k);
   const etTime = (ms) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'America/New_York', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(ms));
   function coinSeries() {
@@ -883,33 +956,29 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   function renderCoin() {
     const box = $('v-coin');
-    if (!funded()) { box.innerHTML = '<p class="empty-row">코인 계좌는 주식 계좌에서 첫 자금이 들어오면 24시간 매매를 시작합니다.</p>'; return; }
+    if (!funded()) { box.innerHTML = '<p class="empty-row">AI가 통합계좌에서 24시간 운용에 자금을 배분하면 코인·토큰화 주식 매매를 시작합니다.</p>'; return; }
     const st = CV.stats || {}, w = CV.w || {}, br = CV.brake || {};
-    let h = `<div class="hero"><div class="hero-label">코인 계좌<span class="badge${wsOk ? ' on' : ''}" id="coinBadge"><i></i>${wsOk ? '실시간 시세' : '시세 연결 중'}</span></div><div class="hero-value num" id="coinValue">${usd(cryptoLive())}</div><div class="hero-change num" id="coinChange"></div></div><div class="chart"></div>`;
+    let h = `<div class="hero"><div class="hero-label">24시간 운용 (코인·토큰화 주식)<span class="badge${wsOk ? ' on' : ''}" id="coinBadge"><i></i>${wsOk ? '실시간 시세' : '시세 연결 중'}</span></div><div class="hero-value num" id="coinValue">${usd(cryptoLive())}</div><div class="hero-change num" id="coinChange"></div></div><div class="chart"></div>`;
     const pnl = cryptoLive() - CV.funded;
-    h += kv([['받은 자금', usd(CV.funded)], ['손익', sgnUsd(pnl), cls(pnl)], ['현금', usd(CV.usd)], ['코인 평가액', `<span id="coinHold">${usd(cryptoLive() - CV.usd)}</span>`]]);
+    h += kv([['배분받은 자금', usd(CV.funded)], ['손익', sgnUsd(pnl), cls(pnl)], ['현금', usd(CV.usd)], ['코인·토큰 평가액', `<span id="coinHold">${usd(cryptoLive() - CV.usd)}</span>`]].concat(CV.tilt ? [['AI 배분(추세·초단타·토큰)', `${Math.round((CV.tilt.trend || 1) * 100)}% · ${Math.round((CV.tilt.scalp || 1) * 100)}% · ${Math.round((CV.tilt.tok || 1) * 100)}%`]] : []));
     if (br.stopNew || br.half < 1) h += `<p class="note"><i aria-hidden="true"></i><span>${br.stopNew ? '손실 브레이크: 새 매매를 잠시 멈췄습니다' : '손실 브레이크: 위험을 절반으로 줄였습니다'} (오늘 ${pct(-(br.dayLoss || 0))}, 고점 대비 ${pct(-(br.dd || 0))})</span></p>`;
     h += `<div class="band"></div><h2>보유 코인</h2><ul class="list">` + ((CV.hold || []).length ? CV.hold.map((x) => `<li><div class="row"><span class="l"><b>${esc(x.c)}</b><span>${fmt(x.qty, 6)}개</span></span>
       <span class="r"><b data-coinv="${esc(x.c)}">${usd(x.qty * coinPx(x.c))}</b><span class="muted" data-coinp="${esc(x.c)}">${usd(coinPx(x.c))}</span></span></div></li>`).join('') : '<li><p class="empty-row">보유 코인이 없습니다.</p></li>') + '</ul>';
-    h += `<div class="band"></div><h2>전략별 성과</h2><ul class="mix" style="padding-top:6px">` + ['arb', 'trend', 'scalp', 'moves'].map((k) => { const x = st[k] || { n: 0, pnl: 0, fees: 0 }, nm = k === 'moves' ? SNAME.move : SNAME[k];
+    const TQ = CV.tokQ || {};
+    h += `<div class="band"></div><h2>토큰화 주식 <span class="count num">${(CV.toks || []).length}</span></h2><p class="sumline">코인 거래소(Kraken xStocks)에서 미국 주식·ETF 토큰을 24시간 사고팝니다. 1시간 추세가 확인되고 호가 차이가 0.3% 이하일 때만 삽니다.</p>`
+      + ((CV.toks || []).length ? '<ul class="list">' + CV.toks.map((t) => `<li><div class="row"><span class="l"><b>${esc(t.s)}</b><span>${esc(t.name)} · ${fmt(t.qty, 4)}주</span></span><span class="r"><b>${usd(t.value)}</b>${t.pnl != null ? `<span class="${cls(t.pnl)}">${sgnUsd(t.pnl)}</span>` : ''}</span></div>${t.why ? `<p class="why"><b>편입 이유</b>${esc(t.why)}</p>` : ''}</li>`).join('') + '</ul>' : '')
+      + (Object.keys(TQ).length ? `<div class="sig">${Object.entries(TQ).map(([k, q]) => `<div><span>${esc(k)}</span><b>${usd((q.bid + q.ask) / 2)}</b><small>호가 차이 ${fmt((q.ask / q.bid - 1) * 100, 2)}%</small></div>`).join('')}</div>` : '<p class="empty-row">토큰 시세를 기다리는 중입니다.</p>');
+    h += `<div class="band"></div><h2>전략별 성과</h2><ul class="mix" style="padding-top:6px">` + ['arb', 'trend', 'scalp', 'tok', 'moves'].map((k) => { const x = st[k] || { n: 0, pnl: 0, fees: 0 }, nm = k === 'moves' ? SNAME.move : SNAME[k];
       return `<li><span class="name">${nm}</span><span class="pnl ${k === 'moves' ? '' : cls(x.pnl)}">${k === 'moves' ? (x.fees > 0 ? '−' : '') + usd(x.fees) : sgnUsd(x.pnl)}</span><span class="stat">${k === 'moves' ? `${x.n}번 이동 · 네트워크 수수료` : `${x.n}건 · 수수료 ${usd(x.fees)}`}${k === 'trend' || k === 'scalp' ? ` · AI 위험 배분 ${Math.round((w[k] || 0) * 100)}%` : ''}</span></li>`; }).join('') + '</ul>';
     const sp = CV.spreads || {};
     h += `<div class="band"></div><h2>거래소 간 가격 차이</h2><p class="sumline">가장 싸게 사서 가장 비싸게 팔 수 있는 조합입니다. 수수료를 빼고도 +${fmt((CV.cfg.arbMinEdge || 0) * 100, 2)}%를 넘으면 차익거래를 합니다.</p><ul class="mix" style="padding-top:10px">` + Object.keys(sp).map((c) => { const x = sp[c];
       return `<li><span class="name">${esc(c)}</span><span class="pnl ${x.net > 0 ? 'up' : ''}">${pct(x.net, 2)}</span><span class="stat">${esc(VN(x.buyAt))}에서 사서 ${esc(VN(x.sellAt))}에 팔면 수수료 전 ${pct(x.gross, 3)}, 수수료 후 ${pct(x.net, 2)}</span></li>`; }).join('') + '</ul>';
     const fl = (CV.fills || []).slice(0, 15);
-    h += `<div class="band"></div><h2>최근 체결</h2><ul class="list">` + (fl.length ? fl.map((f) => {
-      const sideTxt = f.side === 'arb' ? '차익' : f.side === 'move' ? '이동' : f.side === 'buy' ? '매수' : '매도', sideCls = f.side === 'sell' ? 'sell' : f.side === 'buy' ? 'buy' : '';
-      const sub = f.side === 'arb' ? `${esc(VN(f.buyAt))} → ${esc(VN(f.sellAt))}` : f.side === 'move' ? `${esc(VN(f.from))} → ${esc(VN(f.to))}` : `${fmt(f.qty, 6)}개 · ${usd(f.px)}`;
-      const right = f.pnl != null ? `<b class="${cls(f.pnl)}">${sgnUsd(f.pnl)}</b>` : f.side === 'move' ? `<b>−${usd(f.fee)}</b>` : `<b>${usd(f.qty * f.px)}</b>`;
-      const rows = f.side === 'arb' ? [['방법', SNAME.arb], ['수량', `${fmt(f.qty, 6)}개`], ['산 곳', `${esc(VN(f.buyAt))} ${usd(f.buy)}`], ['판 곳', `${esc(VN(f.sellAt))} ${usd(f.sell)}`], ['수수료 뺀 가격 차이', pct(f.edge || 0, 2)], ['수수료', usd(f.fee || 0)], ['손익', sgnUsd(f.pnl)]]
-        : f.side === 'move' ? [['방법', SNAME.move], ['수량', `${fmt(f.qty, 6)}개`], ['보낸 곳 → 받은 곳', `${esc(VN(f.from))} → ${esc(VN(f.to))}`], ['네트워크 수수료', usd(f.fee || 0)]]
-        : [['방법', SNAME[f.s] || f.s], ['체결가', usd(f.px)], ['수량', `${fmt(f.qty, 6)}개`], ['체결 금액', usd(f.qty * f.px)], ['수수료', usd(f.fee || 0)], f.why ? ['이유', esc(f.why)] : null, f.pnl != null ? ['손익', sgnUsd(f.pnl)] : null];
-      return `<li><details><summary class="row"><span class="side ${sideCls}">${sideTxt}</span><span class="l"><b>${esc(f.c)}<span class="tag">${esc(SNAME[f.s] || f.s)}</span></b><span>${sub}</span></span><span class="r">${right}<span class="muted">${esc(etTime(f.t))}</span></span></summary>${more(rows)}</details></li>`;
-    }).join('') : '<li><p class="empty-row">아직 체결이 없습니다.</p></li>') + '</ul>';
+    h += `<div class="band"></div><h2>최근 체결</h2><ul class="list">` + (fl.length ? fl.map(coinFillRow).join('') : '<li><p class="empty-row">아직 체결이 없습니다.</p></li>') + '</ul>';
     const vs = CV.venues || {};
     h += `<details class="teamlog"><summary>거래소별 잔고</summary>${Object.keys(vs).map((k) => { const v = vs[k]; return `<div class="logitem"><b>${esc(v.name)} · 수수료 ${fmt(v.taker * 100, 2)}%</b><p>달러 ${usd(v.usd)} · ${Object.entries(v.coin).map(([c, q]) => `${esc(c)} ${fmt(q, 5)}`).join(' · ')}</p></div>`; }).join('')}${CV.trade ? `<div class="logitem"><b>${esc(CV.trade.venue)} · 추세·초단타용</b><p>달러 ${usd(CV.trade.usd)} · ${Object.entries(CV.trade.coin).map(([c, q]) => `${esc(c)} ${fmt(q, 5)}`).join(' · ')}</p></div>` : ''}</details>`;
     h += `<details class="teamlog"><summary>AI 기록 ${(CV.log || []).length}건</summary>${(CV.log || []).map((l) => `<div class="logitem"><span class="d">${esc(etTime(l.t))}</span><p>${esc(l.text)}</p></div>`).join('') || '<div class="logitem"><p>아직 기록이 없습니다.</p></div>'}</details>`;
-    h += `<footer>가상 계좌입니다. 실제 돈이 아니며 투자 권유가 아닙니다. 서버가 약 15초마다 Coinbase·Kraken·Bitstamp·Gemini·Binance.US의 공개 호가(최우선 매수·매도 호가)를 받아 매매를 판단하고, 2분마다 저장합니다. 화면의 코인 가격은 Coinbase 공개 실시간 시세로 바로 바뀝니다. 수수료(시장가 기준, 2026-11-18 확인): Coinbase 0.90%, Kraken 0.80%, Bitstamp 0.40%, Gemini 1.20%, Binance.US 0.02%. 체결은 받은 호가보다 0.02% 불리하게 잡았습니다. 실제 차익거래 로봇은 1초보다 빠르게 움직여, 15초 간격으로는 잡을 수 없는 기회가 많고 실제 체결은 더 나쁠 수 있습니다. 거래소 간 코인 이동은 네트워크 수수료(BTC 0.0002, ETH 0.002, SOL 0.01, 확인필요)를 내고 바로 도착한다고 가정했습니다.</footer>`;
+    h += `<footer>가상 계좌입니다. 실제 돈이 아니며 투자 권유가 아닙니다. 서버가 약 15초마다 Coinbase·Kraken·Bitstamp·Gemini·Binance.US의 공개 호가(최우선 매수·매도 호가)를 받아 매매를 판단하고, 2분마다 저장합니다. 화면의 코인 가격은 Coinbase 공개 실시간 시세로 바로 바뀝니다. 수수료(시장가 기준, 2026-11-18 확인): Coinbase 0.90%, Kraken 0.80%, Bitstamp 0.40%, Gemini 1.20%, Binance.US 0.02%. 체결은 받은 호가보다 0.02% 불리하게 잡았습니다. 토큰화 주식은 Kraken xStocks의 공개 호가(약 15초 간격)로 매수 호가에 사고 매도 호가에 팔며, 수수료는 0.08%로 가정했습니다(확인필요). 토큰은 실제 주식과 가격이 조금 다를 수 있고, 미국 장이 닫힌 시간에는 거래가 적어 호가 차이가 벌어집니다. 실제 차익거래 로봇은 1초보다 빠르게 움직여, 15초 간격으로는 잡을 수 없는 기회가 많고 실제 체결은 더 나쁠 수 있습니다. 거래소 간 코인 이동은 네트워크 수수료(BTC 0.0002, ETH 0.002, SOL 0.01, 확인필요)를 내고 바로 도착한다고 가정했습니다.</footer>`;
     box.innerHTML = h;
     drawCoinChart();
   }
@@ -930,6 +999,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     }
     if (v === 'account' && funded()) {
       if ($('kvCoin')) $('kvCoin').textContent = usd(coinTotal());
+      if ($('kvInv')) { const dv = S.deriv, cashAll = stockNow() - (S.account.open.reduce((t, p) => t + p.value, 0) + (S.account.hedge ? S.account.hedge.value : 0)) + (dv ? dv.cash - dv.margin - dv.optRisk : 0) + CV.usd + inTransit(); $('kvInv').textContent = usd(totalNow() - cashAll); }
       const t = totalNow(), put = (id, d) => { const b = $(id); if (b) { b.textContent = sgnUsd(d); b.className = cls(d); } };
       put('kvDay', t - acctPrev); put('kvAll', t - S.capital);
       if (idle('#v-account')) drawChart();

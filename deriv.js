@@ -14,7 +14,7 @@
     ['MNQ', '@ND', '나스닥 100 마이크로 선물', 'eq', 2, 0.08, 0.25, 0.35],
     ['MYM', '@DJ', '다우 마이크로 선물', 'eq', 0.5, 0.06, 1, 0.35],
     ['M2K', '@TFS', '러셀 2000 마이크로 선물(중소형주)', 'sc', 5, 0.08, 0.1, 0.35],
-    ['ZT', '@TU', '미국 2년 국채 선물', 'rt', 2000, 0.006, 0.0078125, 0.8],
+    ['ZT', '@TU', '미국 2년 국채 선물', 'rt', 2000, 0.006, 0.00390625, 0.8],
     ['ZF', '@FV', '미국 5년 국채 선물', 'rt', 1000, 0.015, 0.0078125, 0.8],
     ['ZN', '@TY', '미국 10년 국채 선물', 'rt', 1000, 0.023, 0.015625, 0.8],
     ['ZB', '@US', '미국 30년 국채 선물', 'rt', 1000, 0.045, 0.03125, 0.8],
@@ -45,6 +45,7 @@
   const days = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / DAY);
   const addMonths = (d, m) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCMonth(x.getUTCMonth() + m); return x.toISOString().slice(0, 10); };
   const usd = (v) => '$' + Math.round(v).toLocaleString('en-US');
+  const pc = (v, d = 1) => (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%';
 
   // ── math: normal distribution, Black-Scholes for European puts, a small seeded random generator
   function ncdf(x) { const t = 1 / (1 + 0.2316419 * Math.abs(x)), d = 0.3989423 * Math.exp(-x * x / 2); const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return x > 0 ? 1 - p : p; }
@@ -190,7 +191,7 @@
       const p = st.fut[k], f = FUT_BY[k], t = sig[k], q = (ctx.fut || {})[k];
       const dir = Math.sign(p.qty), live = q && q.c1 && q.c1.contract === p.contract ? q.c1.px : q && q.c2 && q.c2.contract === p.contract ? q.c2.px : p.px;
       let why = null;
-      if (t && (dir > 0 ? t.s <= -1 / 3 : t.s >= 1 / 3)) why = `추세 반전(60일 ${(t.r1 * 100).toFixed(1)}%, 120일 ${(t.r2 * 100).toFixed(1)}%)`;
+      if (t && (dir > 0 ? t.s <= -1 / 3 : t.s >= 1 / 3)) why = `추세 반전(60일 ${pc(t.r1)}, 120일 ${pc(t.r2)})`;
       else if (t && (dir > 0 ? p.px <= p.best * (1 - CFG.cta.stopK * t.sd) : p.px >= p.best * (1 + CFG.cta.stopK * t.sd))) why = `추적 손절(최고점 대비 ${(CFG.cta.stopK * t.sd * 100).toFixed(1)}%)`;
       else if (tilt(f, dir) === 0) why = `AI 배분: ${GROUP_NAME[f.g]} ${dir > 0 ? '매수' : '매도'} 쉼`;
       if (why && live > 0) closeFut(st, k, live, now, d, why);
@@ -207,6 +208,7 @@
       if (!c1 || !(c1.px > 0)) continue;
       const use = c1.exp && days(d, c1.exp) <= ROLL_DAYS && q.c2 && q.c2.px > 0 ? q.c2 : c1;
       const one = c.t.sd * use.px * c.f.mult, want = per * tilt(c.f, c.dir) / one;
+      if (2 * futFee(c.f, 1) + 2 * c.f.mult * c.f.tick > 0.1 * one) continue;      // a round trip must cost under 10% of a day's risk
       let n = Math.floor(want + 0.5);
       if (n === 0 && want >= 0.4 && one <= per * 2.5) n = 1;
       if (n < 1) continue;
@@ -214,7 +216,7 @@
       if (est > daily$ * 1.25 && Object.keys(st.fut).length >= 1) continue;
       const margin = n * use.px * c.f.mult * c.f.mr;
       if (marginUsed(st) + margin > Math.max(0, st.cash - optRisk(st)) * CFG.cta.marginCap) continue;
-      openFut(st, c.f, c.dir * n, use, now, d, `${GROUP_NAME[c.f.g]} ${c.dir > 0 ? '상승' : '하락'} 추세: 60일 ${(c.t.r1 * 100).toFixed(1)}%, 120일 ${(c.t.r2 * 100).toFixed(1)}%, 20일 평균이 100일 평균 ${c.t.ef > c.t.es ? '위' : '아래'}. 하루 변동 ${(c.t.sd * 100).toFixed(1)}% 기준 ${n}계약(1계약 하루 위험 약 ${usd(one)})`);
+      openFut(st, c.f, c.dir * n, use, now, d, `${GROUP_NAME[c.f.g]} ${c.dir > 0 ? '상승' : '하락'} 추세: 60일 ${pc(c.t.r1)}, 120일 ${pc(c.t.r2)}, 20일 평균이 100일 평균 ${c.t.ef > c.t.es ? '위' : '아래'}. 하루 변동 ${(c.t.sd * 100).toFixed(1)}% 기준 ${n}계약(1계약 하루 위험 약 ${usd(one)})`);
       risk2 += add * add;
     }
     // 3. options (managed again in the session with fresh quotes)
