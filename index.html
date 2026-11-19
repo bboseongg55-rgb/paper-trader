@@ -680,11 +680,11 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const it = (nm, sub, v, id) => ({ nm, sub, v, id });
     const add = (key, name, items, col) => { const v = sum(items, (x) => x.v); if (v > 0.5) segs.push({ key, name, v, col, items: items.filter((x) => Math.abs(x.v) >= 0.005).sort((p, q) => q.v - p.v) }); };
     const stockL = a.open.filter((p) => p.kind !== 'bond'), bondL = a.open.filter((p) => p.kind === 'bond');
-    add('stock', '주식', stockL.map((p) => it(p.sym, `${p.name} · ${p.qty.toLocaleString()}주`, p.value, 's:' + p.sym)), 'var(--s1)');
+    add('stock', '주식', stockL.map((p) => it(p.sym, `${p.name} · ${p.qty.toLocaleString()}주`, p.value, 's:' + p.sym)).concat(dv ? (dv.stk || []).map((x) => it(x.sym, `${ETFN[x.sym] || x.sym} · ${x.qty}주 · 휠 전략`, x.value, 'k:' + x.sym)) : []), 'var(--s1)');
     add('bond', '채권', bondL.map((p) => it(p.sym, p.name + (p.yld != null ? ` · 금리 ${p.yld}%` : ''), p.value, 'b:' + p.sym)), 'var(--s2)');
     add('coin', '코인', funded() ? (CV.hold || []).map((h) => it(assetName(h.c), `${h.c} · ${fmt(h.qty, 6)}개 · 개당 ${usd(coinPx(h.c), 0)}`, h.qty * coinPx(h.c), 'c:' + h.c)) : [], 'var(--s3)');
     add('fut', '선물', dv ? dv.fut.map((f) => it(f.name.replace(/ 선물$/, ''), `${f.key} · ${f.qty > 0 ? '매수' : '매도'} ${Math.abs(f.qty)}계약 · 금액은 증거금`, f.margin, 'f:' + f.key)) : [], 'var(--s4)');
-    add('opt', '옵션', dv ? dv.opt.map((o) => it(`SPY ${o.exp.slice(5).replace('-', '/')} ${o.kLong}/${o.kShort}`, o.side === 'credit' ? `풋 스프레드 매도 ${o.n}계약 · 금액은 손실 한도` : `보호 풋 스프레드 ${o.n}계약 · 평가액`, o.side === 'credit' ? o.n * 100 * (o.kShort - o.kLong) : o.value, 'o:' + o.id)) : [], 'var(--s5)');
+    add('opt', '옵션', dv ? dv.opt.map((o) => { const x = optKind(o); return it(x.title, `${x.tag} ${o.n}계약 · ${o.side === 'hedge' ? '평가액' : o.side === 'csp' ? '금액은 담보' : '금액은 손실 한도'}`, optTied(o), 'o:' + o.id); }) : [], 'var(--s5)');
     add('els', 'ELS', dv ? dv.els.map((e) => it(`ELS 연 ${fmt(e.coupon * 100, 1)}%`, `S&P 500·나스닥 100 · 가입 ${usd(e.amount, 0)}`, e.value, 'e:' + e.id)) : [], 'var(--s6)');
     add('tok', '토큰화 주식', funded() ? (CV.toks || []).map((t) => it(`${t.name} 토큰`, `${t.s} · ${fmt(t.qty, 4)}주`, t.value || 0, 't:' + t.s)) : [], 'var(--s7)');
     if (a.hedge) add('hedge', '헷지', [it('S&P 500 인버스(SH)', `보유 주식의 ${Math.round((a.hedge.ratio || 0) * 100)}%만큼 · S&P 500이 내리면 이익`, a.hedge.value, 'h:SH')], 'var(--s-other)');
@@ -692,7 +692,8 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const total = totalNow(), cashT = total - segs.reduce((t, x) => t + x.v, 0), tr = inTransit(), cu = funded() ? CV.usd : 0;
     const core = stockNow() - sum(a.open, (p) => p.value) - (a.hedge ? a.hedge.value : 0);
     const rp = S.rates && S.rates.rp != null ? `RP 연 ${fmt(S.rates.rp * 100, 2)}%로 운용` : '현금';
-    add('cash', '현금·RP', [it('주식·채권 쪽 현금', rp, core), it('선물·옵션 쪽 현금', '증거금을 뺀 나머지 · ' + rp, cashT - core - cu - tr), it('코인 거래소 달러', '코인·토큰 매매 대기 자금', cu), it('계좌 안에서 옮기는 중', '한쪽에서 나가 다른 쪽에 아직 도착 전', tr)], 'var(--s-cash)');
+    const ur = funded() && CV.stake && CV.stake.net && CV.stake.net.USD;
+    add('cash', '현금·RP', [it('주식·채권 쪽 현금', rp, core), it('선물·옵션 쪽 현금', '증거금을 뺀 나머지 · ' + rp, cashT - core - cu - tr), it('코인 거래소 달러', `코인·토큰 매매 대기 자금${ur ? ` · USDC 보상 연 ${fmt(ur * 100, 2)}%` : ''}`, cu), it('계좌 안에서 옮기는 중', '한쪽에서 나가 다른 쪽에 아직 도착 전', tr)], 'var(--s-cash)');
     const all = segs.reduce((t, x) => t + x.v, 0);
     segs.forEach((x) => { x.share = all > 0 ? x.v / all : 0; });
     return { segs, total: all };
@@ -704,7 +705,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     if (!c) return '';
     const top = c.items.filter((x) => x.on).slice(0, 3);
     return `<div class="band"></div><h2>AI 운용 방향</h2><div class="aisum"><p class="h">${esc(c.regime.label)}${c.regime.tags.length ? ' · ' + esc(c.regime.tags.slice(0, 2).join(' · ')) : ''}</p>
-      <ol>${top.map((x) => `<li><i>${x.rank}</i><span>${esc(x.k === 'rp' ? x.name : x.name.replace(/\(.*\)/, ''))} <span class="tag">${esc(x.lean)}${x.k === 'rp' ? '' : ' ' + Math.round(x.w * 100) + '%'}</span></span></li>`).join('')}</ol>
+      <ol>${top.map((x) => `<li><i>${x.rank}</i><span>${esc(x.k === 'rp' ? x.name : x.name.replace(/\(.*\)/, ''))} <span class="tag">${esc(x.lean)}${x.k === 'rp' || x.k === 'stake' ? '' : ' ' + Math.round(x.w * 100) + '%'}</span></span></li>`).join('')}</ol>
       <a href="#team">이유와 매크로 지표 전체 보기 →</a></div>`;
   }
   // exposure by asset class: face value bought and sold against the account's size, and what a normal day can move
@@ -719,6 +720,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     };
     const add = (g, v, r) => { const x = G[g]; if (v >= 0) x.L += v; else x.S -= v; x.r += r || 0; };
     for (const p of a.open) add(p.kind === 'bond' ? 'rt' : 'eq', p.value);
+    if (dv) for (const x of dv.stk || []) add('eq', x.value);
     if (a.hedge) add('eq', -a.hedge.value);
     let futRisk = 0;
     if (dv) {
@@ -753,7 +755,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const c = S.alloc && S.alloc.cio;
     if (!c) return '';
     let h = `<h2>AI 운용 방향</h2><div class="mac"><p class="mac-head">${esc(c.headline)}</p><span class="mac-sub">${md(c.date)} 종가 기준 · 매일 장 마감 뒤 다시 정합니다</span></div>`;
-    h += '<ol class="prio">' + c.items.map((it) => `<li class="${it.on ? '' : 'off'}"><span class="rk">${it.on ? it.rank + '순위' : '쉼'}</span><div class="bd"><b>${esc(it.name)}${it.on ? `<span class="tag">${esc(it.lean)}${it.k === 'rp' ? '' : ' ' + Math.round(it.w * 100) + '%'}</span>` : ''}${matTag(it.k === 'hedge' ? 'optHedge' : it.k)}</b><p>${esc(it.why)}</p></div></li>`).join('') + '</ol>';
+    h += '<ol class="prio">' + c.items.map((it) => `<li class="${it.on ? '' : 'off'}"><span class="rk">${it.on ? it.rank + '순위' : '쉼'}</span><div class="bd"><b>${esc(it.name)}${it.on ? `<span class="tag">${esc(it.lean)}${it.k === 'rp' || it.k === 'stake' ? '' : ' ' + Math.round(it.w * 100) + '%'}</span>` : ''}${matTag(it.k === 'hedge' ? 'optHedge' : it.k)}</b><p>${esc(it.why)}</p></div></li>`).join('') + '</ol>';
     const t = totalNow() || 1, now = { core: stockNow() / t, deriv: derivNow() / t, h24: coinTotal() / t };
     h += `<h3 class="sub-h">자산 배분 (지금 / AI 목표)</h3><ul class="abar">` + [['core', '주식·채권 (현금·RP 포함)'], ['deriv', '선물·옵션·ELS'], ['h24', '코인·토큰화 주식 (24시간)']].map(([k, nm]) => {
       const v = Math.max(0, Math.min(1, now[k])), g = Math.max(0, Math.min(1, c.target[k]));
@@ -771,6 +773,20 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     return `M${p(r1, a0)}A${r1} ${r1} 0 ${big} 1 ${p(r1, a1)}L${p(r0, a1)}A${r0} ${r0} 0 ${big} 0 ${p(r0, a0)}Z`;
   }
   const allocCenter = (x, total) => (x ? `<span>${esc(x.name)}</span><b>${usd(x.v, 0)}</b><span>${fmt(x.share * 100, 1)}%</span>` : `<span>총 자산</span><b>${usd(total, 0)}</b>`);
+  const ETFN = { IWM: 'iShares 러셀 2000 ETF', SPY: 'SPDR S&P 500 ETF' };
+  // what each kind of option position is called, and the cash it ties up (a covered call is covered by its shares)
+  function optKind(o) {
+    const u = o.und || 'SPY', md = o.exp.slice(5).replace('-', '/'), prem = Math.abs(o.cost);
+    const L = (a, b) => [{ v: a, l: '매도 행사가', keep: true }, { v: b, l: '매수 행사가', keep: true }];
+    return ({
+      credit: { title: `${u} ${md} ${o.kLong}/${o.kShort} 풋`, tag: '풋 스프레드 매도', be: o.kShort - prem, lines: L(o.kShort, o.kLong), how: '옵션 프리미엄 매도(풋 스프레드)', strikes: `${o.kShort} 풋 매도 · ${o.kLong} 풋 매수` },
+      ccall: { title: `${u} ${md} ${o.kShort}/${o.kLong} 콜`, tag: '콜 스프레드 매도', be: o.kShort + prem, lines: L(o.kShort, o.kLong), how: '옵션 프리미엄 매도(콜 스프레드)', strikes: `${o.kShort} 콜 매도 · ${o.kLong} 콜 매수` },
+      hedge: { title: `${u} ${md} ${o.kLong}/${o.kShort} 풋`, tag: '보호 풋 스프레드', be: o.kLong - prem, lines: [{ v: o.kLong, l: '매수 행사가', keep: true }, { v: o.kShort, l: '매도 행사가', keep: true }], how: '하락 대비 보호', strikes: `${o.kLong} 풋 매수 · ${o.kShort} 풋 매도` },
+      csp: { title: `${u} ${md} ${o.k} 풋`, tag: '현금 담보 풋', be: o.k - prem, lines: [{ v: o.k, l: '행사가', keep: true }], how: '현금 담보 풋 매도(휠)', strikes: `${o.k} 풋 매도` },
+      cc: { title: `${u} ${md} ${o.k} 콜`, tag: '커버드콜', be: null, lines: [{ v: o.k, l: '콜 행사가', keep: true }], how: '커버드콜(휠)', strikes: `${o.k} 콜 매도` },
+    })[o.side] || { title: `${u} ${md}`, tag: '옵션', be: null, lines: [], how: '옵션', strikes: '' };
+  }
+  const optTied = (o) => (o.side === 'credit' ? o.n * 100 * (o.kShort - o.kLong) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort) : o.side === 'csp' ? o.n * 100 * o.k : o.side === 'cc' ? 0 : o.value);
   function allocInHTML(x, all) {
     if (!x) return '<p class="ain-hint">항목이나 고리를 누르면 그 안에 든 자산을 보여 줍니다.</p>';
     const pc = (v) => { const p = v / (all || 1) * 100; return fmt(p, p < 1 ? 2 : 1) + '%'; };
@@ -933,7 +949,8 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     for (const p of a.open) if (!(p.kind === 'bond' && p.syn)) out.add(cnSym(p.sym));
     if (a.hedge) out.add('.SPX');
     if (dv) {
-      if (dv.opt.length) out.add('SPY');
+      for (const o of dv.opt) out.add(o.und || 'SPY');
+      for (const x of dv.stk || []) out.add(x.sym);
       if (dv.els.length) { out.add('.SPX'); out.add('.NDX'); }
       for (const f of dv.fut) if (FUTQ[f.key] && !FSUF[f.key + '|' + f.contract]) { out.add(FUTQ[f.key] + '.1'); out.add(FUTQ[f.key] + '.2'); }
     }
@@ -1002,6 +1019,13 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         if (!q || !(q.px > 0) || !(f._b.px > 0) || !f.qty) continue;
         const mult = f._b.notional / (Math.abs(f.qty) * f._b.px), d = f.qty * mult * (q.px - f._b.px);
         f.px = q.px; f.pnl = r2(f._b.pnl + d); f.notional = r2(Math.abs(f.qty) * mult * q.px); df += d;
+      }
+      for (const x of dv.stk || []) {
+        if (!x._b) x._b = { px: x.px, value: x.value, pnl: x.pnl };
+        const q = LQ[x.sym];
+        if (!q || !(q.px > 0)) continue;
+        const d = (q.px - x._b.px) * x.qty;
+        x.px = q.px; x.value = r2(x._b.value + d); x.pnl = r2(x._b.pnl + d); df += d;
       }
       dv.liveD = df;
     }
@@ -1095,14 +1119,27 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         ['진입', f.date ? dLabel(f.date) : '—'], ['방법', '선물 추세추종']] };
   }
   function optA(o) {
-    const credit = o.side === 'credit', prem = Math.abs(o.cost), be = (credit ? o.kShort : o.kLong) - prem, q = LQ.SPY;
-    return { id: 'o:' + o.id, grp: '옵션', short: 'SPY 옵션', val: Math.abs(o.value), title: `SPY ${o.exp.slice(5).replace('-', '/')} ${o.kLong}/${o.kShort}`, tag: credit ? '풋 스프레드 매도' : '보호 풋 스프레드',
-      sub: `${o.n}계약 · 최대 손실 ${usd(o.maxLoss, 0)}`, rb: sgnUsd(o.pnl), rbC: cls(o.pnl), rs: `${credit ? '되사는 값' : '평가액'} ${usd(Math.abs(o.value), 0)}`, rsC: 'muted', why: o.why,
-      name: `SPY 풋 스프레드 ${o.kLong}/${o.kShort}`, chartName: 'SPY(S&P 500 ETF)', px: q ? q.px : null, liveAt: q ? q.t : null, unit: '$', dp: 2, pnl: o.pnl,
-      entry: be, entryL: '손익분기', lines: [{ v: o.kShort, l: '매도 행사가', keep: true }, { v: o.kLong, l: '매수 행사가', keep: true }],
-      src: { k: 'cnbc', sym: 'SPY', reg: true }, note: 'SPY는 CNBC 실시간 · 옵션 값은 CBOE 15분 지연',
-      rows: [['만기', esc(o.exp)], ['행사가', credit ? `${o.kShort} 매도 · ${o.kLong} 매수` : `${o.kLong} 매수 · ${o.kShort} 매도`], [credit ? '받은 값(평단)' : '낸 값(평단)', `계약당 $${fmt(prem * 100, 0)}`],
-        ['손익분기(SPY)', usd(be)], ['최대 손실', usd(o.maxLoss, 0)], ['손익', `<span class="${cls(o.pnl)}">${sgnUsd(o.pnl)}</span>`], ['진입', dLabel(o.date)], ['방법', credit ? '옵션 프리미엄 매도' : '하락 대비 보호']] };
+    const u = o.und || 'SPY', q = LQ[u], prem = Math.abs(o.cost), K = optKind(o), short = o.side !== 'hedge';
+    const stk = ((S.deriv && S.deriv.stk) || []).find((x) => x.sym === u);
+    const entry = o.side === 'cc' ? (stk ? stk.cost : null) : K.be;
+    return { id: 'o:' + o.id, grp: '옵션', short: `${u} 옵션`, val: Math.abs(optTied(o)), title: K.title, tag: K.tag,
+      sub: `${o.n}계약 · ${o.maxLoss != null ? `최대 손실 ${usd(o.maxLoss, 0)}` : '주식으로 덮인 콜'}`, rb: sgnUsd(o.pnl), rbC: cls(o.pnl),
+      rs: `${short ? '되사는 값' : '평가액'} ${usd(Math.abs(o.value), 0)}`, rsC: 'muted', why: o.why,
+      name: `${K.title} ${K.tag}`, chartName: u === 'SPY' ? 'SPY(S&P 500 ETF)' : u === 'IWM' ? 'IWM(러셀 2000 ETF)' : u, px: q ? q.px : null, liveAt: q ? q.t : null, unit: '$', dp: 2, pnl: o.pnl,
+      entry, entryL: o.side === 'cc' ? '주식 평단' : '손익분기', lines: K.lines, src: { k: 'cnbc', sym: u, reg: true }, note: `${u}는 CNBC 실시간 · 옵션 값은 CBOE 15분 지연`,
+      rows: [['만기', esc(o.exp)], ['행사가', K.strikes], [short ? '받은 값(평단)' : '낸 값(평단)', `계약당 $${fmt(prem * 100, 0)}`], K.be != null ? [`손익분기(${u})`, usd(K.be)] : null,
+        o.side === 'cc' && stk ? ['주식 평단', usd(stk.cost)] : null, ['최대 손실', o.maxLoss != null ? usd(o.maxLoss, 0) : '없음(주식이 담보, 대신 행사가 위 상승분을 포기)'],
+        o.side === 'csp' ? ['묶인 현금(담보)', usd(o.k * 100 * o.n, 0)] : null, ['손익', `<span class="${cls(o.pnl)}">${sgnUsd(o.pnl)}</span>`], ['진입', dLabel(o.date)], ['방법', K.how]] };
+  }
+  function stkA(x) {
+    const q = LQ[x.sym], cc = ((S.deriv && S.deriv.opt) || []).find((o) => o.side === 'cc' && (o.und || 'SPY') === x.sym);
+    return { id: 'k:' + x.sym, grp: '주식', val: x.value, title: x.sym, tag: '휠', sub: `${ETFN[x.sym] || x.sym} · ${x.qty}주`,
+      rb: usd(x.value), rs: `${sgnUsd(x.pnl)} (${pct(x.px / x.cost - 1)})`, rsC: cls(x.pnl),
+      why: '현금 담보 풋이 행사돼 받은 주식입니다. 이 위에 커버드콜을 팔아 프리미엄을 받고, 콜 행사가 위로 오르면 그 값에 팔립니다.',
+      name: `${x.sym} · ${ETFN[x.sym] || ''}`, px: x.px, liveAt: q ? q.t : null, unit: '$', dp: 2, pnl: x.pnl,
+      entry: x.cost, entryL: '평단', lines: cc ? [{ v: cc.k, l: '콜 행사가' }] : [], src: { k: 'cnbc', sym: x.sym, reg: true }, note: 'CNBC 실시간',
+      rows: [['평균 매수가(평단)', usd(x.cost)], ['현재가', usd(x.px)], ['보유', `${x.qty}주 · ${usd(x.value)}`], ['손익', `<span class="${cls(x.pnl)}">${sgnUsd(x.pnl)}</span>`],
+        cc ? ['커버드콜', `${cc.k} 콜 · ${esc(cc.exp)} 만기`] : null, ['받은 날', dLabel(x.since)], ['방법', '휠(현금 담보 풋 → 커버드콜)']] };
   }
   function elsA(e) {
     const nb = (e.obs || []).find(([d]) => d === e.next), a = LQ['.SPX'], b = LQ['.NDX'];
@@ -1120,13 +1157,16 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const px = coinPx(x.c), v = x.qty * px, avg = COINB[x.c] || null, pnl = avg ? (px - avg) * x.qty : null;
     const ps = ['trend', 'scalp'].map((k) => (CV.pos && CV.pos[k] && CV.pos[k][x.c] ? [k, CV.pos[k][x.c]] : null)).filter(Boolean);
     const why = ps.length ? ps.map(([k, p]) => `${SNAME[k]}: ${p.why || ''}`).join(' / ') : '거래소 간 가격 차이가 수수료보다 커지면 바로 사고팔 수 있게 5개 거래소에 나눠 둔 차익거래용 재고입니다.';
-    return { id: 'c:' + x.c, grp: '코인', val: v, title: assetName(x.c), sub: `${x.c} · ${fmt(x.qty, 6)}개`,
+    const sk = CV.stake || {}, sr = sk.net && sk.net[x.c], earned = sk.earned && sk.earned[x.c];
+    return { id: 'c:' + x.c, grp: '코인', val: v, title: assetName(x.c), sub: `${x.c} · ${fmt(x.qty, 6)}개${sr ? ` · 스테이킹 연 ${fmt(sr * 100, 1)}%` : ''}`,
       rb: usd(v), rs: pnl != null ? `${sgnUsd(pnl)} (${pct(px / avg - 1)})` : usd(px), rsC: pnl != null ? cls(pnl) : 'muted', why,
       name: `${assetName(x.c)} (${x.c})`, px, liveAt: Date.now(), unit: '$', dp: px >= 1000 ? 0 : 2, pnl,
       entry: avg, entryL: '평단', lines: ps.filter(([, p]) => p.stop).map(([k, p]) => ({ v: p.stop, l: `${SNAME[k]} 손절` })),
       src: { k: 'kraken', pair: KPAIR[x.c] || x.c + 'USD' }, note: `${wsOk ? '가격은 Coinbase 실시간' : '가격은 거래소 약 15초 간격'} · 차트는 Kraken`,
       rows: [['보유', `${fmt(x.qty, 6)}개`], ['평단가', avg ? usd(avg) : '계산 중'], ['현재가', usd(px)], ['평가손익', pnl != null ? `<span class="${cls(pnl)}">${sgnUsd(pnl)}</span>` : '—'],
-        ['차익거래용', `${fmt(x.arb, 6)}개`], ['추세·초단타용', `${fmt(x.trade, 6)}개`]].concat(ps.map(([k, p]) => [SNAME[k], `${usd(p.entry)}에 매수${p.stop ? ` · 손절 ${usd(p.stop)}` : ''}`]))
+        ['차익거래용', `${fmt(x.arb, 6)}개`], ['추세·초단타용', `${fmt(x.trade, 6)}개`],
+        sr ? ['스테이킹', `연 ${fmt(sr * 100, 2)}% · ${esc((sk.src && sk.src[x.c]) || '기본값')} 기준에서 거래소 수수료 ${Math.round((sk.cut || 0.25) * 100)}% 뺌(확인필요)`] : null,
+        earned ? ['받은 스테이킹 보상', `${fmt(earned, 8)}개 · ${usd(earned * px)}`] : null].concat(ps.map(([k, p]) => [SNAME[k], `${usd(p.entry)}에 매수${p.stop ? ` · 손절 ${usd(p.stop)}` : ''}`]))
         .concat([['평단 계산', '자금이 들어온 때의 가격(Coinbase 1분봉)과 진행 중인 매매의 매수가']]) };
   }
   function tokA(t) {
@@ -1142,7 +1182,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     if (!S || !S.account) return [];
     const a = S.account, dv = S.deriv, out = a.open.map(coreA);
     if (a.hedge) out.push(hedgeA(a.hedge));
-    if (dv) { dv.fut.forEach((f) => out.push(futA(f))); dv.opt.forEach((o) => out.push(optA(o))); dv.els.forEach((e) => out.push(elsA(e))); }
+    if (dv) { (dv.stk || []).forEach((x) => out.push(stkA(x))); dv.fut.forEach((f) => out.push(futA(f))); dv.opt.forEach((o) => out.push(optA(o))); dv.els.forEach((e) => out.push(elsA(e))); }
     if (funded()) { (CV.hold || []).forEach((x) => out.push(coinA(x))); (CV.toks || []).forEach((t) => out.push(tokA(t))); }
     return out;
   }
@@ -1346,8 +1386,8 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const etDate = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(ms));
   function derivFillRow(f) {
     const sideTxt = f.side === 'buy' ? '매수' : f.side === 'sell' ? '매도' : '교체', sideCls = f.side === 'buy' || f.side === 'sell' ? f.side : '';
-    const kind = f.kind === 'fut' ? '선물' : f.kind === 'opt' ? '옵션' : 'ELS';
-    const sub = f.kind === 'fut' ? `${Math.abs(f.qty)}계약 · ${fmt(f.px, 2)}${f.contract ? ' · ' + esc(f.contract) : f.to ? ' · ' + esc(f.from) + '→' + esc(f.to) : ''}` : f.kind === 'opt' ? `${f.qty}계약 · $${fmt(f.px, 2)}` : usd(f.px);
+    const kind = f.kind === 'fut' ? '선물' : f.kind === 'opt' ? '옵션' : f.kind === 'stk' ? '주식' : 'ELS';
+    const sub = f.kind === 'fut' ? `${Math.abs(f.qty)}계약 · ${fmt(f.px, 2)}${f.contract ? ' · ' + esc(f.contract) : f.to ? ' · ' + esc(f.from) + '→' + esc(f.to) : ''}` : f.kind === 'opt' ? `${f.qty}계약 · $${fmt(f.px, 2)}` : f.kind === 'stk' ? `${f.qty}주 · ${usd(f.px)}` : usd(f.px);
     const right = f.pnl != null ? `<b class="${cls(f.pnl)}">${sgnUsd(f.pnl)}</b>` : f.kind === 'els' ? `<b>${usd(f.px)}</b>` : `<b>수수료 ${usd(f.fee || 0)}</b>`;
     return `<li><details><summary class="row"><span class="side ${sideCls}">${sideTxt}</span><span class="l"><b>${esc(f.kind === 'fut' ? f.name.replace(/ 선물$/, '') : f.name)}<span class="tag">${kind}</span></b><span>${f.key ? esc(f.key) + ' · ' : ''}${sub}</span></span><span class="r">${right}<span class="muted">${esc(etTime(f.t))}</span></span></summary>
       ${more([['종목', esc(f.name)], ['체결가', f.kind === 'fut' ? fmt(f.px, 4) : usd(f.px)], ['수량', f.kind === 'els' ? '1건' : `${Math.abs(f.qty)}계약`], ['수수료·슬리피지', usd(f.fee || 0)], f.why ? ['이유', esc(f.why)] : null, f.pnl != null ? ['손익', sgnUsd(f.pnl)] : null])}</details></li>`;
@@ -1512,12 +1552,13 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         <span class="stat">매도 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''} · AI 위험 배분 ${Math.round((mm[k] == null ? 0 : mm[k]) * 100)}%${k === 'dt' && a.dtPaused ? ' · 쉬는 중' : ''}</span></li>`;
     }).join('') + (bp.hedge ? `<li><span class="name">S&amp;P 500 인버스 헷지 ${matTag('hedge')}</span><span class="pnl ${cls(bp.hedge.pnl + (bp.hedge.open || 0))}">${sgnUsd(bp.hedge.pnl + (bp.hedge.open || 0))}</span>
         <span class="stat">헷지 ${bp.hedge.n}번 정리${bp.hedge.open ? ' · 지금 보유 중' : ''} · 리스크·헷지팀 담당</span></li>` : '')
-      + (dv ? [['cta', '선물 추세추종'], ['credit', '옵션 프리미엄 매도'], ['hedge', '보호 풋 스프레드'], ['els', 'ELS']].map(([k, nm]) => { const b = (dv.by || {})[k] || { n: 0, wins: 0, pnl: 0 };
-          const open = k === 'cta' ? dv.fut.reduce((t, p) => t + p.pnl, 0) : k === 'els' ? dv.els.reduce((t, e) => t + e.value - e.amount, 0) : dv.opt.filter((o) => o.side === k).reduce((t, o) => t + o.pnl, 0);
-          const nOpen = k === 'cta' ? dv.fut.length : k === 'els' ? dv.els.length : dv.opt.filter((o) => o.side === k).length;
+      + (dv ? [['cta', '선물 추세추종'], ['credit', '옵션 풋 스프레드 매도'], ['ccall', '옵션 콜 스프레드 매도'], ['hedge', '보호 풋 스프레드'], ['csp', '현금 담보 풋(IWM 휠)'], ['cc', '커버드콜(IWM 휠)'], ['wheel', '휠 주식(IWM)'], ['els', 'ELS']]
+          .filter(([k]) => ['cta', 'credit', 'hedge', 'els'].includes(k) || (dv.by || {})[k] || dv.opt.some((o) => o.side === k) || (k === 'wheel' && (dv.stk || []).length)).map(([k, nm]) => { const b = (dv.by || {})[k] || { n: 0, wins: 0, pnl: 0 };
+          const open = k === 'cta' ? dv.fut.reduce((t, p) => t + p.pnl, 0) : k === 'els' ? dv.els.reduce((t, e) => t + e.value - e.amount, 0) : k === 'wheel' ? (dv.stk || []).reduce((t, x) => t + x.pnl, 0) : dv.opt.filter((o) => o.side === k).reduce((t, o) => t + o.pnl, 0);
+          const nOpen = k === 'cta' ? dv.fut.length : k === 'els' ? dv.els.length : k === 'wheel' ? (dv.stk || []).length : dv.opt.filter((o) => o.side === k).length;
           return `<li><span class="name">${nm} ${matTag(k === 'hedge' ? 'optHedge' : k)}</span><span class="pnl ${cls(b.pnl + open)}">${sgnUsd(b.pnl + open)}</span><span class="stat">정리 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''}${nOpen ? ` · 보유 ${nOpen}건(평가 ${sgnUsd(open)})` : ''}</span></li>`; }).join('') : '')
-      + (funded() ? [['arb', '코인 거래소 간 차익거래'], ['trend', '코인 추세'], ['scalp', '코인 초단타'], ['tok', '토큰화 주식']].map(([k, nm]) => { const x = (CV.stats || {})[k] || { n: 0, pnl: 0, fees: 0 };
-          return `<li><span class="name">${nm} ${matTag(k)}</span><span class="pnl ${cls(x.pnl)}">${sgnUsd(x.pnl)}</span><span class="stat">${x.n}건 · 수수료 ${usd(x.fees)}</span></li>`; }).join('') : '') + '</ul>';
+      + (funded() ? [['arb', '코인 거래소 간 차익거래'], ['trend', '코인 추세'], ['scalp', '코인 초단타'], ['tok', '토큰화 주식'], ['stake', '코인 스테이킹·달러 보상']].filter(([k]) => k !== 'stake' || (CV.stats || {}).stake).map(([k, nm]) => { const x = (CV.stats || {})[k] || { n: 0, pnl: 0, fees: 0 };
+          return `<li><span class="name">${nm} ${matTag(k)}</span><span class="pnl ${cls(x.pnl)}">${sgnUsd(x.pnl)}</span><span class="stat">${k === 'stake' ? '받은 보상(받은 때 값) · 가격 위험 없음' : `${x.n}건 · 수수료 ${usd(x.fees)}`}</span></li>`; }).join('') : '') + '</ul>';
     h += metricsHTML(rowsC);
     h += `<div class="band"></div><h2>주식·채권 매매 성적</h2>`;
     h += kv([
@@ -1631,6 +1672,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const sig = dv.signals || {}, held = new Map(dv.fut.map((p) => [p.key, p]));
     let h = `<div class="band"></div><h2>파생팀 <span class="count">선물·옵션·ELS</span></h2><p class="sumline" style="padding-top:4px">CME 마이크로 선물 등 14개 시장의 추세를 매일 장 마감 뒤 봅니다. 60일·120일 수익률과 20일·100일 평균이 모두 같은 방향일 때만 새로 들어가고(하락이면 매도), 추세가 꺾이거나 추적 손절에 닿으면 나옵니다. 옵션과 ELS는 AI 운용 방향이 허용할 때만 삽니다.</p>`;
     const ks = Object.keys(FUTN).filter((k) => sig[k]);
+    h += '<p class="sumline" style="padding-top:8px">옵션: SPY 풋 스프레드 매도(상승·횡보), 콜 스프레드 매도(하락·횡보, 둘을 함께 팔면 아이언 콘도르), 보호 풋 스프레드(위험 회피), IWM 현금 담보 풋과 커버드콜(휠). 손실이 끝없이 커질 수 있는 맨 콜 매도는 하지 않습니다. 언제 무엇을 할지는 AI 배분이 매일 저녁 정합니다.</p>';
     h += '<ul class="mix" style="padding-top:10px">' + ks.map((k) => { const g = sig[k], p = held.get(k), dir = g.s >= 0.99 ? '상승 추세' : g.s <= -0.99 ? '하락 추세' : '혼조';
       return `<li><span class="name">${esc(FUTN[k])}${p ? ` <span class="flag">${p.qty > 0 ? '매수' : '매도'} 보유</span>` : ''}</span><span class="pnl ${g.s >= 0.99 ? 'up' : g.s <= -0.99 ? 'down' : ''}">${dir}</span><span class="stat">60일 ${pct(g.r60)} · 120일 ${pct(g.r120)} · 하루 변동 ${fmt(g.vol * 100, 1)}%</span></li>`; }).join('') + '</ul>';
     h += `<details class="teamlog"><summary>파생팀 기록 ${(dv.log || []).length}건</summary>${(dv.log || []).map((l) => `<div class="logitem"><span class="d">${esc(etTime(l.t))}</span><p>${esc(l.text)}</p></div>`).join('') || '<div class="logitem"><p>아직 기록이 없습니다.</p></div>'}</details>`;

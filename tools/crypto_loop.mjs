@@ -72,6 +72,15 @@ async function seedToks(st) {
     } catch (e) { console.log('token seed failed', k, String(e.message || e).slice(0, 120)); }
   }
 }
+// staking yields from public sources every 6 hours: Lido stETH (7-day average APR) and Marinade mSOL (30-day APY)
+async function stakeRates(st) {
+  const S = (st.stake = st.stake || { at: Date.now(), rates: {}, earned: {} }), src = Object.assign({}, S.src || {});
+  try { const j = await getJ('https://eth-api.lido.fi/v1/protocol/steth/apr/sma'); const v = n(j && j.data && j.data.smaApr); if (v > 0 && v < 20) { S.rates.ETH = v / 100; src.ETH = 'Lido stETH 7일 평균'; } }
+  catch (e) { console.log('lido failed', String(e.message || e).slice(0, 100)); }
+  try { const j = await getJ('https://api.marinade.finance/msol/apy/30d'); const v = n(j && j.value); if (v > 0 && v < 0.3) { S.rates.SOL = v; src.SOL = 'Marinade mSOL 30일'; } }
+  catch (e) { console.log('marinade failed', String(e.message || e).slice(0, 100)); }
+  S.src = src; S.ratesAt = Date.now();
+}
 const sh = (cmd) => { try { return execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim(); } catch (e) { return 'ERR ' + String(e.stderr || e.message || e).slice(0, 200); } };
 const pull = () => sh('git pull -q --rebase -X theirs || git rebase --abort');
 const save = (full) => {
@@ -83,7 +92,10 @@ const save = (full) => {
 };
 
 let st = readJSON('data/crypto/state.json', null);
-let lastView = 0, lastState = Date.now(), lastPull = 0, ticks = 0, seeded = false;
+let lastView = 0, lastState = Date.now(), lastPull = 0, ticks = 0, seeded = false, lastRates = 0;
+// a stopped job (cancelled or out of time) saves everything first
+let stopping = false;
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { if (stopping) return; stopping = true; console.log('stop signal', sig, save(true)); process.exit(0); });
 sh('git config user.name "paper-trader-bot"');
 sh('git config user.email "41898282+github-actions[bot]@users.noreply.github.com"');
 console.log('crypto loop start', new Date().toISOString(), st ? `equity ${st.eq}` : 'no account yet');
@@ -104,6 +116,8 @@ while (Date.now() < END) {
       }
     }
     if (st) st.tilt = (alloc && alloc.cio && alloc.cio.tilt && alloc.cio.tilt.h24) || null;
+    if (st && alloc && alloc.cio && Number.isFinite(alloc.cio.rp)) { st.stake = st.stake || { at: Date.now(), rates: {}, earned: {} }; st.stake.rates.USD = alloc.cio.rp; }
+    if (st && Date.now() - lastRates >= 6 * 3600e3) { lastRates = Date.now(); await stakeRates(st); }
     if (st && !seeded) { await seedToks(st); seeded = true; }
     if (st) { C.step(st, q, q.at); ticks++; }
   }

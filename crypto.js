@@ -41,6 +41,10 @@
     brakes: { day: 0.03, half: 0.15, stop: 0.25 },
     reweightMs: 24 * 3600e3, reviewMs: 7 * 24 * 3600e3, trialW: 0.25, tiers: [1, 0.5], loserW: 0.17, minTrades: 5,
     keepFills: 300, keepMin: 2 * 1440, keepHour: 90 * 24, keepBarsH: 300, keepBarsM: 120,
+    // staking: ETH and SOL held earn the public liquid-staking yield (Lido stETH 7-day average, Marinade mSOL 30-day),
+    // less an exchange commission of 25% (확인필요); until the first fetch, 2.5% and 5.5% (확인필요). The dollars waiting
+    // at the exchanges earn USDC rewards at the account's RP rate (확인필요). Rewards are added to the same balances.
+    stake: { coins: ['ETH', 'SOL'], fallback: { ETH: 0.025, SOL: 0.055 }, cut: 0.25 },
   };
   const r2 = (v) => Math.round(v * 100) / 100;
   const r8 = (v) => Math.round(v * 1e8) / 1e8;
@@ -189,9 +193,35 @@
   }
 
   // one poll of the exchanges: arbitrage, then stops and signals, brakes, re-weighting, the equity record
+  // staking rewards since the last poll (a gap of more than two days, when the loop was off, earns nothing)
+  function stake(st, now, m) {
+    const S = (st.stake = st.stake || { at: now, rates: {}, earned: {} });
+    const dt = (now - (S.at || now)) / (365 * 864e5);
+    S.at = now;
+    if (!(dt > 0) || dt > 2 / 365) return;
+    if (!st.stats.stake) st.stats.stake = { n: 0, pnl: 0, fees: 0 };
+    for (const c of CFG.stake.coins) {
+      const r = (isNum(S.rates[c]) ? S.rates[c] : CFG.stake.fallback[c]) * (1 - CFG.stake.cut);
+      if (!(r > 0)) continue;
+      let got = 0;
+      for (const k in st.venues) { const a = st.venues[k], add = (a.coin[c] || 0) * r * dt; if (add > 0) { a.coin[c] += add; got += add; } }
+      const tq = st.trade.coin[c] || 0, add = tq * r * dt;
+      if (add > 0) { st.trade.coin[c] = tq + add; got += add; }
+      S.earned[c] = (S.earned[c] || 0) + got;
+      if (isNum(m[c])) st.stats.stake.pnl += got * m[c];
+    }
+    const ur = isNum(S.rates.USD) ? S.rates.USD : 0;
+    if (ur > 0) {
+      let got = 0;
+      for (const k in st.venues) { const a = st.venues[k]; if (a.usd > 0) { const add = a.usd * ur * dt; a.usd += add; got += add; } }
+      if (st.trade.usd > 0) { const add = st.trade.usd * ur * dt; st.trade.usd += add; got += add; }
+      S.earned.USD = (S.earned.USD || 0) + got; st.stats.stake.pnl += got;
+    }
+  }
   function step(st, q, now) {
     const m = mids(q);
     for (const c of COINS) if (isNum(m[c])) st.last[c] = m[c];
+    stake(st, now, m);
     arb(st, q, now);
     const ex = q.books[CFG.exec];
     let eq = equity(st, m);
@@ -345,6 +375,10 @@
       pos: st.pos, w: st.w, tilt: st.tilt || null, brake: st.brake, spreads: st.spreads, mkt,
       toks: Object.keys((st.tok && st.tok.hold) || {}).map((k) => { const T = st.tok, qq = T.q[k] || {}, p = T.pos[k] || null; return { s: k, name: TOKS[k] || k, qty: r8(T.hold[k]), bid: qq.bid || null, ask: qq.ask || null, value: r2(T.hold[k] * (qq.mid || 0)), entry: p ? r2(p.entry) : null, stop: p ? r2(p.stop) : null, t0: p ? p.t0 : null, pnl: p ? r2(T.hold[k] * ((qq.bid || 0) - p.entry) - p.fee) : null, why: p ? p.why : null }; }),
       tokQ: Object.fromEntries(Object.entries((st.tok && st.tok.q) || {}).map(([k, v]) => [k, { bid: v.bid, ask: v.ask }])),
+      stake: (() => { const S = st.stake || { rates: {}, earned: {} }, net = {};
+        for (const c of CFG.stake.coins) net[c] = Math.round((isNum(S.rates[c]) ? S.rates[c] : CFG.stake.fallback[c]) * (1 - CFG.stake.cut) * 1e4) / 1e4;
+        if (isNum(S.rates.USD)) net.USD = Math.round(S.rates.USD * 1e4) / 1e4;
+        return { net, gross: S.rates, cut: CFG.stake.cut, src: S.src || null, earned: Object.fromEntries(Object.entries(S.earned).map(([k, v]) => [k, k === 'USD' ? r2(v) : r8(v)])) }; })(),
       stats: Object.fromEntries(Object.entries(st.stats).map(([k, v]) => [k, { n: v.n, pnl: r2(v.pnl || 0), fees: r2(v.fees || 0) }])),
       fills: st.fills.slice(-80).reverse(), log: st.log.slice(-30).reverse(), eqMin: st.eqMin.slice(-1440), eqHour: st.eqHour.slice(-720), transfers: st.transfers,
       cfg: { coins: COINS, exec: CFG.exec, arbShare: CFG.arbShare, arbMinEdge: CFG.arbMinEdge, scalp: CFG.scalp, trend: CFG.trend, brakes: CFG.brakes },

@@ -99,7 +99,7 @@ const cryptoSeen = new Set(((cv && cv.transfers) || []).map((x) => x.id));
 const transit = () => alloc.transfers.reduce((a, t) => a + (t.to === 'crypto' && t.stockDone && !cryptoSeen.has(t.id) ? t.amount : t.from === 'crypto' && !t.stockDone && cryptoSeen.has(t.id) ? t.amount : 0), 0);
 const valAt = (sym, d) => { const m = MS[sym] || {}; if (m[d] != null) return m[d]; const q = (mk.ix || {})[sym]; if (q && q.time && q.time.slice(0, 10) === d) return q.px; const ks = Object.keys(m).filter((k) => k <= d).sort(); return ks.length ? m[ks[ks.length - 1]] : null; };
 let decided = false;
-if (book && MS['.SPX'] && (!alloc.cio || alloc.cio.date < book.date)) {
+if (book && MS['.SPX'] && (!alloc.cio || alloc.cio.date < book.date || alloc.cio.v !== CIO.V)) {
   const pic = CIO.picture(MS, book.date);
   // what the allocator needs to know about the account: the stocks it would protect, and today's ELS coupon
   const expo = book.state.positions.filter((p) => p.pb !== 'bd').reduce((a, p) => a + p.qty * (p.lastPx || p.fill || 0), 0)
@@ -111,9 +111,13 @@ if (book && MS['.SPX'] && (!alloc.cio || alloc.cio.date < book.date)) {
     const v = Dv.elsValue({ perf: [1, 1], t0: 0, obs, ki: E2.ki, kiHit: false, T: 3, paths: 3000, seed: 11, sig: [0.5 * pic.vix / 100 + 0.09, 0.5 * (pic.vxn || pic.vix * 1.3) / 100 + 0.115], rho: pic.rho || 0.9, r: (pic.y2 || 4) / 100, q: [E2.qSpx, E2.qNdx] });
     elsCoupon = (E2.fvTarget - v.A) / v.B;
   }
-  const dec = CIO.decide(pic, { exposure: expo, elsCoupon });
+  // the IWM wheel: its price, the account, and what it already holds (shares and the cash a short put ties up)
+  const iwm = (mk.ix && mk.ix.IWM && mk.ix.IWM.px) || (mk.chain && mk.chain.IWM && mk.chain.IWM.spot) || null;
+  const acct0 = coreNow() + (dst ? Dv.equity(dst) : 0) + ((cv && cv.eq) || 0) + transit();
+  const wheelHeld = dst ? Object.values(dst.stk || {}).reduce((a, x) => a + x.qty * x.px, 0) + dst.opt.filter((o) => o.side === 'csp').reduce((a, o) => a + o.n * 100 * o.k, 0) : 0;
+  const dec = CIO.decide(pic, { exposure: expo, elsCoupon, iwm, account: acct0, wheelHeld });
   alloc.cio = dec; decided = true; allocChanged = true;
-  alloc.history = (alloc.history || []).concat([{ date: book.date, key: dec.regime.key, label: dec.regime.label, headline: dec.headline, target: dec.target }]).slice(-250);
+  alloc.history = (alloc.history || []).filter((h) => h.date !== book.date).concat([{ date: book.date, key: dec.regime.key, label: dec.regime.label, headline: dec.headline, target: dec.target }]).slice(-250);
   const lt = alloc.tilts[alloc.tilts.length - 1];
   if (!lt || JSON.stringify(lt.core) !== JSON.stringify(dec.tilt.core)) alloc.tilts.push({ from: book.date, core: dec.tilt.core });
 }
@@ -152,7 +156,8 @@ if (dst && book) {
   if (alloc.cio && alloc.cio.pic) rho = alloc.cio.pic.rho;
   const ctx = { date: d, now: Date.now(), fut: mk.fut || {}, hist: MS, chain: mk.chain || null, cio: alloc.cio ? alloc.cio.tilt : null, account: total,
     exposure: stocksLong + futLong + toksLong, spx: valAt('.SPX', d), ndx: valAt('.NDX', d), vix: valAt('.VIX', d), vxn: valAt('.VXN', d), y2: valAt('US2Y', d), rp: valAt('US1M', d), rho,
-    spy: mk.chain && mk.chain.SPY ? mk.chain.SPY.spot : null, today: etToday };
+    spy: mk.chain && mk.chain.SPY ? mk.chain.SPY.spot : null, today: etToday,
+    px: { SPY: (mk.ix && mk.ix.SPY && mk.ix.SPY.px) || null, IWM: (mk.ix && mk.ix.IWM && mk.ix.IWM.px) || null } };
   if (!dst.date || dst.date < d) { Dv.nightly(dst, ctx); const h = dst.hist[dst.hist.length - 1]; if (h) h.pre = r2(h.eq - (dst.transfers || []).filter((x) => x.date === d).reduce((a, x) => a + x.amount, 0)); }
   else Dv.session(dst, ctx);
   derivChanged = true;
