@@ -16,6 +16,7 @@ while :; do
   OUT=$(node tools/collect.mjs 2>&1 | tail -1)
   echo "$DATE $HM ${OUT:0:260}"
   if echo "$OUT" | grep -q '"changed":true'; then
+    node tools/markets.mjs 2>&1 | tail -1 | cut -c1-200
     node tools/run.mjs 2>&1 | tail -1 | cut -c1-260
     bash tools/save.sh session || true
   fi

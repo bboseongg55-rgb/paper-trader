@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'session | collect-now | nightly | rebuild | probe | probe-assets | probe-more | bonds-hist'
+        description: 'session | collect-now | nightly | rebuild | probe | probe-assets | probe-more | bonds-hist | macro-hist'
         required: true
         default: session
 permissions:
@@ -61,11 +61,16 @@ jobs:
       - name: Bond history (yields, currencies, bond ETFs and their distributions)
         if: steps.mode.outputs.mode == 'nightly' || steps.mode.outputs.mode == 'bonds-hist'
         run: node tools/bonds_hist.mjs || echo "bond history not refreshed"
+      - name: Market picture and futures history, live futures and option quotes (the allocator and the derivatives part)
+        if: steps.mode.outputs.mode == 'nightly' || steps.mode.outputs.mode == 'macro-hist' || steps.mode.outputs.mode == 'rebuild'
+        run: |
+          node tools/macro_hist.mjs || echo "market history not refreshed"
+          node tools/markets.mjs || echo "live market quotes not refreshed"
       - name: Run the engine and save
-        if: steps.mode.outputs.mode != 'session' && steps.mode.outputs.mode != 'probe' && steps.mode.outputs.mode != 'probe-assets' && steps.mode.outputs.mode != 'probe-more'
+        if: steps.mode.outputs.mode != 'session' && steps.mode.outputs.mode != 'probe' && steps.mode.outputs.mode != 'probe-assets' && steps.mode.outputs.mode != 'probe-more' && steps.mode.outputs.mode != 'macro-hist'
         run: |
           node tools/run.mjs
           bash tools/save.sh "${{ steps.mode.outputs.mode }}"
       - name: Save probe
-        if: steps.mode.outputs.mode == 'probe' || steps.mode.outputs.mode == 'probe-assets' || steps.mode.outputs.mode == 'probe-more'
+        if: steps.mode.outputs.mode == 'probe' || steps.mode.outputs.mode == 'probe-assets' || steps.mode.outputs.mode == 'probe-more' || steps.mode.outputs.mode == 'macro-hist'
         run: bash tools/save.sh probe
