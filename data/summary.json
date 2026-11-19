@@ -1,8 +1,8 @@
 {
- "built": "2026-11-19T14:50:23.314Z",
+ "built": "2026-11-19T14:55:24.639Z",
  "asOf": {
   "date": "2026-11-19",
-  "time": "09:50",
+  "time": "09:55",
   "prov": true
  },
  "regime": "200일선 위 · 50일선 아래",
@@ -14,12 +14,12 @@
    "hedge": 0,
    "n": 0,
    "dd": 0,
-   "bench": 100879.64,
-   "time": "09:50",
+   "bench": 100499.28,
+   "time": "09:55",
    "prov": true
   },
   "ret": -0.18752080000000004,
-  "bench": 0.008796400000000038,
+  "bench": 0.004992799999999908,
   "trades": 4,
   "fees": 0.68,
   "open": [],
@@ -73,7 +73,19 @@
  },
  "signals": [
   {
+   "sym": "U",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "VEEV",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "IQV",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
@@ -91,7 +103,19 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
+   "sym": "REGN",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "WDAY",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "ROP",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
@@ -103,31 +127,7 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "MCK",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "PSX",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "IBN",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "TGT",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "ABBV",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
