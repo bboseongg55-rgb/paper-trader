@@ -1,8 +1,8 @@
 {
- "built": "2026-11-19T14:45:24.421Z",
+ "built": "2026-11-19T14:50:23.314Z",
  "asOf": {
   "date": "2026-11-19",
-  "time": "09:45",
+  "time": "09:50",
   "prov": true
  },
  "regime": "200일선 위 · 50일선 아래",
@@ -14,12 +14,12 @@
    "hedge": 0,
    "n": 0,
    "dd": 0,
-   "bench": 100811.93,
-   "time": "09:45",
+   "bench": 100879.64,
+   "time": "09:50",
    "prov": true
   },
   "ret": -0.18752080000000004,
-  "bench": 0.00811929999999994,
+  "bench": 0.008796400000000038,
   "trades": 4,
   "fees": 0.68,
   "open": [],
@@ -79,12 +79,6 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "IQV",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "MPC",
    "pb": "pb",
    "taken": false,
@@ -92,6 +86,12 @@
   },
   {
    "sym": "THC",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "WDAY",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
@@ -121,13 +121,13 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "ABBV",
-   "pb": "pb",
+   "sym": "TGT",
+   "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "SHOP",
+   "sym": "ABBV",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
