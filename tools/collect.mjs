@@ -110,8 +110,10 @@ if (cfg.index) {
     log.bx = { y: Object.keys(bx.y).length, fx: Object.keys(bx.fx).length, etf: Object.keys(bx.etf).length };
   } catch (e) { log.bxErr = String(e.message || e).slice(0, 200); }
 }
-// Nasdaq 100 and Dow Jones levels for the page's comparison chart; a failure here never stops the collection
-const IXS = { ndx: '.NDX', dji: '.DJI' };
+// world indexes, gold and bitcoin for the page's comparison chart (indexes.js); a failure here never stops the collection
+const IXS = Object.fromEntries((await import('node:module')).createRequire(import.meta.url)('../indexes.js').LIST.filter((x) => x.k !== 'spx').map((x) => [x.k, x.sym]));
+// a quote time without a clock (a market already closed) is that market's own trading date
+const ixDate = (time) => (/^\d{4}-\d{2}-\d{2}$/.test(String(time || '')) ? String(time) : tradeDate(time));
 let ixNow = null, ixPrev = null;
 if (cfg.index) {
   try {
@@ -119,7 +121,7 @@ if (cfg.index) {
     for (const k in IXS) {
       const v = m.get(IXS[k]);
       if (!v) continue;
-      if (v.px > 0 && (!v.time || tradeDate(v.time) === today)) (ixNow = ixNow || {})[k] = r2(v.px);
+      if (v.px > 0 && (!v.time || ixDate(v.time) === today)) (ixNow = ixNow || {})[k] = r2(v.px);
       if (v.prev > 0) (ixPrev = ixPrev || {})[k] = r2(v.prev);
     }
     log.ix = ixNow;

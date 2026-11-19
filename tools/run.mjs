@@ -14,6 +14,7 @@ const Lab = require('../evolve.js');
 const Bonds = require('../bonds.js');
 const Dv = require('../deriv.js');
 const CIO = require('../cio.js');
+const IXL = require('../indexes.js').LIST;
 const readJSON = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 
 const t0 = Date.now();
@@ -172,14 +173,21 @@ function compareView() {
   const r2 = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 100) / 100 : null);
   const byDate = new Map(L.days.map((d) => [d.date, d]));
   const li = D.dates.findIndex((d) => d >= liveStart);
+  // each day's close: the level collected at that day's close, else the market's last daily close on or before it
+  const histAt = (sym, d) => { const m = MS[sym]; if (!m) return null; if (m[d] != null) return m[d]; let best = null, bd = ''; for (const k in m) if (k <= d && k > bd) { bd = k; best = m[k]; } return best; };
   const daily = [];
   if (li >= 0) for (let t = li; t < T; t++) {
-    const ix = (byDate.get(D.dates[t]) || {}).ix || {};
-    daily.push({ date: D.dates[t], spx: r2(D.spx[t]), ndx: r2(ix.ndx), dji: r2(ix.dji) });
+    const d = D.dates[t], ix = (byDate.get(d) || {}).ix || {}, row = { date: d, spx: r2(D.spx[t]) };
+    for (const x of IXL) if (x.k !== 'spx') row[x.k] = r2(ix[x.k] != null ? ix[x.k] : histAt(x.sym, d));
+    daily.push(row);
   }
   const doc = intra[D.dates[T - 1]];
-  const intraday = doc && Array.isArray(doc.snaps) ? doc.snaps.map((s) => ({ t: s.t, spx: r2(s.spx), ndx: r2(s.ix && s.ix.ndx), dji: r2(s.ix && s.ix.dji) })).sort((a, b) => (a.t < b.t ? -1 : 1)) : [];
-  return { names: { spx: 'S&P 500', ndx: '나스닥 100', dji: '다우존스' }, daily, intraday, prev: (doc && doc.prev) || null };
+  const intraday = doc && Array.isArray(doc.snaps) ? doc.snaps.map((s) => { const o = { t: s.t, spx: r2(s.spx) }; for (const x of IXL) if (x.k !== 'spx') o[x.k] = r2(s.ix && s.ix[x.k]); return o; }).sort((a, b) => (a.t < b.t ? -1 : 1)) : [];
+  // the close before the first day shown, for each index (the 1-day view starts there)
+  const prev = Object.assign({}, (doc && doc.prev) || {});
+  const pd = D.dates[T - 2];
+  if (pd) for (const x of IXL) if (prev[x.k] == null) { const v = x.k === 'spx' ? D.spx[T - 2] : histAt(x.sym, pd); if (v != null) prev[x.k] = r2(v); }
+  return { names: Object.fromEntries(IXL.map((x) => [x.k, x.name])), list: IXL.map((x) => ({ k: x.k, name: x.name, chip: x.chip, group: x.group })), daily, intraday, prev };
 }
 // fills: every buy and sell, newest first (a trade still open has only its buy)
 const orders = [];

@@ -10,7 +10,8 @@ const Dv = require('../deriv.js');
 
 const from = '20240101000000', now = new Date();
 const to = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}235959`;
-const CNBC = ['.SPX', '.NDX', '.RUT', '.VIX', '.VXN', '.DXY', 'US1M', 'US3M', 'US2Y', 'US10Y', ...Dv.FUT.map((f) => f.cnbc + '.1')];
+const IX = require('../indexes.js');
+const CNBC = [...new Set(['.SPX', '.NDX', '.RUT', '.VIX', '.VXN', '.DXY', 'US1M', 'US3M', 'US2Y', 'US10Y', ...Dv.FUT.map((f) => f.cnbc + '.1'), ...IX.LIST.map((x) => x.sym)])];
 const FRED = ['BAMLH0A0HYM2', 'DFF'];
 const out = { built: now.toISOString(), asOf: null, s: {}, errors: {} };
 const iso = (tt) => `${tt.slice(0, 4)}-${tt.slice(4, 6)}-${tt.slice(6, 8)}`;
