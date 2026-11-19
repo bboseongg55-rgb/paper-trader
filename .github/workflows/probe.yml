@@ -1,0 +1,16 @@
+# One-off checks of public price sources (which ones a page can read directly, how fresh they are); log only.
+name: probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node tools/probe_cors.mjs
