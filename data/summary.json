@@ -1,25 +1,25 @@
 {
- "built": "2026-11-19T15:10:27.807Z",
+ "built": "2026-11-19T15:15:22.914Z",
  "asOf": {
   "date": "2026-11-19",
-  "time": "10:10",
+  "time": "10:15",
   "prov": true
  },
  "regime": "200일선 위 · 50일선 아래",
  "account": {
   "equity": {
    "date": "2026-11-19",
-   "eq": 81247.91,
-   "cash": 81247.91,
+   "eq": 81247.93,
+   "cash": 81247.93,
    "hedge": 0,
    "n": 0,
    "dd": 0,
-   "bench": 100518.9,
-   "time": "10:10",
+   "bench": 100179.28,
+   "time": "10:15",
    "prov": true
   },
-  "ret": -0.1875209,
-  "bench": 0.005188999999999888,
+  "ret": -0.1875207000000001,
+  "bench": 0.0017928000000000388,
   "trades": 4,
   "fees": 0.68,
   "open": [],
@@ -73,13 +73,13 @@
  },
  "signals": [
   {
-   "sym": "U",
+   "sym": "VEEV",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "VEEV",
+   "sym": "IQV",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
@@ -103,19 +103,19 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "REGN",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "ROP",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "VLO",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "ADP",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "CAH",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
@@ -127,8 +127,8 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "PSX",
-   "pb": "pb",
+   "sym": "IBN",
+   "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   }
