@@ -6,23 +6,22 @@ const pad = (n) => String(n).padStart(2, '0');
 const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
 const ymd = `${et.getFullYear()}${pad(et.getMonth() + 1)}${pad(et.getDate())}`;
 const QS = 'requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&events=1';
-const SY = ['AAPL', 'SPY', '.SPX', '.NDX', '@ES.1', '@TU.1', '@RTY.1', '@CL.1', '@GC.1'].map(encodeURIComponent).join('%7C');
+const SY = ['VCIT', '.RUT', '.DJI', 'US2Y', 'US5Y', 'US10Y', 'US30Y', '@TU.1', '@TU.2', '@TFS.1', '@SP.1', '@BTC.1', '@ETH.1', '@SI.1', '@HG.1', 'BTC.CM='].map(encodeURIComponent).join('%7C');
+const bar = (sym, iv, a, b) => `https://ts-api.cnbc.com/harmony/app/bars/${encodeURIComponent(sym)}/${iv}/${a}/${b}/adjusted/EST5EDT.json`;
 const urls = [
   ['cnbc quote', `https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=${SY}&${QS}&output=json`],
-  ['cnbc quote jsonp', `https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=AAPL&${QS}&output=jsonp&callback=cb`],
-  ['cnbc bars 1M', `https://ts-api.cnbc.com/harmony/app/bars/AAPL/1M/${ymd}000000/${ymd}235959/adjusted/EST5EDT.json`],
-  ['cnbc bars 5M', `https://ts-api.cnbc.com/harmony/app/bars/AAPL/5M/${ymd}000000/${ymd}235959/adjusted/EST5EDT.json`],
-  ['cnbc bars 5M fut', `https://ts-api.cnbc.com/harmony/app/bars/${encodeURIComponent('@ES.1')}/5M/${ymd}000000/${ymd}235959/adjusted/EST5EDT.json`],
-  ['cnbc bars 1D', `https://ts-api.cnbc.com/harmony/app/bars/AAPL/1D/20261101000000/${ymd}235959/adjusted/EST5EDT.json`],
-  ['cnbc chart 1D', `https://ts-api.cnbc.com/harmony/app/charts/1D.json?symbol=AAPL`],
-  ['cboe quote', 'https://cdn.cboe.com/api/global/delayed_quotes/quotes/AAPL.json'],
-  ['cboe options', 'https://cdn.cboe.com/api/global/delayed_quotes/options/SPY.json'],
-  ['nasdaq', 'https://api.nasdaq.com/api/quote/AAPL/info?assetclass=stocks'],
-  ['yahoo chart', 'https://query1.finance.yahoo.com/v8/finance/chart/AAPL?range=1d&interval=1m'],
-  ['stooq', 'https://stooq.com/q/l/?s=aapl.us&f=sd2t2ohlcv&h&e=json'],
-  ['kraken ohlc', 'https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=5'],
-  ['kraken tok ohlc', 'https://api.kraken.com/0/public/OHLC?pair=AAPLxUSD&interval=5&asset_class=tokenized_asset'],
-  ['coinbase candles', 'https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=300'],
+  ['cnbc bars 5M @TU.1', bar('@TU.1', '5M', ymd + '000000', ymd + '235959')],
+  ['cnbc bars 5M @TFS.1', bar('@TFS.1', '5M', ymd + '000000', ymd + '235959')],
+  ['cnbc bars 1D @TU.1', bar('@TU.1', '1D', '20260801000000', ymd + '235959')],
+  ['cnbc bars 1D @TU.2', bar('@TU.2', '1D', '20260801000000', ymd + '235959')],
+  ['cnbc bars 15M AAPL', bar('AAPL', '15M', '20261112000000', ymd + '235959')],
+  ['cnbc bars 30M AAPL', bar('AAPL', '30M', '20261112000000', ymd + '235959')],
+  ['cnbc bars 1H AAPL', bar('AAPL', '1H', '20261020000000', ymd + '235959')],
+  ['cnbc bars 1W AAPL', bar('AAPL', '1W', '20250101000000', ymd + '235959')],
+  ['cnbc bars 5M US2Y', bar('US2Y', '5M', ymd + '000000', ymd + '235959')],
+  ['cnbc bars 1M .SPX', bar('.SPX', '1M', ymd + '000000', ymd + '235959')],
+  ['cnbc bars 5M 5days AAPL', bar('AAPL', '5M', '20261113000000', ymd + '235959')],
+  ['cnbc bars 1D VCIT', bar('VCIT', '1D', '20260101000000', ymd + '235959')],
 ];
 for (const [name, u] of urls) {
   const t0 = Date.now();
@@ -34,7 +33,7 @@ for (const [name, u] of urls) {
     if (name === 'cnbc quote') {
       try {
         const j = JSON.parse(body); let q = j.FormattedQuoteResult && j.FormattedQuoteResult.FormattedQuote; if (q && !Array.isArray(q)) q = [q];
-        for (const x of q || []) console.log(`   ${x.symbol}: last ${x.last} at ${x.last_time} | realTime=${x.realTime} | ${x.curmktstatus || ''} | ext ${x.ExtendedMktQuote ? x.ExtendedMktQuote.last + ' ' + x.ExtendedMktQuote.last_time : '-'} | keys ${Object.keys(x).slice(0, 40).join(',')}`);
+        for (const x of q || []) console.log(`   ${x.symbol}: ${x.name} | last ${x.last} at ${x.last_time} | realTime=${x.realTime} | ${x.curmktstatus || ''} | prev ${x.previous_day_closing} | chg ${x.change}`);
       } catch (e) { console.log('   parse error ' + e.message); }
     }
     if (/bars/.test(name)) {
