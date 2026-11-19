@@ -201,6 +201,21 @@ section.view.on { display: block; }
 .alloc .sw { width: 12px; height: 12px; border-radius: 3px; }
 .alloc .nm { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alloc .sh { font-size: 15px; font-variant-numeric: tabular-nums; color: var(--sub); }
+.ain-box { margin: 12px 20px 0; }
+.ain-hint { margin: 0; font-size: 15px; color: var(--muted); }
+.ain-h { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 4px; }
+.ain-h .sw { flex: none; width: 12px; height: 12px; border-radius: 3px; }
+.ain-h b { font-size: 17px; font-weight: 700; }
+.ain-h span { font-size: 15px; color: var(--sub); font-variant-numeric: tabular-nums; }
+.ain { list-style: none; margin: 0; padding: 0; }
+.ain li { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 60px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.ain li:last-child { border-bottom: 0; }
+.ain .l { display: grid; gap: 2px; min-width: 0; }
+.ain .l b { font-size: 16px; font-weight: 600; word-break: keep-all; }
+.ain .l span { font-size: 15px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ain .r { flex: none; display: grid; gap: 2px; justify-items: end; font-variant-numeric: tabular-nums; }
+.ain .r b { font-size: 16px; font-weight: 600; }
+.ain .r span { font-size: 15px; color: var(--muted); }
 @media (max-width: 370px) { .alloc { grid-template-columns: minmax(0, 1fr); justify-items: center; } .alloc ul { width: 100%; } }
 
 /* key numbers in two columns */
@@ -622,15 +637,22 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   function allocation() {
     const a = S.account, dv = S.deriv, segs = [];
     const sum = (xs, f) => xs.reduce((t, x) => t + f(x), 0);
-    const stocks = sum(a.open.filter((p) => p.kind !== 'bond'), (p) => p.value), bonds = sum(a.open.filter((p) => p.kind === 'bond'), (p) => p.value);
-    const coins = funded() ? sum(CV.hold || [], (h) => h.qty * coinPx(h.c)) : 0, toks = funded() ? sum(CV.toks || [], (x) => x.value || 0) : 0;
-    const fut = dv ? dv.margin : 0, opt = dv ? dv.optRisk + sum(dv.opt.filter((o) => o.side !== 'credit'), (o) => o.value) : 0, els = dv ? sum(dv.els, (e) => e.value) : 0;
-    const add = (name, sub, v, col) => { if (v > 0.5) segs.push({ name, sub, v, col }); };
-    add('주식', '미국 주식', stocks, 'var(--s1)'); add('채권', '각국 국채·회사채', bonds, 'var(--s2)'); add('코인', '24시간 코인', coins, 'var(--s3)');
-    add('선물', '선물 증거금', fut, 'var(--s4)'); add('옵션', '옵션 손실 한도·매수 가치', opt, 'var(--s5)'); add('ELS', 'ELS 평가액', els, 'var(--s6)');
-    add('토큰화 주식', '코인 거래소의 미국 주식', toks, 'var(--s7)'); add('헷지', 'S&P 500 인버스', a.hedge ? a.hedge.value : 0, 'var(--s-other)');
-    const total = totalNow();
-    add('현금·RP', S.rates && S.rates.rp != null ? `RP 연 ${fmt(S.rates.rp * 100, 2)}%` : '현금', total - segs.reduce((t, x) => t + x.v, 0), 'var(--s-cash)');
+    const it = (nm, sub, v) => ({ nm, sub, v });
+    const add = (key, name, items, col) => { const v = sum(items, (x) => x.v); if (v > 0.5) segs.push({ key, name, v, col, items: items.filter((x) => Math.abs(x.v) >= 0.005).sort((p, q) => q.v - p.v) }); };
+    const stockL = a.open.filter((p) => p.kind !== 'bond'), bondL = a.open.filter((p) => p.kind === 'bond');
+    add('stock', '주식', stockL.map((p) => it(p.sym, `${p.name} · ${p.qty.toLocaleString()}주`, p.value)), 'var(--s1)');
+    add('bond', '채권', bondL.map((p) => it(p.sym, p.name + (p.yld != null ? ` · 금리 ${p.yld}%` : ''), p.value)), 'var(--s2)');
+    add('coin', '코인', funded() ? (CV.hold || []).map((h) => it(assetName(h.c), `${h.c} · ${fmt(h.qty, 6)}개 · 개당 ${usd(coinPx(h.c), 0)}`, h.qty * coinPx(h.c))) : [], 'var(--s3)');
+    add('fut', '선물', dv ? dv.fut.map((f) => it(f.name.replace(/ 선물$/, ''), `${f.key} · ${f.qty > 0 ? '매수' : '매도'} ${Math.abs(f.qty)}계약 · 금액은 증거금`, f.margin)) : [], 'var(--s4)');
+    add('opt', '옵션', dv ? dv.opt.map((o) => it(`SPY ${o.exp.slice(5).replace('-', '/')} ${o.kLong}/${o.kShort}`, o.side === 'credit' ? `풋 스프레드 매도 ${o.n}계약 · 금액은 손실 한도` : `보호 풋 스프레드 ${o.n}계약 · 평가액`, o.side === 'credit' ? o.n * 100 * (o.kShort - o.kLong) : o.value)) : [], 'var(--s5)');
+    add('els', 'ELS', dv ? dv.els.map((e) => it(`ELS 연 ${fmt(e.coupon * 100, 1)}%`, `S&P 500·나스닥 100 · 가입 ${usd(e.amount, 0)}`, e.value)) : [], 'var(--s6)');
+    add('tok', '토큰화 주식', funded() ? (CV.toks || []).map((t) => it(`${t.name} 토큰`, `${t.s} · ${fmt(t.qty, 4)}주`, t.value || 0)) : [], 'var(--s7)');
+    if (a.hedge) add('hedge', '헷지', [it('S&P 500 인버스(SH)', `보유 주식의 ${Math.round((a.hedge.ratio || 0) * 100)}%만큼 · S&P 500이 내리면 이익`, a.hedge.value)], 'var(--s-other)');
+    // the cash is what is left of each part once its holdings are counted
+    const total = totalNow(), cashT = total - segs.reduce((t, x) => t + x.v, 0), tr = inTransit(), cu = funded() ? CV.usd : 0;
+    const core = stockNow() - sum(a.open, (p) => p.value) - (a.hedge ? a.hedge.value : 0);
+    const rp = S.rates && S.rates.rp != null ? `RP 연 ${fmt(S.rates.rp * 100, 2)}%로 운용` : '현금';
+    add('cash', '현금·RP', [it('주식·채권 쪽 현금', rp, core), it('선물·옵션 쪽 현금', '증거금을 뺀 나머지 · ' + rp, cashT - core - cu - tr), it('코인 거래소 달러', '코인·토큰 매매 대기 자금', cu), it('계좌 안에서 옮기는 중', '한쪽에서 나가 다른 쪽에 아직 도착 전', tr)], 'var(--s-cash)');
     const all = segs.reduce((t, x) => t + x.v, 0);
     segs.forEach((x) => { x.share = all > 0 ? x.v / all : 0; });
     return { segs, total: all };
@@ -709,6 +731,12 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     return `M${p(r1, a0)}A${r1} ${r1} 0 ${big} 1 ${p(r1, a1)}L${p(r0, a1)}A${r0} ${r0} 0 ${big} 0 ${p(r0, a0)}Z`;
   }
   const allocCenter = (x, total) => (x ? `<span>${esc(x.name)}</span><b>${usd(x.v, 0)}</b><span>${fmt(x.share * 100, 1)}%</span>` : `<span>총 자산</span><b>${usd(total, 0)}</b>`);
+  function allocInHTML(x, all) {
+    if (!x) return '<p class="ain-hint">항목이나 고리를 누르면 그 안에 든 자산을 보여 줍니다.</p>';
+    const pc = (v) => { const p = v / (all || 1) * 100; return fmt(p, p < 1 ? 2 : 1) + '%'; };
+    return `<div class="ain-h"><i class="sw" style="background:${x.col}"></i><b>${esc(x.name)}</b><span>${x.key === 'cash' ? '' : x.items.length + '종 · '}${usd(x.v, 0)} · 계좌의 ${pc(x.v)}</span></div>`
+      + `<ul class="ain">${x.items.map((t) => `<li><span class="l"><b>${esc(t.nm)}</b><span>${esc(t.sub)}</span></span><span class="r"><b>${usd(t.v, Math.abs(t.v) >= 100 ? 0 : 2)}</b><span>${pc(t.v)}</span></span></li>`).join('')}</ul>`;
+  }
   function allocHTML() {
     const { segs, total } = allocation();
     if (!segs.length || total <= 0) return '<p class="empty-row">보유 자산이 없습니다.</p>';
@@ -723,25 +751,35 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       return `<path data-i="${i}" d="${d}" style="fill:${x.col}"><title>${esc(x.name)} ${fmt(x.share * 100, 1)}%</title></path>`;
     }).join('');
     return `<div class="alloc"><div class="donut"><svg viewBox="0 0 168 168" role="img" aria-label="포트폴리오 구성: ${esc(segs.map((x) => `${x.name} ${fmt(x.share * 100, 1)}%`).join(', '))}">${paths}</svg><div class="c">${allocCenter(null, total)}</div></div>
-      <ul>${segs.map((x, i) => `<li><button type="button" data-i="${i}" aria-pressed="false" aria-label="${esc(`${x.name} ${usd(x.v, 0)}, ${fmt(x.share * 100, 1)}%`)}"><i class="sw" style="background:${x.col}"></i><span class="nm">${esc(x.name)}</span><span class="sh">${fmt(x.share * 100, 1)}%</span></button></li>`).join('')}</ul></div>`;
+      <ul>${segs.map((x, i) => `<li><button type="button" data-i="${i}" aria-pressed="false" aria-label="${esc(`${x.name} ${usd(x.v, 0)}, ${fmt(x.share * 100, 1)}%`)}"><i class="sw" style="background:${x.col}"></i><span class="nm">${esc(x.name)}</span><span class="sh">${fmt(x.share * 100, 1)}%</span></button></li>`).join('')}</ul></div><div class="ain-box" aria-live="polite"></div>`;
   }
+  let allocSel = null;                   // the slice the reader opened; kept when the screen refreshes
   function wireAlloc() {
-    const box = document.querySelector('#v-account .alloc');
-    if (!box) return;
+    const box = document.querySelector('#v-account .alloc'), inn = document.querySelector('#v-account .ain-box');
+    if (!box || !inn) return;
     const { segs, total } = allocation();
     const svg = box.querySelector('svg'), c = box.querySelector('.c');
-    let sel = -1;
-    const pickSeg = (i) => {
-      sel = sel === i ? -1 : i;
-      svg.classList.toggle('sel', sel >= 0);
-      svg.querySelectorAll('path').forEach((p) => p.classList.toggle('on', +p.dataset.i === sel));
-      box.querySelectorAll('li button').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.i === sel)));
-      c.innerHTML = allocCenter(segs[sel] || null, total);
+    const show = () => {
+      const i = segs.findIndex((x) => x.key === allocSel);
+      if (i < 0) allocSel = null;
+      svg.classList.toggle('sel', i >= 0);
+      svg.querySelectorAll('path').forEach((p) => p.classList.toggle('on', +p.dataset.i === i));
+      box.querySelectorAll('li button').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.i === i)));
+      c.innerHTML = allocCenter(segs[i] || null, total);
+      inn.innerHTML = allocInHTML(segs[i] || null, total);
     };
-    svg.querySelectorAll('path').forEach((p) => p.addEventListener('click', () => pickSeg(+p.dataset.i)));
-    box.querySelectorAll('li button').forEach((b) => b.addEventListener('click', () => pickSeg(+b.dataset.i)));
+    const pick = (i) => { allocSel = segs[i] && segs[i].key !== allocSel ? segs[i].key : null; show(); };
+    svg.querySelectorAll('path').forEach((p) => p.addEventListener('click', () => pick(+p.dataset.i)));
+    box.querySelectorAll('li button').forEach((b) => b.addEventListener('click', () => pick(+b.dataset.i)));
+    show();
   }
 
+  const sigOf = (d) => { const m = d.querySelector(':scope > summary'); return (m ? m.textContent : '').replace(/[0-9$,.+−\-%:/()]/g, '').replace(/\s+/g, ' ').trim(); };
+  function put(el, html) {
+    const open = new Set([...el.querySelectorAll('details[open]')].map(sigOf));
+    el.innerHTML = html;
+    if (open.size) el.querySelectorAll('details').forEach((d) => { if (open.has(sigOf(d))) d.open = true; });
+  }
   let acctPrev = 0;
   function chipHTML(x) {
     const on = cmp.includes(x.k);
@@ -799,7 +837,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const fills = `<div class="band"></div><h2>최근 체결</h2>` + (recent.length ? '<ul class="list">' + recent.map((x) => x.html).join('') + '</ul><p class="sumline"><a href="#fills" style="color:inherit">체결내역 전체 보기</a></p>' : '<p class="empty-row">아직 체결된 매매가 없습니다.</p>');
     h = `<div class="col-a"><div class="sec-hero">${h}</div><div class="sec-hold">${hold}</div><div class="sec-fills">${fills}</div></div>`
       + `<div class="col-b"><div class="sec-ai">${aiSummaryHTML()}</div><div class="sec-ring"><div class="band"></div><h2>포트폴리오 구성</h2>${allocHTML()}</div><div class="sec-risk">${riskHTML()}</div></div>`;
-    $('v-account').innerHTML = h;
+    put($('v-account'), h);
     const rg = $('v-account').querySelector('.range');
     $('v-account').querySelectorAll('.periods button').forEach((b) => b.addEventListener('click', () => {
       period = b.dataset.p;
@@ -930,7 +968,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       h += o.html;
     }
     if (day) h += '</ul>';
-    $('v-fills').innerHTML = h;
+    put($('v-fills'), h);
     $('v-fills').querySelectorAll('.filters button').forEach((b) => b.addEventListener('click', () => { filter = b.dataset.f; renderFills(); }));
   }
 
@@ -1049,7 +1087,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       ['평균 손실', losses.length ? sgnUsd(avg(losses)) : '-', losses.length ? cls(avg(losses)) : ''],
     ]);
     h += `<footer>가상 계좌입니다. 실제 돈이 아니며 투자 권유가 아닙니다.<details class="fine"><summary>계산 방식과 가정</summary><p>체결은 받은 가격에서 0.1% 불리하게 잡았고, 수수료는 로빈후드 기준입니다: 위탁 수수료 없음, 매도 때 SEC 수수료(100만 달러당 $20.60, $500 이하 매도는 면제)와 FINRA 수수료(주당 $0.000195, 최대 $9.79, 50주 이하는 면제, 2026년 10~12월은 일시 중단), 매수·매도 때 CAT 수수료(주당 $0.000003, 1센트 미만은 면제). 배당과 세금은 넣지 않았습니다. 채권: 각국 국채는 그 나라 국채 금리와 환율로 계산한 합성 지수(이자 + 금리 변화 × 듀레이션 + 환율, 달러 기준, 실제 상품 아님)이고, 회사채·신흥국·해외 채권은 미국 상장 채권 ETF(분배금 포함 총수익)입니다. 증거금(레버리지)을 쓰면 로빈후드 기준 이자(빌린 금액 5만 달러까지 연 5%, 10만 달러까지 4.8%, 그 이상 4.5%, 하루 단위)를 냅니다. 시세: CNBC 공개 시세(약 5분 간격). 남는 현금은 RP 이자(미국 1개월 국채 금리 − 0.25%p, 365일 기준, 확인필요)를 받습니다. 선물: CME 마이크로 선물 등, CNBC 근월·차월물 시세와 정산가, 로빈후드 수수료(계약당 한쪽 $0.75 + NFA $0.02 + 거래소 수수료, 확인필요)와 체결 1틱 불리, 만기 12일 전 차월물로 교체, 증거금은 명목 금액의 일정 비율로 가정(확인필요). 옵션: CBOE 지연 시세의 매수·매도 호가로 체결, 계약당 약 $0.04 규제·청산 수수료(확인필요). ELS: 실제 상품이 아닌 합성 상품으로, 발행사가 쓰는 방식(몬테카를로)으로 공정 쿠폰을 계산하고 발행사 마진 2%를 뺐습니다(확인필요). 매일 같은 방식으로 평가하며 실제 중도환매 가격과 다를 수 있습니다.</p></details></footer>`;
-    $('v-profit').innerHTML = h;
+    put($('v-profit'), h);
   }
 
   const ruleVal = (r) => {
@@ -1132,7 +1170,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       const name = m[1].replace(/<span class="count">([^<]*)<\/span>/, ' · $1').replace(/<[^>]+>/g, '').trim();
       return `<details class="fold"><summary><b>${name}</b><span>자세히</span></summary>${c.replace(m[0], '')}</details>`;
     }).join('');
-    $('v-team').innerHTML = prioHTML() + `<div class="band"></div><h2 style="padding-top:8px">AI 팀</h2>` + h;
+    put($('v-team'), prioHTML() + `<div class="band"></div><h2 style="padding-top:8px">AI 팀</h2>` + h);
   }
 
   const SNAME = { arb: '거래소 간 차익거래', trend: '추세(1시간)', scalp: '초단타(1분)', tok: '토큰화 주식', move: '거래소 간 코인 이동' };
