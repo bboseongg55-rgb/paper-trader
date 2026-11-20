@@ -185,25 +185,32 @@
     // that put yields of 1.6-4.7 in place of bond prices of about 100 and stopped out every bond held.)
     const symIdx = new Map(S.slice(0, bond0).map((x, i) => [x.s, i]));
     const blank = () => new Float64Array(S.length).fill(NaN);
+    // a quote far from the stock's last close (below 0.625x or above 1.6x) is a bad tick (a wrong symbol, a split not yet
+    // known, a unit mix-up) and is left out: such a price stopped out real positions once (2026-11-20, bond yields)
+    const lastClose = (i, t) => { for (let k = t - 1; k >= 0; k--) { const v = S[i].c[k]; if (isNum(v) && v > 0) return v; } return NaN; };
+    const sane = (v, r) => !(r > 0) || (v / r > 0.625 && v / r < 1.6);
     if (intra) {
       for (const dt in intra) {
         const t = dates.indexOf(dt), doc = intra[dt];
         if (t < 0 || !doc) continue;
+        const refs = new Map(), refOf = (i) => { if (!refs.has(i)) refs.set(i, lastClose(i, t)); return refs.get(i); };
+        let bad = 0;
         let list = [];
         if (Array.isArray(doc)) {
-          list = doc.filter((s) => s && s.t && s.px).map((s) => { const a = blank(); for (const k in s.px) { const i = symIdx.get(k); if (i != null && isNum(s.px[k]) && s.px[k] > 0) a[i] = s.px[k]; } return { t: s.t, spx: NaN, px: a }; });
+          list = doc.filter((s) => s && s.t && s.px).map((s) => { const a = blank(); for (const k in s.px) { const i = symIdx.get(k); if (i != null && isNum(s.px[k]) && s.px[k] > 0) { if (sane(s.px[k], refOf(i))) a[i] = s.px[k]; else bad++; } } return { t: s.t, spx: NaN, px: a }; });
         } else if (Array.isArray(doc.snaps)) {
           const syms = doc.syms || [];
           const map = syms.map((k) => symIdx.get(k));
           list = doc.snaps.filter((s) => s && s.t && Array.isArray(s.p)).map((s) => {
-            const a = blank(); s.p.forEach((v, j) => { const i = map[j]; if (i != null && isNum(v) && v > 0) a[i] = v; });
+            const a = blank(); s.p.forEach((v, j) => { const i = map[j]; if (i != null && isNum(v) && v > 0) { if (sane(v, refOf(i))) a[i] = v; else bad++; } });
             let hi = null;
-            if (Array.isArray(s.h)) { hi = blank(); s.h.forEach((v, j) => { const i = map[j]; if (i != null && isNum(v) && v > 0) hi[i] = v; }); }
+            if (Array.isArray(s.h)) { hi = blank(); s.h.forEach((v, j) => { const i = map[j]; if (i != null && isNum(v) && v > 0 && sane(v, refOf(i))) hi[i] = v; }); }
             return { t: s.t, spx: isNum(s.spx) ? s.spx : NaN, px: a, hi };
           });
         }
         list.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0));
         if (list.length) snap[t] = list;
+        if (bad) notes.push({ date: dt, badTicks: bad });
       }
       for (const a of splitAdj) { const i = symIdx.get(a.sym); for (let j = 0; j < a.t; j++) if (snap[j]) for (const sm of snap[j]) { if (isNum(sm.px[i])) sm.px[i] *= a.factor; if (sm.hi && isNum(sm.hi[i])) sm.hi[i] *= a.factor; } }
     }
