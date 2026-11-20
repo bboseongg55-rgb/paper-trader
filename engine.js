@@ -180,7 +180,10 @@
       ? { t: dates.length - 1, time: lastDay.t || null } : null;
     // intraday snapshots aligned to day indexes as price arrays by symbol, on the same split-adjusted scale as the closes
     const snap = new Array(dates.length).fill(null);
-    const symIdx = new Map(S.map((x, i) => [x.s, i]));
+    // intraday quotes are for the stocks only: a bond here is valued from its yield or its ETF's total return, once a day.
+    // (A quote under a bond's own name is the yield itself: CNBC's 'US2Y' is the 2-year yield, not a price. On 2026-11-20
+    // that put yields of 1.6-4.7 in place of bond prices of about 100 and stopped out every bond held.)
+    const symIdx = new Map(S.slice(0, bond0).map((x, i) => [x.s, i]));
     const blank = () => new Float64Array(S.length).fill(NaN);
     if (intra) {
       for (const dt in intra) {

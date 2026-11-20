@@ -241,9 +241,10 @@ function teamsView(lv) {
     risk: { name: E.TEAMS.risk, rules: own('risk'), log: logs('risk'), gate: res.gate, regime: res.regime, hedge: lv.hedge, risk: lv.risk },
   };
 }
-// a bond built from yields has no market quote to chart, so its own daily values (last year) go with it to the page
+// a bond's own daily values (last year) go with it to the page, for its chart: a bond built from yields has no quote,
+// and a bond ETF is kept as a total-return index (its distributions added), which its market price is not
 const withHist = (p) => {
-  if (p.kind !== 'bond' || !p.syn) return p;
+  if (p.kind !== 'bond') return p;
   const x = D.S.find((y) => y.s === p.sym);
   if (!x) return p;
   const hist = [];
@@ -270,7 +271,8 @@ const state = {
   data: { liveBuilt: live.built || null, sources: readJSON('data/source.json', null) },
 };
 fs.writeFileSync('data/state.json', JSON.stringify(state));
-fs.writeFileSync('data/held.json', JSON.stringify({ syms: lv ? lv.open.map((p) => p.sym).sort() : [] }));
+// the stocks held, for the next intraday quotes (bonds are not quoted: under their names CNBC gives the yield)
+fs.writeFileSync('data/held.json', JSON.stringify({ syms: lv ? lv.open.filter((p) => p.kind !== 'bond').map((p) => p.sym).sort() : [] }));
 // the earlier summary kept in the repository
 const last = lv && lv.equity[lv.equity.length - 1];
 const summary = {

@@ -946,7 +946,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const futSym = (f) => (FUTQ[f.key] ? FUTQ[f.key] + (FSUF[f.key + '|' + f.contract] || '.1') : null);
   function quoteSyms() {
     const out = new Set(), a = S.account, dv = S.deriv;
-    for (const p of a.open) if (!(p.kind === 'bond' && p.syn)) out.add(cnSym(p.sym));
+    for (const p of a.open) if (p.kind !== 'bond') out.add(cnSym(p.sym));      // bonds move with the server's runs (their values are indexes)
     if (a.hedge) out.add('.SPX');
     if (dv) {
       for (const o of dv.opt) out.add(o.und || 'SPY');
@@ -1004,7 +1004,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     let dc = 0, df = 0;
     for (const p of a.open) {
       if (!p._b) p._b = { price: p.price, value: p.value, pnl: p.pnl };
-      const q = !(p.kind === 'bond' && p.syn) && LQ[cnSym(p.sym)];
+      const q = p.kind !== 'bond' && LQ[cnSym(p.sym)];
       if (!q || !(q.px > 0)) continue;
       const d = (q.px - p._b.price) * p.qty;
       p.price = q.px; p.value = r2(p._b.value + d); p.pnl = r2(p._b.pnl + d); if (p.entry > 0) p.pct = q.px / p.entry - 1; dc += d;
@@ -1089,12 +1089,12 @@ details.teamlog[open] > summary::after { content: " 접기"; }
 
   const sideTag = (q) => (q > 0 ? '매수' : '매도');
   function coreA(p) {
-    const bond = p.kind === 'bond', syn = bond && p.syn, P = (v) => (syn ? fmt(v, 2) : usd(v)), q = !syn && LQ[cnSym(p.sym)];
+    const bond = p.kind === 'bond', syn = bond, P = (v) => (syn ? fmt(v, 2) : usd(v)), q = !bond && LQ[cnSym(p.sym)];
     return { id: (bond ? 'b:' : 's:') + p.sym, grp: bond ? '채권' : '주식', val: p.value, title: p.sym, sub: `${p.name}${bond ? (p.yld != null ? ` · 금리 ${p.yld}%` : '') : ` · ${p.qty.toLocaleString()}주`}`,
       rb: usd(p.value), rs: `${sgnUsd(p.pnl)} (${pct(p.pct)})`, rsC: cls(p.pnl), why: p.why,
       name: `${p.sym} · ${p.name}`, px: p.price, liveAt: q ? q.t : null, unit: syn ? '' : '$', dp: 2, pnl: p.pnl,
       entry: p.entry, entryL: syn ? '매수 때 지수' : '평단', lines: [{ v: p.stop, l: '손절' }],
-      src: syn ? { k: 'hist', d: p.hist || [] } : { k: 'cnbc', sym: cnSym(p.sym), reg: true }, periods: syn ? ['1w', '1m', '3m', '1y'] : null, note: syn ? '국채 금리로 계산한 지수 · 매일 장 마감 값' : 'CNBC 실시간',
+      src: syn ? { k: 'hist', d: p.hist || [] } : { k: 'cnbc', sym: cnSym(p.sym), reg: true }, periods: syn ? ['1w', '1m', '3m', '1y'] : null, note: syn ? (p.syn ? '국채 금리로 계산한 지수 · 매일 장 마감 값' : '분배금을 더한 총수익 지수 · 매일 장 마감 값') : 'CNBC 실시간',
       rows: [[syn ? '매수 때 지수(평단)' : '평균 매수가(평단)', P(p.entry)], ['현재가', P(p.price)], ['보유', bond ? usd(p.value) : `${p.qty.toLocaleString()}주 · ${usd(p.value)}`],
         ['손익', `<span class="${cls(p.pnl)}">${sgnUsd(p.pnl)} (${pct(p.pct)})</span>`], ['손절가', P(p.stop)], bond && p.yld != null ? ['금리', `${p.yld}%`] : null,
         ['매수', p.pb === 'dt' ? `오늘 ${esc(p.et || '')}` : `${dLabel(p.entryDate)} 장 마감`], ['방법', PB_LONG[p.pb] || esc(p.pb || '')], p.ctx ? ['편입 당시 시장', esc(p.ctx)] : null] };
@@ -1191,7 +1191,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     + `<span class="r"><b class="${x.rbC || ''}">${esc(x.rb)}</b><span class="${x.rsC || ''}">${esc(x.rs || '')}</span></span></a>${x.why ? `<p class="why"><b>편입 이유</b>${esc(x.why)}</p>` : ''}</li>`;
   function holdGroups() {
     const L = assetList(), g = [];
-    const SRC = { 주식: 'CNBC 실시간', 채권: 'CNBC 실시간 · 금리로 만든 채권은 장 마감 값', 헷지: 'CNBC 실시간', 선물: 'CNBC 1분봉 · 약 1분 지연', 옵션: 'CBOE 15분 지연',
+    const SRC = { 주식: 'CNBC 실시간', 채권: '매일 장 마감 값(금리·총수익 지수)', 헷지: 'CNBC 실시간', 선물: 'CNBC 1분봉 · 약 1분 지연', 옵션: 'CBOE 15분 지연',
       ELS: '매일 장 마감 뒤 모형 평가', 코인: wsOk ? '거래소 실시간' : '거래소 · 약 15초 간격', '토큰화 주식': 'Kraken 실시간 호가' };
     for (const grp of ['주식', '채권', '헷지', '선물', '옵션', 'ELS', '코인', '토큰화 주식']) {
       const xs = L.filter((x) => x.grp === grp);

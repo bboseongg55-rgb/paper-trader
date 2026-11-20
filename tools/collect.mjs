@@ -55,7 +55,8 @@ const settings = readJSON('data/settings.json', {});
 const live = readJSON('data/live.json', { v: 2, meta: {}, days: [] });
 live.meta = live.meta || {};
 live.days = live.days || [];
-const held = (readJSON('data/held.json', { syms: [] }).syms || []).filter(Boolean);
+// stocks only: a bond's name (US2Y, KR10Y ...) is a yield on CNBC, not a price
+const held = (readJSON('data/held.json', { syms: [] }).syms || []).filter((s) => s && !/^[A-Z]{2}\d{1,2}Y$/.test(s));
 const todayDone = live.days.find((d) => d.date === today && d.final);
 if (todayDone && !FORCE) { out({ changed: false, skip: '오늘 종가 이미 확정', et: now }); process.exit(0); }
 const log = { at: new Date().toISOString(), et: `${today} ${now.hm}` };
