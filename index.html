@@ -331,6 +331,11 @@ footer { margin: 28px 20px 8px; font-size: 15px; color: var(--muted); line-heigh
 .rules b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .rules b.changed::after { content: "조정됨"; margin-left: 6px; font-size: 14px; font-weight: 600; padding: 0 6px; border-radius: 6px; background: var(--up-soft); color: var(--up); vertical-align: 1px; }
 details.teamlog { margin: 10px 20px 0; }
+.rdlog { margin: 6px 20px 0; }
+.rdlog .logitem:first-child { border-top: 0; }
+ol.rdnext { margin: 0; padding: 4px 20px 0 44px; font-size: 16px; color: var(--sub); }
+ol.rdnext li { padding: 4px 0; }
+.nw { white-space: nowrap; }
 details.teamlog > summary { cursor: pointer; font-size: 15px; font-weight: 600; color: var(--sub); padding: 8px 0; list-style: none; }
 details.teamlog > summary::-webkit-details-marker { display: none; }
 details.teamlog > summary::after { content: " 보기"; color: var(--muted); font-weight: 500; }
@@ -404,6 +409,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const HOLIDAYS = ['2026-11-26', '2026-12-25', '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24'];
   const EARLY_CLOSE = ['2026-11-27', '2026-12-24', '2027-11-26'];
   let S = null, period = 'day', filter = 'all', range = null;
+  let RD = null;   // data/rd.json: the daily research log and the latest backtest
 
   function nyNow() {
     const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((x) => [x.type, x.value]));
@@ -1651,7 +1657,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       const name = m[1].replace(/<span class="count">([^<]*)<\/span>/, ' · $1').replace(/<[^>]+>/g, '').trim();
       return `<details class="fold"><summary><b>${name}</b><span>자세히</span></summary>${c.replace(m[0], '')}</details>`;
     }).join('');
-    put($('v-team'), prioHTML() + `<div class="band"></div><h2 style="padding-top:8px">AI 팀</h2>` + h);
+    put($('v-team'), prioHTML() + rdHTML() + `<div class="band"></div><h2 style="padding-top:8px">AI 팀</h2>` + h);
   }
 
   const SNAME = { arb: '거래소 간 차익거래', trend: '추세(1시간)', scalp: '초단타(1분)', tok: '토큰화 주식', move: '거래소 간 코인 이동' };
@@ -1663,7 +1669,32 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   // how far each strategy has been tested: the stock and bond engine passed two years of history and runs the lab;
   // the newer parts start small until their own record builds up
   const MATURE = { dt: 1, bo: 1, pb: 1, bd: 1, hedge: 1 };
-  const matTag = (k) => (k === 'rp' ? '' : MATURE[k] ? '<span class="tag ok">검증됨</span>' : '<span class="tag warn">실험 중</span>');
+  // a method with its own line in the latest backtest (data/rd.json) is tagged by that result: losing → under review
+  const matTag = (k) => {
+    if (k === 'rp') return '';
+    const b = RD && RD.bt && RD.bt.by && RD.bt.by[k];
+    if (b) return b.pnl > 0 ? '<span class="tag ok">검증됨</span>' : '<span class="tag warn">점검 중</span>';
+    return MATURE[k] ? '<span class="tag ok">검증됨</span>' : '<span class="tag warn">실험 중</span>';
+  };
+  // the daily research log: what the evening run tested and changed in trading or risk rules
+  const AREA = { 리스크: 'warn', 매매: 'ok' };
+  // keeps signed amounts like −$8,323 or +0.4%p on one line
+  const nw = (s) => esc(s).replace(/[−+-]?\$[\d,.]+|[−+-][\d,.]+%p?/g, (m) => `<span class="nw">${m}</span>`);
+  const ym = (d) => `${d.slice(0, 4)}년 ${+d.slice(5, 7)}월`;
+  function rdItem(x) {
+    return `<div class="logitem"><span class="d">${dLabel(x.date)}</span><b>${esc(x.title)}<span class="tag ${AREA[x.area] || ''}">${esc(x.area)}</span></b><p>${nw(x.what)}</p>${x.why ? `<p>근거: ${nw(x.why)}</p>` : ''}${x.effect ? `<p>결과: ${nw(x.effect)}</p>` : ''}</div>`;
+  }
+  function rdHTML() {
+    if (!RD || !Array.isArray(RD.log)) return '';
+    const log = RD.log, b = RD.bt, nx = RD.next || [];
+    let h = `<div class="band"></div><h2>매일 개선 기록 <span class="count">매매·리스크</span></h2><p class="sumline" style="padding-top:4px">매일 저녁 6시쯤(뉴욕 시간) AI가 그날 매매를 점검하고, 매매 방법이나 리스크 관리를 하나씩 시험해 나아진 것만 반영합니다.</p>`;
+    h += `<div class="rdlog">${log.slice(0, 3).map(rdItem).join('') || '<div class="logitem"><p>아직 기록이 없습니다.</p></div>'}</div>`;
+    if (log.length > 3) h += `<details class="teamlog"><summary>지난 기록 ${log.length - 3}건</summary>${log.slice(3).map(rdItem).join('')}</details>`;
+    if (b) h += `<h3 class="day">주식·채권 엔진 2년 백테스트 (${dLabel(b.date)} 측정)</h3><ul class="mix"><li><span class="name">전체</span><span class="pnl ${cls(b.ret * 100)}">${pct(b.ret)}</span><span class="stat">${ym(b.from)}~${ym(b.to)} (${b.days}거래일) · 최대 낙폭 ${pct(-b.mdd)} · ${b.trades}건 · 승률 ${Math.round(b.win * 100)}% · 손익비 ${fmt(b.pf, 2)}</span></li>`
+      + Object.entries(b.by || {}).sort((p, q) => p[1].pnl - q[1].pnl).map(([k, x]) => `<li><span class="name">${esc(PB_LONG[k] || k)}</span><span class="pnl ${cls(x.pnl)}">${sgnUsd(x.pnl)}</span><span class="stat">${x.n}건</span></li>`).join('') + '</ul>';
+    if (nx.length) h += `<h3 class="day">다음에 시험할 것</h3><ol class="rdnext">${nx.map((t) => `<li>${nw(t)}</li>`).join('')}</ol>`;
+    return h;
+  }
   const FUTN = { MES: 'S&P 500', MNQ: '나스닥 100', MYM: '다우', M2K: '러셀 2000', ZT: '미 2년 국채', ZF: '미 5년 국채', ZN: '미 10년 국채', ZB: '미 30년 국채', MCL: 'WTI 원유', MGC: '금', SIL: '은', MHG: '구리', MBT: '비트코인', MET: '이더리움' };
   // the derivatives team and the 24-hour team, on the AI team screen
   function derivTeamHTML() {
@@ -1761,6 +1792,16 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     }
     return null;
   }
+  async function loadRD() {
+    for (const u of [RAW ? RAW.replace(/state\.json$/, 'rd.json') : null, 'data/rd.json'].filter(Boolean)) {
+      try { const r = await fetch(u + '?ts=' + Date.now(), { cache: 'no-store' }); if (r.ok) { const v = await r.json(); if (v && Array.isArray(v.log)) return v; } } catch (e) { /* next */ }
+    }
+    return null;
+  }
+  async function refreshRD() {
+    const v = await loadRD();
+    if (v && JSON.stringify(v) !== JSON.stringify(RD)) { RD = v; if (S) render(); }
+  }
   async function refresh() {
     try {
       const st = await load();
@@ -1774,8 +1815,9 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   async function main() {
     showView();
-    try { const [st, cv] = await Promise.all([load(), loadCrypto()]); CV = cv; S = st; lastV = viewKey(); render(); startWS(); coinBasis(); livePoll(); setInterval(livePoll, 2500); }
+    try { const [st, cv, rd] = await Promise.all([load(), loadCrypto(), loadRD()]); CV = cv; RD = rd; S = st; lastV = viewKey(); render(); startWS(); coinBasis(); livePoll(); setInterval(livePoll, 2500); }
     catch (err) { $('loading').textContent = '불러오지 못했습니다: ' + (err.message || err) + ' 잠시 뒤 새로 고침해 주세요.'; }
+    setInterval(() => { if (document.visibilityState === 'visible') refreshRD(); }, 600000);
     setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 60000);
     setInterval(() => { if (document.visibilityState === 'visible') refreshCrypto(); }, 20000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refresh(); refreshCrypto(); } });
