@@ -711,7 +711,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     if (!c) return '';
     const top = c.items.filter((x) => x.on).slice(0, 3);
     return `<div class="band"></div><h2>AI 운용 방향</h2><div class="aisum"><p class="h">${esc(c.regime.label)}${c.regime.tags.length ? ' · ' + esc(c.regime.tags.slice(0, 2).join(' · ')) : ''}</p>
-      <ol>${top.map((x) => `<li><i>${x.rank}</i><span>${esc(x.k === 'rp' ? x.name : x.name.replace(/\(.*\)/, ''))} <span class="tag">${esc(x.lean)}${x.k === 'rp' || x.k === 'stake' ? '' : ' ' + Math.round(x.w * 100) + '%'}</span></span></li>`).join('')}</ol>
+      <ol>${top.map((x) => `<li><i>${x.rank}</i><span>${esc(x.k === 'rp' ? x.name : x.name.replace(/\(.*\)/, ''))} <span class="tag">${esc(x.k === 'base' ? '기반' : x.lean)}${x.k === 'rp' || x.k === 'stake' || x.k === 'base' ? '' : ' ' + Math.round(x.w * 100) + '%'}</span></span></li>`).join('')}</ol>
       <a href="#team">이유와 매크로 지표 전체 보기 →</a></div>`;
   }
   // exposure by asset class: face value bought and sold against the account's size, and what a normal day can move
@@ -761,7 +761,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const c = S.alloc && S.alloc.cio;
     if (!c) return '';
     let h = `<h2>AI 운용 방향</h2><div class="mac"><p class="mac-head">${esc(c.headline)}</p><span class="mac-sub">${md(c.date)} 종가 기준 · 매일 장 마감 뒤 다시 정합니다</span></div>`;
-    h += '<ol class="prio">' + c.items.map((it) => `<li class="${it.on ? '' : 'off'}"><span class="rk">${it.on ? it.rank + '순위' : '쉼'}</span><div class="bd"><b>${esc(it.name)}${it.on ? `<span class="tag">${esc(it.lean)}${it.k === 'rp' || it.k === 'stake' ? '' : ' ' + Math.round(it.w * 100) + '%'}</span>` : ''}${matTag(it.k === 'hedge' ? 'optHedge' : it.k)}</b><p>${esc(it.why)}</p></div></li>`).join('') + '</ol>';
+    h += '<ol class="prio">' + c.items.map((it) => `<li class="${it.on ? '' : 'off'}"><span class="rk">${it.on ? it.rank + '순위' : '쉼'}</span><div class="bd"><b>${esc(it.name)}${it.on ? `<span class="tag">${esc(it.k === 'base' ? '기반' : it.lean)}${it.k === 'rp' || it.k === 'stake' || it.k === 'base' ? '' : ' ' + Math.round(it.w * 100) + '%'}</span>` : ''}${matTag(it.k === 'hedge' ? 'optHedge' : it.k)}</b><p>${esc(it.why)}</p></div></li>`).join('') + '</ol>';
     const t = totalNow() || 1, now = { core: stockNow() / t, deriv: derivNow() / t, h24: coinTotal() / t };
     h += `<h3 class="sub-h">자산 배분 (지금 / AI 목표)</h3><ul class="abar">` + [['core', '주식·채권 (현금·RP 포함)'], ['deriv', '선물·옵션·ELS'], ['h24', '코인·토큰화 주식 (24시간)']].map(([k, nm]) => {
       const v = Math.max(0, Math.min(1, now[k])), g = Math.max(0, Math.min(1, c.target[k]));
@@ -785,6 +785,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const u = o.und || 'SPY', md = o.exp.slice(5).replace('-', '/'), prem = Math.abs(o.cost);
     const L = (a, b) => [{ v: a, l: '매도 행사가', keep: true }, { v: b, l: '매수 행사가', keep: true }];
     return ({
+      base: { title: `${u} ${md} ${o.kShort}/${o.kLong} 풋`, tag: 'S&P 500 기반층', be: o.kShort - prem, lines: L(o.kShort, o.kLong), how: 'S&P 500 기반층(풋 스프레드 매도)', strikes: `${o.kShort} 풋 매도 · ${o.kLong} 풋 매수` },
       credit: { title: `${u} ${md} ${o.kLong}/${o.kShort} 풋`, tag: '풋 스프레드 매도', be: o.kShort - prem, lines: L(o.kShort, o.kLong), how: '옵션 프리미엄 매도(풋 스프레드)', strikes: `${o.kShort} 풋 매도 · ${o.kLong} 풋 매수` },
       ccall: { title: `${u} ${md} ${o.kShort}/${o.kLong} 콜`, tag: '콜 스프레드 매도', be: o.kShort + prem, lines: L(o.kShort, o.kLong), how: '옵션 프리미엄 매도(콜 스프레드)', strikes: `${o.kShort} 콜 매도 · ${o.kLong} 콜 매수` },
       hedge: { title: `${u} ${md} ${o.kLong}/${o.kShort} 풋`, tag: '보호 풋 스프레드', be: o.kLong - prem, lines: [{ v: o.kLong, l: '매수 행사가', keep: true }, { v: o.kShort, l: '매도 행사가', keep: true }], how: '하락 대비 보호', strikes: `${o.kLong} 풋 매수 · ${o.kShort} 풋 매도` },
@@ -792,7 +793,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       cc: { title: `${u} ${md} ${o.k} 콜`, tag: '커버드콜', be: null, lines: [{ v: o.k, l: '콜 행사가', keep: true }], how: '커버드콜(휠)', strikes: `${o.k} 콜 매도` },
     })[o.side] || { title: `${u} ${md}`, tag: '옵션', be: null, lines: [], how: '옵션', strikes: '' };
   }
-  const optTied = (o) => (o.side === 'credit' ? o.n * 100 * (o.kShort - o.kLong) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort) : o.side === 'csp' ? o.n * 100 * o.k : o.side === 'cc' ? 0 : o.value);
+  const optTied = (o) => (o.side === 'credit' || o.side === 'base' ? o.n * 100 * (o.kShort - o.kLong) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort) : o.side === 'csp' ? o.n * 100 * o.k : o.side === 'cc' ? 0 : o.value);
   function allocInHTML(x, all) {
     if (!x) return '<p class="ain-hint">항목이나 고리를 누르면 그 안에 든 자산을 보여 줍니다.</p>';
     const pc = (v) => { const p = v / (all || 1) * 100; return fmt(p, p < 1 ? 2 : 1) + '%'; };
@@ -1558,7 +1559,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         <span class="stat">매도 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''} · AI 위험 배분 ${Math.round((mm[k] == null ? 0 : mm[k]) * 100)}%${k === 'dt' && a.dtPaused ? ' · 쉬는 중' : ''}</span></li>`;
     }).join('') + (bp.hedge ? `<li><span class="name">S&amp;P 500 인버스 헷지 ${matTag('hedge')}</span><span class="pnl ${cls(bp.hedge.pnl + (bp.hedge.open || 0))}">${sgnUsd(bp.hedge.pnl + (bp.hedge.open || 0))}</span>
         <span class="stat">헷지 ${bp.hedge.n}번 정리${bp.hedge.open ? ' · 지금 보유 중' : ''} · 리스크·헷지팀 담당</span></li>` : '')
-      + (dv ? [['cta', '선물 추세추종'], ['credit', '옵션 풋 스프레드 매도'], ['ccall', '옵션 콜 스프레드 매도'], ['hedge', '보호 풋 스프레드'], ['csp', '현금 담보 풋(IWM 휠)'], ['cc', '커버드콜(IWM 휠)'], ['wheel', '휠 주식(IWM)'], ['els', 'ELS']]
+      + (dv ? [['cta', '선물 추세추종'], ['base', 'S&P 500 기반층(풋 스프레드)'], ['credit', '옵션 풋 스프레드 매도'], ['ccall', '옵션 콜 스프레드 매도'], ['hedge', '보호 풋 스프레드'], ['csp', '현금 담보 풋(IWM 휠)'], ['cc', '커버드콜(IWM 휠)'], ['wheel', '휠 주식(IWM)'], ['els', 'ELS']]
           .filter(([k]) => ['cta', 'credit', 'hedge', 'els'].includes(k) || (dv.by || {})[k] || dv.opt.some((o) => o.side === k) || (k === 'wheel' && (dv.stk || []).length)).map(([k, nm]) => { const b = (dv.by || {})[k] || { n: 0, wins: 0, pnl: 0 };
           const open = k === 'cta' ? dv.fut.reduce((t, p) => t + p.pnl, 0) : k === 'els' ? dv.els.reduce((t, e) => t + e.value - e.amount, 0) : k === 'wheel' ? (dv.stk || []).reduce((t, x) => t + x.pnl, 0) : dv.opt.filter((o) => o.side === k).reduce((t, o) => t + o.pnl, 0);
           const nOpen = k === 'cta' ? dv.fut.length : k === 'els' ? dv.els.length : k === 'wheel' ? (dv.stk || []).length : dv.opt.filter((o) => o.side === k).length;
@@ -1687,9 +1688,13 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   function rdHTML() {
     if (!RD || !Array.isArray(RD.log)) return '';
     const log = RD.log, b = RD.bt, nx = RD.next || [];
-    let h = `<div class="band"></div><h2>매일 개선 기록 <span class="count">매매·리스크</span></h2><p class="sumline" style="padding-top:4px">매일 저녁 6시쯤(뉴욕 시간) AI가 그날 매매를 점검하고, 매매 방법이나 리스크 관리를 하나씩 시험해 나아진 것만 반영합니다.</p>`;
+    let h = `<div class="band"></div><h2>매일 개선 기록 <span class="count">매매·리스크</span></h2><p class="sumline" style="padding-top:4px">매매 방법과 리스크 관리를 저장된 시세로 시험해, 같은 기간 S&amp;P 500 보유와 비교한 뒤 나아진 것만 반영합니다. 채택하지 않은 시험도 남깁니다.</p>`;
     h += `<div class="rdlog">${log.slice(0, 3).map(rdItem).join('') || '<div class="logitem"><p>아직 기록이 없습니다.</p></div>'}</div>`;
     if (log.length > 3) h += `<details class="teamlog"><summary>지난 기록 ${log.length - 3}건</summary>${log.slice(3).map(rdItem).join('')}</details>`;
+    const lb = RD.lab, fd = (d) => `${d.slice(0, 4)}.${+d.slice(5, 7)}.${+d.slice(8, 10)}`, sh = (v) => (v < 0 ? '−' : '') + fmt(v, 2);
+    if (lb && Array.isArray(lb.rules)) h += `<h3 class="day">포트폴리오 시험: ${fd(lb.from)}~${fd(lb.to)}, S&amp;P 500 보유와 비교</h3><ul class="mix">`
+      + lb.rules.map((r) => `<li><span class="name">${esc(r.name)}${r.k === lb.chosen ? '<span class="tag ok">채택</span>' : r.k === 'hold' ? '<span class="tag">기준</span>' : ''}</span><span class="pnl ${cls(r.ret * 100)}">${pct(r.ret, 1)}</span><span class="stat">최대 낙폭 ${pct(-r.mdd, 1)} · 샤프 ${sh(r.sharpe)} · 급락 구간 ${pct(r.crash, 1)} · 최근 7일 ${pct(r.last7, 1)}</span></li>`).join('') + '</ul>'
+      + `<p class="sumline">급락 구간은 ${fd(lb.crash.from)}~${fd(lb.crash.to)}입니다. 모든 규칙은 그날 장 마감까지의 자료로 다음 날 비중을 정합니다(미래 참조 없음). 지수는 배당을 뺀 값이고, 옵션값은 VIX로 추정한 블랙–숄즈 값이라 실제 호가와 다를 수 있습니다(확인필요).</p>`;
     if (b) h += `<h3 class="day">주식·채권 엔진 2년 백테스트 (${dLabel(b.date)} 측정)</h3><ul class="mix"><li><span class="name">전체</span><span class="pnl ${cls(b.ret * 100)}">${pct(b.ret)}</span><span class="stat">${ym(b.from)}~${ym(b.to)} (${b.days}거래일) · 최대 낙폭 ${pct(-b.mdd)} · ${b.trades}건 · 승률 ${Math.round(b.win * 100)}% · 손익비 ${fmt(b.pf, 2)}</span></li>`
       + Object.entries(b.by || {}).sort((p, q) => p[1].pnl - q[1].pnl).map(([k, x]) => `<li><span class="name">${esc(PB_LONG[k] || k)}</span><span class="pnl ${cls(x.pnl)}">${sgnUsd(x.pnl)}</span><span class="stat">${x.n}건</span></li>`).join('') + '</ul>';
     if (nx.length) h += `<h3 class="day">다음에 시험할 것</h3><ol class="rdnext">${nx.map((t) => `<li>${nw(t)}</li>`).join('')}</ol>`;
@@ -1703,7 +1708,9 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const sig = dv.signals || {}, held = new Map(dv.fut.map((p) => [p.key, p]));
     let h = `<div class="band"></div><h2>파생팀 <span class="count">선물·옵션·ELS</span></h2><p class="sumline" style="padding-top:4px">CME 마이크로 선물 등 14개 시장의 추세를 매일 장 마감 뒤 봅니다. 60일·120일 수익률과 20일·100일 평균이 모두 같은 방향일 때만 새로 들어가고(하락이면 매도), 추세가 꺾이거나 추적 손절에 닿으면 나옵니다. 옵션과 ELS는 AI 운용 방향이 허용할 때만 삽니다.</p>`;
     const ks = Object.keys(FUTN).filter((k) => sig[k]);
-    h += '<p class="sumline" style="padding-top:8px">옵션: SPY 풋 스프레드 매도(상승·횡보), 콜 스프레드 매도(하락·횡보, 둘을 함께 팔면 아이언 콘도르), 보호 풋 스프레드(위험 회피), IWM 현금 담보 풋과 커버드콜(휠). 손실이 끝없이 커질 수 있는 맨 콜 매도는 하지 않습니다. 언제 무엇을 할지는 AI 배분이 매일 저녁 정합니다.</p>';
+    h += '<p class="sumline" style="padding-top:8px">옵션: S&amp;P 500 기반층(매달 SPY 등가격 풋 매도·10% 아래 풋 매수, 옵션값이 실제 흔들림 예측보다 비쌀 때만), 콜 스프레드 매도(하락·횡보), 보호 풋 스프레드(위험 회피). 기반층이 켜져 있는 동안 예전 풋 스프레드와 IWM 휠은 풋 매도가 겹치지 않게 쉽니다. 손실이 끝없이 커질 수 있는 맨 콜 매도는 하지 않습니다.</p>';
+    const bg = dv.base;   // the base layer's last nightly check
+    if (bg) h += `<ul class="mix" style="padding-top:6px"><li><span class="name">기반층 판단 (${dLabel(bg.date)} 장 마감)</span><span class="pnl ${bg.open ? 'up' : ''}">${bg.open ? '매도함' : '쉼'}</span><span class="stat">옵션 내재 변동성 ${bg.iv != null ? fmt(bg.iv * 100, 1) + '%' : '-'} · 실제 흔들림 예측 ${bg.rv != null ? fmt(bg.rv * 100, 1) + '%' : '-'} · 최악 손실 한도 계좌의 ${Math.round((bg.budget || 0) * 100)}%${bg.why ? ' · ' + esc(bg.why) : ''}</span></li></ul>`;
     h += '<ul class="mix" style="padding-top:10px">' + ks.map((k) => { const g = sig[k], p = held.get(k), dir = g.s >= 0.99 ? '상승 추세' : g.s <= -0.99 ? '하락 추세' : '혼조';
       return `<li><span class="name">${esc(FUTN[k])}${p ? ` <span class="flag">${p.qty > 0 ? '매수' : '매도'} 보유</span>` : ''}</span><span class="pnl ${g.s >= 0.99 ? 'up' : g.s <= -0.99 ? 'down' : ''}">${dir}</span><span class="stat">60일 ${pct(g.r60)} · 120일 ${pct(g.r120)} · 하루 변동 ${fmt(g.vol * 100, 1)}%</span></li>`; }).join('') + '</ul>';
     h += `<details class="teamlog"><summary>파생팀 기록 ${(dv.log || []).length}건</summary>${(dv.log || []).map((l) => `<div class="logitem"><span class="d">${esc(etTime(l.t))}</span><p>${esc(l.text)}</p></div>`).join('') || '<div class="logitem"><p>아직 기록이 없습니다.</p></div>'}</details>`;

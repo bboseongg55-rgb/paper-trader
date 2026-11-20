@@ -157,7 +157,8 @@ if (dst && book) {
   const ctx = { date: d, now: Date.now(), fut: mk.fut || {}, hist: MS, chain: mk.chain || null, cio: alloc.cio ? alloc.cio.tilt : null, account: total,
     exposure: stocksLong + futLong + toksLong, spx: valAt('.SPX', d), ndx: valAt('.NDX', d), vix: valAt('.VIX', d), vxn: valAt('.VXN', d), y2: valAt('US2Y', d), rp: valAt('US1M', d), rho,
     spy: mk.chain && mk.chain.SPY ? mk.chain.SPY.spot : null, today: etToday,
-    px: { SPY: (mk.ix && mk.ix.SPY && mk.ix.SPY.px) || null, IWM: (mk.ix && mk.ix.IWM && mk.ix.IWM.px) || null } };
+    px: { SPY: (mk.ix && mk.ix.SPY && mk.ix.SPY.px) || null, IWM: (mk.ix && mk.ix.IWM && mk.ix.IWM.px) || null },
+    spxNow: (mk.ix && mk.ix['.SPX'] && mk.ix['.SPX'].px) || null, rf: mk.ix && mk.ix.US3M && mk.ix.US3M.px > 0 ? mk.ix.US3M.px / 100 : null };
   if (!dst.date || dst.date < d) { Dv.nightly(dst, ctx); const h = dst.hist[dst.hist.length - 1]; if (h) h.pre = r2(h.eq - (dst.transfers || []).filter((x) => x.date === d).reduce((a, x) => a + x.amount, 0)); }
   else Dv.session(dst, ctx);
   derivChanged = true;

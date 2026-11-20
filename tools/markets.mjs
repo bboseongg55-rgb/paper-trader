@@ -43,7 +43,7 @@ try {
 const dv = readJSON('data/deriv/state.json', null), al = readJSON('data/alloc.json', null);
 const cio = (al && al.cio && al.cio.tilt && al.cio.tilt.opt) || (al && al.cio && al.cio.opt) || null;
 const has = (u) => ((dv && dv.opt) || []).some((o) => (o.und || 'SPY') === u) || !!(dv && dv.stk && dv.stk[u]);
-const want = { SPY: has('SPY') || !!(cio && (cio.credit || cio.hedge || cio.callCredit)), IWM: has('IWM') || !!(cio && cio.wheel) };
+const want = { SPY: has('SPY') || !!(cio && (cio.base || cio.credit || cio.hedge || cio.callCredit)), IWM: has('IWM') || !!(cio && cio.wheel) };
 const force = process.argv.includes('--chain');
 for (const u of ['SPY', 'IWM']) {
   const old = out.chain && out.chain[u];

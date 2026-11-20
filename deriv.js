@@ -43,6 +43,13 @@
     // calls are sold on them (strike at or above what the shares cost) until they are called away; premium of at least
     // 0.4% of the price per month-ish expiry, at most 30% of the account tied up
     wheel: { und: 'IWM', putDelta: 0.25, callDelta: 0.3, dteMin: 25, dteMax: 50, dteAim: 35, minPrem: 0.004, take: 0.6, maxShare: 0.3 },
+    // the base layer: every month an S&P 500 put spread (sell the at-the-money SPY put, buy the one 10% lower, about 30
+    // days out), only while options are priced above the volatility the index is actually showing (implied vol of the
+    // at-the-money put > the EWMA forecast of realised vol: the variance risk premium). Worst case per spread = (width −
+    // credit) × 100; contracts so the worst case stays within `budget` of the account (startBudget for the first
+    // startCycles months, until it has its own record) and the notional within `cap` × account. Held to expiry, opened
+    // only at night on closing quotes (the model in tools/pf_lab.mjs decides at the close too).
+    base: { und: 'SPY', dteMin: 21, dteMax: 45, dteAim: 30, wing: 0.9, budget: 0.12, startBudget: 0.06, startCycles: 3, cap: 1.5, lam: 0.94 },
     els: { tenor: 3, obs: [0.9, 0.9, 0.85, 0.85, 0.8, 0.75], ki: 0.45, fvTarget: 0.98, lot: 5000, qSpx: 0.012, qNdx: 0.007, earlySale: 0.95, paths: 6000, markPaths: 1500 },
   };
   const DAY = 864e5, ROLL_DAYS = 12;          // roll this many calendar days before the front contract expires
@@ -132,6 +139,7 @@
     if (o.side === 'csp') return `${u} ${e} ${o.k} 풋(현금 담보)`;
     if (o.side === 'cc') return `${u} ${e} ${o.k} 콜(커버드콜)`;
     if (o.side === 'ccall') return `${u} ${e} ${o.kShort}/${o.kLong} 콜 스프레드`;
+    if (o.side === 'base') return `${u} ${e} ${o.kShort}/${o.kLong} 풋 스프레드(기반층)`;
     return `${u} ${e} ${o.kLong}/${o.kShort} 풋 스프레드`;
   }
   function equity(st) {
@@ -144,7 +152,7 @@
   }
   function marginUsed(st) { let m = 0; for (const k in st.fut) { const p = st.fut[k], f = FUT_BY[k]; m += Math.abs(p.qty) * p.px * f.mult * f.mr; } return r2(m); }
   // cash the options tie up: a spread's width, a cash-secured put's whole strike (covered calls are covered by the shares)
-  const spreadRisk = (o) => (o.side === 'credit' ? o.n * 100 * (o.kShort - o.kLong) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort) : 0);
+  const spreadRisk = (o) => (o.side === 'credit' || o.side === 'base' ? o.n * 100 * (o.kShort - o.kLong) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort) : 0);
   function optRisk(st) { let m = 0; for (const o of st.opt) m += o.side === 'csp' ? o.n * 100 * o.k : spreadRisk(o); return m; }
   function free(st) { return st.cash - marginUsed(st) - optRisk(st); }
 
@@ -317,6 +325,49 @@
       : `S&P 500 상승·횡보 국면에 옵션 프리미엄이 높아(VIX ${vix}) 풋 스프레드를 팝니다. SPY ${sh[0]}풋 매도(델타 ${sh[4].toFixed(2)})·${lg[0]}풋 매수, 받은 값 $${credit.toFixed(2)} (최대 손실 $${((width - credit) * 100 * n).toFixed(0)})`;
     openOpt(st, { side, und: 'SPY', right, exp: e, kShort: sh[0], kLong: lg[0], n, cost: -credit, spot: ch.spot, why }, ctx.now, d);
   }
+  // realised-vol forecast: EWMA (RiskMetrics λ) of the S&P 500's daily returns, annualised; seeded with 20 days
+  function rvForecast(spx, lam) {
+    const ks = Object.keys(spx || {}).sort().slice(-260), p = ks.map((k) => +spx[k]).filter((v) => v > 0);
+    if (p.length < 40) return null;
+    let v = 0;
+    for (let i = 1; i < p.length; i++) { const r = p[i] / p[i - 1] - 1; v = i <= 20 ? v + (r * r) / 20 : lam * v + (1 - lam) * r * r; }
+    return Math.sqrt(v * 252);
+  }
+  // implied vol from a put's price (bisection on Black–Scholes), for chains whose quote carries none
+  function ivFromPut(px, S, K, T, r) {
+    if (!(px > 0) || !(T > 0)) return null;
+    let lo = 0.01, hi = 3;
+    for (let k = 0; k < 60; k++) { const m = (lo + hi) / 2; if (bsPut(S, K, T, r, 0, m).px > px) hi = m; else lo = m; }
+    return (lo + hi) / 2;
+  }
+  function openBase(st, ch, ctx, acct) {
+    const B = CFG.base, d = ctx.date, S = ch.spot, now = ctx.now;
+    const e = pickExp(ch, d, B.dteMin, B.dteMax, B.dteAim);
+    if (!e || !(S > 0)) return;
+    const puts = legs(ch, e, 'P').filter((r) => r[1] > 0 && r[2] > 0);
+    const sh = puts.filter((r) => r[0] <= S).sort((a, b) => b[0] - a[0])[0];              // at the money (at or just below)
+    const lg = puts.filter((r) => r[0] <= S * B.wing).sort((a, b) => b[0] - a[0])[0];     // the protective put, 10% lower
+    if (!sh || !lg || !(lg[0] < sh[0])) return;
+    const T = days(d, e) / 365, rf = isNum(ctx.rf) ? ctx.rf : 0.04;
+    const iv = isNum(sh[3]) && sh[3] > 0 ? sh[3] : ivFromPut(midOf(sh), S, sh[0], T, rf);
+    const hs = Object.assign({}, ctx.hist && ctx.hist['.SPX']);
+    if (isNum(ctx.spxNow) && ctx.spxNow > 0 && !hs[d]) hs[d] = ctx.spxNow;              // today's close, if the history has not caught up
+    const rv = rvForecast(hs, B.lam);
+    const done = st.closed.filter((c) => c.s === 'base').length, budget = done < B.startCycles ? B.startBudget : B.budget;
+    const credit = sh[1] - lg[2], width = sh[0] - lg[0], worst = (width - credit) * 100;
+    const gate = { date: d, iv: isNum(iv) ? r4(iv) : null, rv: isNum(rv) ? r4(rv) : null, budget, open: false };
+    st.base = gate;
+    if (!isNum(iv) || !isNum(rv)) { gate.why = '변동성 자료가 없어 쉽니다'; return; }
+    if (!(iv > rv)) { gate.why = `옵션값(내재 변동성 ${(iv * 100).toFixed(1)}%)이 실제 흔들림 예측(${(rv * 100).toFixed(1)}%)보다 싸서 팔지 않습니다`; return; }
+    if (!(credit > 0) || !(worst > 0)) { gate.why = '호가가 맞지 않아 쉽니다'; return; }
+    const n = Math.min(Math.floor((acct * budget) / worst), Math.floor((acct * B.cap) / (sh[0] * 100)));
+    if (n < 1) { gate.why = `한 계약의 최악 손실 $${worst.toFixed(0)}이 한도(계좌의 ${Math.round(budget * 100)}%)를 넘어 쉽니다`; return; }
+    if (free(st) < n * width * 100) { gate.why = `담보로 묶을 현금(${usd(n * width * 100)})이 모자라 쉽니다`; return; }
+    gate.open = true; gate.why = null;
+    const why = `S&P 500 기반층: 옵션값(내재 변동성 ${(iv * 100).toFixed(1)}%)이 실제 흔들림 예측(${(rv * 100).toFixed(1)}%)보다 비싸 SPY ${sh[0]}풋을 팔고 ${lg[0]}풋을 삽니다(${e} 만기, ${n}계약). `
+      + `받은 값 $${(credit * 100 * n).toFixed(0)}, 최악 손실 $${(worst * n).toFixed(0)}(계좌의 ${((worst * n) / acct * 100).toFixed(1)}%, 한도 ${Math.round(budget * 100)}%). 만기까지 들고 갑니다.`;
+    openOpt(st, { side: 'base', und: 'SPY', right: 'P', exp: e, kShort: sh[0], kLong: lg[0], n, cost: -credit, spot: S, iv: r4(iv), rv: r4(rv), why }, now, d);
+  }
   function manageOptions(st, ctx, night) {
     const chs = ctx.chain || {}, d = ctx.date, now = ctx.now, cio = ctx.cio || {}, O = cio.opt || {}, acct = Math.max(1, ctx.account || equity(st));
     const pxOf = (u) => (chs[u] && chs[u].spot) || (ctx.px && ctx.px[u]) || (u === 'SPY' ? ctx.spy : null);
@@ -360,6 +411,7 @@
     }
     // 3. new positions
     const spy = chs.SPY;
+    if (spy && spy.exps && night && O.base && !st.opt.some((o) => o.side === 'base')) openBase(st, spy, ctx, acct);
     if (spy && spy.exps) {
       if (O.credit) openCreditSpread(st, spy, ctx, 'P', acct);
       if (O.callCredit) openCreditSpread(st, spy, ctx, 'C', acct);
@@ -488,7 +540,7 @@
     const fut = Object.values(st.fut).map((p) => ({ key: p.key, name: p.name, g: p.g, qty: p.qty, contract: p.contract, exp: p.exp, entry: p.entry, px: p.px,
       stop: p.best && sdOf(p.key) ? r4(p.qty > 0 ? p.best * (1 - CFG.cta.stopK * sdOf(p.key)) : p.best * (1 + CFG.cta.stopK * sdOf(p.key))) : null,
       notional: r2(Math.abs(p.qty) * p.px * p.mult), margin: r2(Math.abs(p.qty) * p.px * p.mult * FUT_BY[p.key].mr), pnl: r2((p.real || 0) + p.qty * p.mult * (p.px - p.mark) - (p.feesPaid || 0)), date: p.date, why: p.why }));
-    const maxLossOf = (o) => (o.side === 'credit' ? o.n * 100 * (o.kShort - o.kLong + o.cost) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort + o.cost)
+    const maxLossOf = (o) => (o.side === 'credit' || o.side === 'base' ? o.n * 100 * (o.kShort - o.kLong + o.cost) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort + o.cost)
       : o.side === 'csp' ? o.n * 100 * (o.k + o.cost) : o.side === 'cc' ? null : o.n * 100 * o.cost);
     const opt = st.opt.map((o) => ({ id: o.id, side: o.side, und: o.und || 'SPY', right: rightOf(o), exp: o.exp, k: o.k, kLong: o.kLong, kShort: o.kShort, n: o.n, cost: o.cost, val: o.val,
       value: r2(o.n * 100 * (o.val != null ? o.val : o.cost)), pnl: r2(o.n * 100 * ((o.val != null ? o.val : o.cost) - o.cost) - (o.fees || 0)),
@@ -499,7 +551,7 @@
     const by = {};
     for (const c of st.closed) { const b = (by[c.s] = by[c.s] || { n: 0, wins: 0, pnl: 0 }); b.n++; if (c.pnl > 0) b.wins++; b.pnl = r2(b.pnl + c.pnl); }
     return { v: 1, at: st.at, date: st.date, funded: st.funded, cash: st.cash, eq: equity(st), margin: marginUsed(st), optRisk: r2(optRisk(st)), rp: st.rp, fees: st.fees,
-      fut, opt, els, stk, by, signals: st.signals || {}, fills: st.fills.slice(-120).reverse(), hist: st.hist.slice(-400), log: st.log.slice(-40).reverse(), transfers: st.transfers };
+      fut, opt, els, stk, by, base: st.base || null, signals: st.signals || {}, fills: st.fills.slice(-120).reverse(), hist: st.hist.slice(-400), log: st.log.slice(-40).reverse(), transfers: st.transfers };
   }
 
   const api = { FUT, FUT_BY, GROUP_NAME, CFG, init, fund, nightly, session, view, equity, marginUsed, free, elsValue, bsPut, trend };

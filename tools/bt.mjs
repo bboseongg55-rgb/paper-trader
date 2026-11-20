@@ -20,10 +20,12 @@ const rpFor = (dates) => { const y = MS.US1M || {}, ks = Object.keys(y).sort(); 
 const L = Object.assign({}, live, { days: (live.days || []).filter((d) => d.final !== false) });
 const D = E.prepare(seed, L, intra, { instruments: bondsHist ? (dates) => Bonds.build(bondsHist, L.days, dates) : null, rp: rpFor });
 const from = Math.max(0, D.dates.findIndex((d) => d >= (arg('--from') || settings.btStart || '2025-01-02')));
-const to = D.dates.length - 1, capital = settings.capital || 100000;
+const toI = arg('--to') ? D.dates.findIndex((d) => d > arg('--to')) - 1 : -2;
+const to = toI >= 0 ? toI : D.dates.length - 1, capital = settings.capital || 100000;
+const tiltArg = JSON.parse(arg('--tilt') || 'null');   // e.g. '{"bo":0}': per-method risk multipliers, as the allocator sets them
 const params = Object.assign({}, E.DEFAULTS, JSON.parse(arg('--params') || '{}'));
 const t0 = Date.now();
-const r = E.simulate(D, { from, to, capital, params, adaptive: true, log: false });
+const r = E.simulate(D, { from, to, capital, params, adaptive: true, log: false, tilt: tiltArg ? () => tiltArg : null });
 
 const eq = r.equity.map((e) => e.eq), rets = eq.slice(1).map((v, i) => v / eq[i] - 1);
 let peak = -Infinity, mdd = 0; for (const v of eq) { peak = Math.max(peak, v); mdd = Math.max(mdd, 1 - v / peak); }

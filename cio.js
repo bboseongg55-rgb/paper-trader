@@ -12,7 +12,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const pct = (v, d = 1) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%' : '-');
   const pp = (v) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%p' : '-');
-  const V = 2;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking)
+  const V = 3;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer)
   const RULES = {
     vol: [16, 22, 30],             // VIX: low < 16 ≤ normal < 22 ≤ high < 30 ≤ extreme
     hyStress: 5, hyJump: 0.75, hyWiden: 0.4,
@@ -47,6 +47,7 @@
       p.spx63 = ret(spx, 63);
     }
     p.vix = lastOf(vixA); p.vxn = lastOf(vxnA);
+    if (spx.length >= 40) { let v = 0; const s = spx.slice(-260); for (let i = 1; i < s.length; i++) { const r = s[i] / s[i - 1] - 1; v = i <= 20 ? v + (r * r) / 20 : 0.94 * v + 0.06 * r * r; } p.rv = Math.sqrt(v * 252); }
     if (isNum(p.vix)) p.volLv = p.vix < RULES.vol[0] ? 'low' : p.vix < RULES.vol[1] ? 'normal' : p.vix < RULES.vol[2] ? 'high' : 'extreme';
     p.hy = lastOf(hyA); const hy0 = ago(hyA, 63); p.dhy = isNum(p.hy) && isNum(hy0) ? p.hy - hy0 : null;
     if (isNum(p.hy)) p.credit = p.hy >= RULES.hyStress || (isNum(p.dhy) && p.dhy >= RULES.hyJump) ? 'stress' : isNum(p.dhy) && p.dhy >= RULES.hyWiden ? 'widening' : 'calm';
@@ -96,13 +97,17 @@
     // 3. options and ELS
     const vixIn = (lo) => isNum(p.vix) && p.vix >= lo && p.vix < RULES.vol[2];
     // put spreads in a rising market, call spreads in a falling one, both (an iron condor) when it goes sideways
-    const credit = !off && ((p.trend === 'up' && vixIn(15)) || (p.trend === 'mixed' && vixIn(18)));
+    // the S&P 500 base layer is always allowed; each night it sells only while options are dearer than the realised-vol
+    // forecast (checked on the closing chain). It replaces the 20-delta put spreads and the IWM wheel, which sold the
+    // same premium without its loss budget, so short puts never stack
+    const base = true;
+    const credit = !base && !off && ((p.trend === 'up' && vixIn(15)) || (p.trend === 'mixed' && vixIn(18)));
     const callCredit = p.credit !== 'stress' && vixIn(18) && (p.trend === 'down' || (p.trend === 'mixed' && !off));
     // the wheel on IWM (cash-secured put, then covered calls): when the market is not falling and premiums pay; it ties
     // up IWM's price × 100 in cash, at most 30% of the account
     const iwm = isNum(ctx.iwm) ? ctx.iwm : null, acct = isNum(ctx.account) && ctx.account > 0 ? ctx.account : null;
     const wheelShare = iwm && acct ? (iwm * 100 * 1.05) / acct : null, affordable = wheelShare != null && wheelShare <= 0.3;
-    const wheel = !off && p.trend !== 'down' && vixIn(15) && affordable;
+    const wheel = !base && !off && p.trend !== 'down' && vixIn(15) && affordable;
     const heldShare = acct && isNum(ctx.wheelHeld) ? ctx.wheelHeld / acct : 0;
     // protection is bought only while it is still cheap (VIX under 22): bought after a crash it costs more than it saves
     const expo = isNum(ctx.exposure) ? ctx.exposure : 0, hedge = off && expo >= 20000 && isNum(p.vix) && p.vix < 22;
@@ -114,7 +119,7 @@
       tok: off ? 0.5 : key === 'bull' ? 1.25 : 1, tokSmall: p.sc === 'lead' ? 1.3 : 1 };
     // 5. each part's share of the account
     const h24T = p.volLv === 'extreme' ? 0.05 : off ? 0.07 : key === 'bull' && p.btcTrend === 'up' ? 0.12 : 0.1;
-    const derivT = Math.min(0.55, 0.12 + (elsOn ? elsMax : 0) + Math.max(wheel ? wheelShare : 0, heldShare));
+    const derivT = Math.min(0.7, 0.12 + (elsOn ? elsMax : 0) + Math.max(wheel ? wheelShare : 0, heldShare) + (base ? 0.15 : 0));
     const target = { core: Math.round((1 - h24T - derivT) * 100) / 100, deriv: Math.round(derivT * 100) / 100, h24: h24T };
 
     // what to do first, and why (the numbers that decided it)
@@ -135,14 +140,17 @@
         why: [scTxt, p.rates === 'cutting' ? '금리 인하 사이클은 빚이 많은 중소형주에 유리' : ''].filter(Boolean).join(', ') + (p.sc === 'lead' || p.rates === 'cutting' ? ' → 중소형주 매수 비중을 늘립니다.' : '. 추세가 맞을 때만 삽니다.') },
       { k: 'cta', name: '선물 추세추종(지수·국채·원자재·코인)', w: off ? 1 : futBudget / 0.05, on: true,
         why: `선물 위험 한도 연 ${Math.round(futBudget * 100)}%(계좌 대비 변동성). ${off ? '하락 추세 시장은 매도 포지션도 잡습니다.' : '여러 시장에 나눠 추세를 따릅니다.'}${p.cmd === 'hot' ? ` 원유·구리 3개월 ${pct(p.cmdMove)}로 원자재 매수 쪽을 늘립니다.` : ''}` },
+      { k: 'base', name: 'S&P 500 기반층(SPY 풋 스프레드 매도)', w: 1.5, on: base,
+        why: `${vixTxt}${isNum(p.rv) ? `, 실현 변동성 예측 ${(p.rv * 100).toFixed(1)}%` : ''}: 옵션값이 실제 흔들림 예측보다 비쌀 때만 매달 SPY 등가격 풋을 팔고 10% 아래 풋을 사서, 받은 값은 챙기고 최악 손실은 계좌의 12%(처음 3개월은 6%) 안으로 묶습니다. 밤에 장 마감 호가로 판단하고 만기까지 들고 갑니다.` },
       { k: 'credit', name: '옵션 프리미엄 매도(SPY 풋 스프레드)', w: credit ? 1 : 0, on: credit,
         why: credit ? (callCredit ? `${spxTxt}, ${vixTxt}: 방향이 없고 옵션값이 비싸 풋·콜 스프레드를 함께 파는 아이언 콘도르로 운용합니다.` : `${spxTxt}, ${vixTxt}: 상승 추세에 옵션값이 비싸 손실 한도가 정해진 풋 스프레드를 팝니다.`)
-          : `상승 추세이면서 VIX가 15~30이거나, 횡보이면서 18~30일 때만 팝니다(지금 ${isNum(p.vix) ? p.vix.toFixed(1) : '-'}).` },
+          : base ? 'S&P 500 기반층이 같은 풋 프리미엄을 손실 한도와 함께 받으므로 겹치지 않게 쉽니다.' : `상승 추세이면서 VIX가 15~30이거나, 횡보이면서 18~30일 때만 팝니다(지금 ${isNum(p.vix) ? p.vix.toFixed(1) : '-'}).` },
       { k: 'callCredit', name: '옵션 프리미엄 매도(SPY 콜 스프레드)', w: callCredit ? 1 : 0, on: callCredit,
         why: callCredit ? (credit ? `${vixTxt}: 풋 스프레드와 함께 파는 아이언 콘도르의 위쪽입니다. 지수가 크게 오르지 않으면 프리미엄을 받습니다.` : `${spxTxt}, ${vixTxt}: 지수가 오르기 어려운 국면에 옵션값이 비싸 손실 한도가 정해진 콜 스프레드를 팝니다.`)
           : `하락·횡보 추세이면서 VIX가 18~30일 때만 팝니다(지금 ${isNum(p.vix) ? p.vix.toFixed(1) : '-'}).` },
       { k: 'wheel', name: '커버드콜·현금 담보 풋(IWM 휠)', w: wheel ? 1 : 0, on: wheel,
         why: wheel ? `${spxTxt}, ${vixTxt}: 러셀 2000 ETF(IWM) 풋을 현금 담보로 팔아 프리미엄을 받고, 주식을 받게 되면 그 위에 커버드콜을 팝니다(계좌의 약 ${Math.round(wheelShare * 100)}%를 담보로 씀).`
+          : base ? 'S&P 500 기반층이 같은 풋 프리미엄을 받으므로 겹치지 않게 쉽니다(들고 있던 IWM은 커버드콜로 정리합니다).'
           : off ? '위험 회피 국면에는 주식을 떠안지 않도록 쉽니다(들고 있던 IWM은 콜을 되사고 정리).'
           : wheelShare != null && !affordable ? `IWM 100주(약 $${Math.round(iwm * 100).toLocaleString('en-US')})가 계좌의 30%를 넘어 쉽니다.`
           : iwm == null ? 'IWM 시세를 아직 받지 못해 다음 판단 때 정합니다.' : `하락 추세가 아니고 VIX가 15~30일 때만 합니다(지금 ${isNum(p.vix) ? p.vix.toFixed(1) : '-'}).` },
@@ -185,11 +193,12 @@
       '금리 인하 사이클 / 금리 상승: 미 2년 금리 3개월 변화 −0.35%p 이하 / +0.35%p 이상',
       '강세 추세: S&P 500이 50일·200일선 위이고 VIX 22 미만',
       '중소형주 강세: 러셀 2000이 S&P 500보다 3개월 2%p 이상 앞섬 · 원자재 강세: 원유·구리 3개월 평균 +10% 이상',
+      'S&P 500 기반층: 등가격 풋의 내재 변동성 > 실현 변동성 예측(지수 일간 수익률의 지수가중 평균, λ 0.94)일 때만 팝니다. 최악 손실 = (행사가 폭 − 받은 값) × 계약 수 ≤ 계좌의 12%(처음 3개월 6%), 명목 금액 ≤ 계좌의 1.5배',
       '배분은 매일 저녁 한 번 정하고, 각 매매는 이 한도 안에서 자기 규칙(손절·추세 확인)으로 사고팝니다',
     ];
     return {
       v: V, date: p.date, regime: { key, label: LABEL[key], tags, off }, headline, items: it, signals, rules,
-      tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { credit, callCredit, wheel, hedge, off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
+      tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { base, credit, callCredit, wheel, hedge, off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
         els: { on: elsOn, max: elsMax, minCoupon: 0.07, coupon: cpn != null ? r4(cpn) : null }, h24 },
       target, rp: isNum(rp) ? r4(rp / 100) : null,
       pic: Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === 'number' ? r4(v) : v])),
