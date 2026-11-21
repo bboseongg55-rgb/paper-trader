@@ -12,7 +12,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const pct = (v, d = 1) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%' : '-');
   const pp = (v) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%p' : '-');
-  const V = 3;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer)
+  const V = 4;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage)
   const RULES = {
     vol: [16, 22, 30],             // VIX: low < 16 ≤ normal < 22 ≤ high < 30 ≤ extreme
     hyStress: 5, hyJump: 0.75, hyWiden: 0.4,
@@ -161,6 +161,10 @@
       { k: 'els', name: 'ELS(S&P 500·나스닥 100 스텝다운)', w: elsOn ? 0.9 : 0, on: elsOn,
         why: elsOn ? `${vixTxt}: 변동성이 높아 ELS 쿠폰이 높습니다${cpn != null ? `(지금 조건이면 연 ${(cpn * 100).toFixed(1)}%)` : ''}. 계좌의 ${Math.round(elsMax * 100)}% 한도 안에서 삽니다.`
           : cpn != null && isNum(p.vix) && p.vix >= 20 ? `지금 조건의 ELS 쿠폰이 연 ${(cpn * 100).toFixed(1)}%로 기준(연 7%)보다 낮아 사지 않습니다.` : 'VIX가 20 이상이고 쿠폰이 연 7% 이상일 때만 삽니다.' },
+      { k: 'sb', name: '하락 돌파 공매도(주식)', w: 1 / 6, on: true,
+        why: `S&P 500이 200일 평균 아래일 때만, 50일 최저가를 깬 하락 추세·상대강도 하위 30% 종목을 공매도합니다(손절은 위쪽, 대여료 연 0.5%, 판 금액의 150% 증거금). 2년 시험이 21건 −$315라 보통의 1/6 위험으로 시작합니다. 주식 쪽 레버리지는 계좌의 1.5배까지 허용합니다.` },
+      { k: 'perp', name: '코인 무기한 선물(매수·공매도)', w: h24.trend, on: true,
+        why: '코인 추세 매매를 무기한 선물로 합니다: 20시간 신고가면 매수, 20시간 신저가(100시간 평균 아래)면 공매도, 증거금의 최대 3배, 선물 전체 명목은 코인 계좌의 1.5배 이내, 공매도는 매수의 절반 위험. 증거금 80%를 잃기 전에 정리합니다.' },
       { k: 'crypto', name: '코인(거래소 간 차익·추세·초단타)', w: h24.trend, on: true,
         why: p.btcTrend ? `비트코인이 100일 평균 ${p.btcTrend === 'up' ? '위' : '아래'}(${pct(p.btc / p.btc100 - 1)})라 추세 매매 위험을 ${Math.round(h24.trend * 100)}%로 둡니다.` : '코인 추세 자료 없음.' },
       { k: 'tok', name: '토큰화 주식(코인 거래소, 24시간)', w: h24.tok, on: true,

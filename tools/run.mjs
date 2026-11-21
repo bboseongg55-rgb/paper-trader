@@ -168,7 +168,10 @@ if (allocChanged) fs.writeFileSync('data/alloc.json', JSON.stringify(alloc, null
 if (bookChanged) fs.writeFileSync('data/book.json', JSON.stringify(book));
 if (evoChanged) fs.writeFileSync('data/evolution.json', JSON.stringify(evo));
 // what the page shows: the book, plus today while the market is open
-const lv = book ? E.simulate(D, { resume: book, to: T - 1, adaptive: true, log: true, tilt: tiltAt }) : null;
+// leverage for the stock account: buying power up to 1.5 × its value (margin interest on what is borrowed); shorts need
+// 150% of their value set aside. Sizing still goes by the risk to each stop, so this is a ceiling, not a target
+const FORCE = { lev: 1.5 };
+const lv = book ? E.simulate(D, { resume: book, to: T - 1, adaptive: true, log: true, tilt: tiltAt, force: FORCE }) : null;
 const mv = E.marketView(D, lv ? lv.params : null);
 const res = { D: { last: D.dates[T - 1], lastTime: D.times[T - 1] || null, prov: D.prov ? { date: D.dates[D.prov.t], time: D.prov.time } : null },
   regime: mv.regime, gate: mv.gate, capital, liveStart, live: lv };

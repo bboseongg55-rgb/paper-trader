@@ -72,8 +72,12 @@
     dailyLossStop: 0.025, ddHalf: 0.08, ddStop: 0.15, ddResume: 0.10,
     cooldown: 10, cooldownGap: 30, reviewDays: 10,
     validateEvery: 20, validateWindow: 120, validateMargin: 0.03, minValue: 0.005,
+    // short selling (breakdown shorts): only while the S&P 500 is below its 200-day average, at most shortMax names; a
+    // short needs 150% of its value set aside (the sale's proceeds + 50% margin, Regulation T) and pays a stock-borrow
+    // fee on its value per calendar day (large caps are easy to borrow: about 0.5% a year, 확인필요)
+    shortMax: 5, shortMargin: 0.5, borrowRate: 0.005,
   };
-  const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세' };
+  const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', sb: '하락 돌파 공매도' };
   // the four teams and the rules each one owns
   const TEAMS = { select: '종목선정팀', entry: '매수팀', exit: '매도팀', risk: '리스크·헷지팀' };
   const TEAM_OF = { rsMin: 'select', pbRsMin: 'select', dtRsMin: 'select', boLookback: 'select', pbRsi: 'entry', dtMinUp: 'entry',
@@ -258,6 +262,14 @@
         x.dom[t] = Math.min(32000, st.length ? t - st[st.length - 1] - 1 : t);
         st.push(t);
       }
+      // the mirror: how many previous closes in a row this close is below (N-day breakdown ⇔ dol ≥ N)
+      x.dol = new Int16Array(T); const sl = [];
+      for (let t = 0; t < T; t++) {
+        if (!isNum(f[t])) { x.dol[t] = 0; continue; }
+        while (sl.length && f[sl[sl.length - 1]] > f[t]) sl.pop();
+        x.dol[t] = Math.min(32000, sl.length ? t - sl[sl.length - 1] - 1 : t);
+        sl.push(t);
+      }
       x.ret126 = new Float64Array(T).fill(NaN);
       for (let t = 126; t < T; t++) if (isNum(f[t]) && isNum(f[t - 126])) x.ret126[t] = f[t] / f[t - 126] - 1;
       // RSI(2), Wilder
@@ -354,7 +366,7 @@
     if (BK && tc < 0) throw new Error('book day missing from the price data: ' + BK.date);
     const from = BK ? tc + 1 : Math.max(opts.from, 210), to = Math.min(opts.to, T - 1);
     const base0 = BK ? Math.max(0, D.dates.indexOf(BK.from0)) : from;     // the account's first day
-    const P = Object.assign({}, DEFAULTS, (BS ? BS.P : opts.params) || {});
+    const P = Object.assign({}, DEFAULTS, (BS ? BS.P : opts.params) || {}, opts.force || {});   // force: settings the live account pins (leverage)
     let ctxT = -1, ctxS = '';
     const ctxAt = (k) => { if (k !== ctxT) { ctxT = k; ctxS = macroLine(macroAt(D, k)); } return ctxS; };
     const highTxt = (n) => (n >= 250 ? '1년 넘게 가장 높은 종가(신고가)' : `${n}거래일 신고가`);
@@ -368,12 +380,17 @@
     let hedge = null;                               // inverse S&P 500 position held by the risk & hedge team
     const hedgeFills = [], hedgeEpisodes = [];
     const cool = new Map();                         // symbol index → first day it may be bought again
-    const scores = Object.assign({ bo: 0, pb: 0, dt: 0 }, (BS ? BS.scores : opts.scores) || {});
+    const scores = Object.assign({ bo: 0, pb: 0, dt: 0, sb: 0 }, (BS ? BS.scores : opts.scores) || {});
     // share of the normal 1-trade risk each playbook may use, set by the strategy tournament
-    let M = Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM, bd: FIXED.selectTrialM }, (BS ? BS.M : opts.mults) || {});
+    let M = Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM, bd: FIXED.selectTrialM }, (BS ? BS.M : opts.mults) || {});   // shorts (sb): a fixed quarter, outside the tournament
     // the allocator's tilt for each method on each day (data/alloc.json), the same in every replay of that day
     let tiltNow = null;
-    const riskMul = (k) => M[k] * (tiltNow && isNum(tiltNow[k]) ? tiltNow[k] : 1);
+    // shorts (sb) are outside the tournament: a sixth of the normal risk, as for a method that lost money (the 2-year
+    // backtest of 2026-11-21: 21 trades, −$315), until their own record says otherwise
+    const riskMul = (k) => (isNum(M[k]) ? M[k] : k === 'sb' ? FIXED.selectLoserM : FIXED.selectTrialM) * (tiltNow && isNum(tiltNow[k]) ? tiltNow[k] : 1);
+    const sgn = (p) => (p.dir === -1 ? -1 : 1);
+    // what the shorts would cost to buy back now: not spendable cash, and 50% more must stay aside as margin
+    const shortLiab = () => positions.reduce((a, p) => a + (p.dir === -1 ? p.qty * (p.lastPx || p.fill) : 0), 0);
     const only = opts.only || null;                               // tournament runs: one playbook alone
     let lastSelect = -1e9, dtPausedUntil = -1, dtCount = 0;
     let streak = 0, blockUntil = -1, ddStopOn = false, lastMarketLoss = -1e9, lastValidate = from, prevEq = capital;
@@ -381,7 +398,7 @@
     let mInt = 0;                                   // margin interest paid
     let rpInt = 0;                                  // RP interest received on idle cash
     const isBond = (i) => D.S[i].kind === 'bond';
-    const bpow = (eq) => Math.max(0, cash + (P.lev - 1) * eq);   // buying power: cash, plus margin when leverage is allowed
+    const bpow = (eq) => Math.max(0, cash - (1 + FIXED.shortMargin) * shortLiab() + (P.lev - 1) * eq);   // buying power: cash (less what shorts tie up), plus margin when leverage is allowed
     const ev0 = BS ? BS.ev : opts.evidence;
     const ev = Object.assign({ fake: [], pb: [], gap: [], mkt: [], noise_bo: [], noise_pb: [], tbo: [], tpb: [], trail: [], hold: [], dtq: [], dtf: [], hedge: [] }, ev0 ? JSON.parse(JSON.stringify(ev0)) : {});
     ev.mkt = BS ? (BS.ev.mkt || []).map((v) => tc + v) : [];      // day indexes carry over only from a book
@@ -434,20 +451,22 @@
     function price(x, t) { return isNum(x.c[t]) ? x.c[t] : x.f[t]; }
     function marked(t) {
       let v = cash;
-      for (const p of positions) v += p.qty * price(D.S[p.i], t);
+      for (const p of positions) v += sgn(p) * p.qty * price(D.S[p.i], t);
       if (hedge) v += hedge.value;
       return v;
     }
     function closeTrade(p, t, px, reason, tm, k) {
-      const x = D.S[p.i];
-      const fill = px * (1 - FIXED.slip);
-      const fs = x.syn ? { sec: 0, taf: 0, cat: 0, total: 0 } : sellFee(p.qty, fill, D.dates[t]);
-      cash += p.qty * fill - fs.total;
-      const R = (fill - p.fill) / p.R1;
+      const x = D.S[p.i], sh = p.dir === -1;
+      const fill = px * (sh ? 1 + FIXED.slip : 1 - FIXED.slip);
+      const fs = sh || x.syn ? { sec: 0, taf: 0, cat: 0, total: 0 } : sellFee(p.qty, fill, D.dates[t]);   // a buy-back pays no sale fees
+      if (sh) cash -= p.qty * fill; else cash += p.qty * fill - fs.total;
+      const gain = sh ? p.fill - fill : fill - p.fill;
+      const R = gain / p.R1;
       const tr = {
         id: p.id, sym: x.s, name: x.n, sec: x.sec, pb: p.pb, entryDate: D.dates[p.t0], exitDate: D.dates[t],
         entry: round(p.fill, 2), exit: round(fill, 2), qty: p.qty, stop0: round(p.stop0, 2),
-        pnl: round(p.qty * (fill - p.fill) - fs.total - (p.feeIn || 0), 2), pct: round(fill / p.fill - 1, 4), R: round(R, 2), days: t - p.t0,
+        pnl: round(p.qty * gain - fs.total - (p.feeIn || 0) - (p.borrow || 0), 2), pct: round(gain / p.fill, 4), R: round(R, 2), days: t - p.t0,
+        dir: sh ? -1 : undefined, borrow: sh ? cent(p.borrow || 0) : undefined,
         reason, mfeR: round(p.mfeR, 2), idx: round(D.spx[t] / D.spx[p.t0] - 1, 4),
         fee: cent(fs.total + (p.feeIn || 0)), feeBuy: p.feeIn || 0, feeSell: fs,
         et: p.et || null, xt: tm || (D.times && D.times[t]) || null, why: p.why || null, ctx: p.ctx || null,
@@ -557,14 +576,20 @@
       const prov = !!(D.prov && D.prov.t === t);     // market still open: today's prices are not final yet
       const closedToday = [];
       if (hedge) { hedge.prev = hedge.value; hedge.value *= (1 - (D.spx[t] / D.spx[t - 1] - 1)) * (1 - FIXED.hedgeExp / 252); }
-      if (cash < -FIXED.marginMin && t > 0) {       // margin interest for the calendar days since the last trading day
-        const owed = -cash, rate = FIXED.marginRates.find((r) => owed <= r[0])[1];
+      const liab0 = t > 0 ? positions.reduce((a, p) => a + (p.dir === -1 && p.t0 < t ? p.qty * price(D.S[p.i], t - 1) : 0), 0) : 0;
+      if (liab0 > 0) {                               // stock-borrow fee on the shorts, per calendar day
+        const days = Math.max(1, Math.round((Date.parse(D.dates[t] + 'T12:00:00Z') - Date.parse(D.dates[t - 1] + 'T12:00:00Z')) / 864e5));
+        for (const p of positions) if (p.dir === -1 && p.t0 < t) { const fee = p.qty * price(D.S[p.i], t - 1) * FIXED.borrowRate / 360 * days; cash -= fee; p.borrow = (p.borrow || 0) + fee; }
+      }
+      const cashNet = cash - liab0;                  // short-sale proceeds are owed back: no interest on them
+      if (cashNet < -FIXED.marginMin && t > 0) {    // margin interest for the calendar days since the last trading day
+        const owed = -cashNet, rate = FIXED.marginRates.find((r) => owed <= r[0])[1];
         const days = Math.max(1, Math.round((Date.parse(D.dates[t] + 'T12:00:00Z') - Date.parse(D.dates[t - 1] + 'T12:00:00Z')) / 864e5));
         const due = owed * rate / 360 * days;
         cash -= due; mInt += due;
-      } else if (cash > FIXED.marginMin && t > 0 && D.rp && isNum(D.rp[t]) && D.rp[t] > 0) {   // RP on idle cash, 365-day basis
+      } else if (cashNet > FIXED.marginMin && t > 0 && D.rp && isNum(D.rp[t]) && D.rp[t] > 0) {   // RP on idle cash, 365-day basis
         const days = Math.max(1, Math.round((Date.parse(D.dates[t] + 'T12:00:00Z') - Date.parse(D.dates[t - 1] + 'T12:00:00Z')) / 864e5));
-        const got = cash * D.rp[t] / 365 * days;
+        const got = cashNet * D.rp[t] / 365 * days;
         cash += got; rpInt += got;
       }
       tiltNow = opts.tilt ? opts.tilt(D.dates[t]) : null;
@@ -585,8 +610,9 @@
             const v = px[p.i];
             if (!isNum(v) || v <= 0) continue;
             p.lastPx = v;
-            if (v <= p.stop) {
-              const kind = p.pb === 'dt' ? (p.stop >= p.fill ? '단타 본전 손절' : '단타 손절') : p.stop > p.stop0 + 1e-9 ? (v >= p.fill ? '추적 손절(이익 보호)' : '추적 손절') : '손절';
+            if (p.dir === -1 ? v >= p.stop : v <= p.stop) {
+              const kind = p.dir === -1 ? (p.stop < p.stop0 - 1e-9 ? (v <= p.fill ? '공매도 추적 손절(이익 보호)' : '공매도 추적 손절') : '공매도 손절')
+                : p.pb === 'dt' ? (p.stop >= p.fill ? '단타 본전 손절' : '단타 손절') : p.stop > p.stop0 + 1e-9 ? (v >= p.fill ? '추적 손절(이익 보호)' : '추적 손절') : '손절';
               learn(closeTrade(p, t, v, `${kind}, 장중 ${tm}`, tm, k), t);
               continue;
             }
@@ -622,7 +648,7 @@
                 cands.push({ i, score: up - spDay, up });
               }
               cands.sort((a, b) => b.score - a.score);
-              let heat = positions.reduce((sum, p) => sum + Math.max(0, p.fill - p.stop) * p.qty, 0);
+              let heat = positions.reduce((sum, p) => sum + Math.max(0, (p.fill - p.stop) * sgn(p)) * p.qty, 0);
               for (const cd of cands) {
                 if (dtOpened >= FIXED.dtNewPerDay || positions.filter((p) => p.pb === 'dt').length >= FIXED.dtMax) break;
                 const x = D.S[cd.i], v = px[cd.i];
@@ -672,6 +698,18 @@
         }
         p.miss = 0;
         const px = x.c[t];
+        if (p.dir === -1) {
+          p.lastPx = px; p.minC = Math.min(p.minC, px);
+          p.mfeR = Math.max(p.mfeR, (p.fill - px) / p.R1);
+          let why = null;
+          if (px >= p.stop) why = p.stop < p.stop0 - 1e-9 ? (px <= p.fill ? '공매도 추적 손절(이익 보호)' : '공매도 추적 손절') : '공매도 손절';
+          else if (t - p.t0 >= P.timeStop_bo && p.mfeR < 0.5) why = '공매도 시간 손절';
+          else if (regimeOk(D, t, 1) && px > x.sma50[t]) why = '공매도 청산(시장 200일선 회복·50일선 위)';
+          if (why) { closedToday.push(closeTrade(p, t, px, why)); continue; }
+          const k = p.mfeR >= FIXED.holdFromR ? P.trailK + P.holdK : P.trailK;
+          p.stop = Math.min(p.stop, p.minC + k * p.atr);        // trailing stop moves down only
+          continue;
+        }
         p.maxC = Math.max(p.maxC, px);
         p.mfeR = Math.max(p.mfeR, (px - p.fill) / p.R1);
         let reason = null;
@@ -822,7 +860,7 @@
         cands.sort((a, b) => b.score - a.score);
         let opened = 0;
         const eq = eqNow;
-        let heat = positions.reduce((s, p) => s + Math.max(0, (p.fill - p.stop)) * p.qty, 0);
+        let heat = positions.reduce((s, p) => s + Math.max(0, (p.fill - p.stop) * sgn(p)) * p.qty, 0);
         for (const cd of cands) {
           const x = D.S[cd.i], c = x.c[t];
           const sig = { sym: x.s, name: x.n, pb: cd.pb, rs: x.rs[t], price: round(c, 2), taken: false, why: '' };
@@ -851,6 +889,38 @@
           opened++;
         }
       }
+      if (!blocked.length && !prov && (!only || only === 'sb') && !regimeOk(D, t, 1) && riskMul('sb') > 0) {
+        const held = new Set(positions.map((p) => p.i)), cands = [];
+        for (let i = 0; i < (D.bond0 != null ? D.bond0 : D.S.length); i++) {
+          const x = D.S[i];
+          if (!x.e[t] || x.syn || held.has(i) || (cool.get(i) || 0) > t) continue;
+          const c = x.c[t];
+          if (!isNum(c) || !isNum(x.sma200[t]) || !isNum(x.sma50[t]) || !isNum(x.vol[t]) || x.vol[t] <= 0 || !isNum(x.rs[t])) continue;
+          if (c < x.sma50[t] && x.sma50[t] < x.sma200[t] && x.dol[t] >= P.boLookback && x.rs[t] <= 100 - P.rsMin) cands.push({ i, score: 100 - x.rs[t] });
+        }
+        cands.sort((a, b) => b.score - a.score);
+        const eq = marked(t);
+        let heat = positions.reduce((s2, p) => s2 + Math.max(0, (p.fill - p.stop) * sgn(p)) * p.qty, 0), nOpen = 0;
+        for (const cd of cands) {
+          const x = D.S[cd.i], c = x.c[t];
+          const sig = { sym: x.s, name: x.n, pb: 'sb', rs: x.rs[t], price: round(c, 2), taken: false, why: '' };
+          todaySignals.push(sig);
+          if (nOpen >= FIXED.maxNewPerDay) { sig.why = `하루 신규 ${FIXED.maxNewPerDay}종목 한도`; continue; }
+          if (positions.filter((p) => p.dir === -1).length >= FIXED.shortMax) { sig.why = `공매도 ${FIXED.shortMax}종목 한도`; continue; }
+          if (positions.filter((p) => D.S[p.i].sec === x.sec).length >= FIXED.sectorMax) { sig.why = `같은 업종 ${FIXED.sectorMax}종목 한도`; continue; }
+          const atr = x.vol[t] * c, fill = c * (1 - FIXED.slip), stop = fill + P.stopK_bo * atr, perShare = stop - fill;
+          let qty = Math.floor((eq * FIXED.riskPct * mult * riskMul('sb')) / perShare);
+          qty = Math.min(qty, Math.floor((P.maxPosW * eq) / fill), Math.floor(bpow(eq) / (FIXED.shortMargin * fill)));
+          if (heat + qty * perShare > FIXED.heatMax * eq) qty = Math.floor(Math.max(0, FIXED.heatMax * eq - heat) / perShare);
+          if (qty < 1 || qty * fill < FIXED.minValue * eq) { sig.why = '증거금 또는 위험 한도 부족'; continue; }
+          const feeIn = sellFee(qty, fill, D.dates[t]).total;                 // a short sale pays the sale fees up front
+          cash += qty * fill - feeIn;
+          heat += qty * perShare; nOpen++;
+          const why = `${x.dol[t] >= 250 ? '52주' : x.dol[t] + '일'} 최저가 이탈(기준 ${P.boLookback}일) · 상대강도 하위 ${Math.max(1, x.rs[t])}% · 50일선이 200일선 아래인 하락 추세 · S&P 500이 200일선 아래`;
+          positions.push({ id: ++idSeq, i: cd.i, pb: 'sb', dir: -1, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, minC: c, mfeR: 0, miss: 0, feeIn, borrow: 0, lastPx: c, why, ctx: ctxAt(t) });
+          sig.taken = true; sig.qty = qty; sig.stop = round(stop, 2);
+        }
+      }
       if (!blocked.length && !prov && (!only || only === 'bd') && D.bond0 != null && D.bond0 < D.S.length) {
         const held = new Set(positions.map((p) => p.i));
         let nb = positions.filter((p) => p.pb === 'bd').length;
@@ -863,7 +933,7 @@
           }
           cands.sort((a, b) => b.score - a.score);
           const eq = marked(t);
-          let heat = positions.reduce((s2, p) => s2 + Math.max(0, (p.fill - p.stop)) * p.qty, 0);
+          let heat = positions.reduce((s2, p) => s2 + Math.max(0, (p.fill - p.stop) * sgn(p)) * p.qty, 0);
           for (const [ci, cd] of cands.entries()) {
             if (nb >= FIXED.bdMax) break;
             const x = D.S[cd.i], c = x.c[t];
@@ -953,8 +1023,9 @@
     const open = positions.map((p) => {
       const x = D.S[p.i], px = price(x, lastT);
       return { id: p.id, sym: x.s, name: x.n, sec: x.sec, pb: p.pb, entryDate: D.dates[p.t0], entry: round(p.fill, 2), qty: p.qty, price: round(px, 2),
-        value: round(px * p.qty, 2), pnl: round((px - p.fill) * p.qty - (p.feeIn || 0), 2), pct: round(px / p.fill - 1, 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2), feeBuy: p.feeIn || 0,
-        R: round((px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, px - p.stop) * p.qty, 2), et: p.et || null,
+        value: round(sgn(p) * px * p.qty, 2), pnl: round(sgn(p) * (px - p.fill) * p.qty - (p.feeIn || 0) - (p.borrow || 0), 2), pct: round(sgn(p) * (px / p.fill - 1), 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2), feeBuy: p.feeIn || 0,
+        R: round(sgn(p) * (px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, sgn(p) * (px - p.stop)) * p.qty, 2), et: p.et || null,
+        dir: p.dir === -1 ? -1 : undefined, borrow: p.dir === -1 ? cent(p.borrow || 0) : undefined,
         kind: x.kind || 'stock', syn: x.syn ? true : undefined, yld: x.yld && isNum(x.yld[lastT]) ? round(x.yld[lastT], 3) : null, why: p.why || null, ctx: p.ctx || null };
     });
     // opts.snapshot: everything needed to continue after this day (a book's state), days kept relative to this day
@@ -998,8 +1069,8 @@
   }
   function hmMin(hm) { return /^\d\d:\d\d$/.test(hm || '') ? +hm.slice(0, 2) * 60 + +hm.slice(3) : NaN; }
   function normW(w) {
-    const sum = (w.bo || 0) + (w.pb || 0) + (w.dt || 0) + (w.bd || 0) || 1;
-    return { bo: round((w.bo || 0) / sum, 3), pb: round((w.pb || 0) / sum, 3), dt: round((w.dt || 0) / sum, 3), bd: round((w.bd || 0) / sum, 3) };
+    const sum = (w.bo || 0) + (w.pb || 0) + (w.dt || 0) + (w.bd || 0) + (w.sb || 0) || 1;
+    return { bo: round((w.bo || 0) / sum, 3), pb: round((w.pb || 0) / sum, 3), dt: round((w.dt || 0) / sum, 3), bd: round((w.bd || 0) / sum, 3), sb: round((w.sb || 0) / sum, 3) };
   }
   // ranks the playbooks by return ÷ max drawdown: the best trades with the normal 1-trade risk, the second with half,
   // the third with a sixth; one that lost money gets at most a sixth; one with too few trades to judge a quarter (trial)

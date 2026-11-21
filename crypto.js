@@ -35,7 +35,12 @@
   const WD_FEE = { BTC: 0.0002, ETH: 0.002, SOL: 0.01 };
   const CFG = {
     arbShare: 0.3, arbMinEdge: 0.0005, arbMaxUsd: 1500, slip: 0.0002, exec: 'binanceus',
-    trend: { hi: 20, lo: 10, atr: 14, ema: 100, stopK: 3, risk: 0.01, maxW: 0.3 },
+    trend: { hi: 20, lo: 10, atr: 14, ema: 100, stopK: 3, risk: 0.01, maxW: 0.3, shortW: 0.5 },
+    // perpetual futures for the trend strategy: longs and shorts, up to `lev` times the margin. Each position keeps its
+    // margin (notional ÷ lev) aside; funding and borrowing cost `fund` a year on the notional (확인필요: real funding swings
+    // around this and is often paid to shorts); a position is closed before 80% of its margin could be lost. Shorts start
+    // at shortW of the long risk until they have their own record
+    perp: { lev: 3, fund: 0.08, guard: 0.8, gross: 1.5 },     // gross: all perpetual notional together ≤ 1.5 × the account (the coins move together)
     tok: { hi: 20, lo: 10, atr: 14, ema: 100, stopK: 3, risk: 0.005, maxW: 0.2, maxAll: 0.6, maxSpread: 0.003 },
     scalp: { look: 15, mom: 0.003, tp: 0.005, sl: 0.0035, maxMin: 20, risk: 0.0025, maxW: 0.2 },
     brakes: { day: 0.03, half: 0.15, stop: 0.25 },
@@ -65,6 +70,7 @@
     for (const k in st.venues) { const a = st.venues[k]; v += a.usd; for (const c of COINS) v += (a.coin[c] || 0) * px(c); }
     v += st.trade.usd; for (const c of COINS) v += (st.trade.coin[c] || 0) * px(c);
     if (st.tok) for (const k in st.tok.hold) { const qq = st.tok.q[k]; if (qq && qq.mid > 0) v += st.tok.hold[k] * qq.mid; }
+    for (const s of ['trend', 'scalp']) for (const c in (st.pos && st.pos[s]) || {}) { const p = st.pos[s][c]; if (p && p.perp) v += p.margin + p.side * p.qty * (px(c) - p.entry); }
     return v;
   }
   const tokState = (st) => (st.tok = st.tok || { hold: {}, pos: {}, bars: {}, q: {} });
@@ -181,6 +187,28 @@
     fill(st, { t: now, s, c, side: 'buy', qty, px: r2(fillPx), fee: r2(fee), why });
     return p;
   }
+  function perpOpen(st, s, c, side, qty, px, now, why, extra) {
+    const v = st.trade, f = VENUES[CFG.exec].taker, fillPx = px * (1 + side * CFG.slip), fee = qty * fillPx * f, margin = (qty * fillPx) / CFG.perp.lev;
+    v.usd -= margin + fee;
+    st.stats[s].fees += fee;
+    const p = Object.assign({ c, qty, entry: fillPx, side, perp: true, lev: CFG.perp.lev, margin, t0: now, fee, fund: 0, why }, extra || {});
+    st.pos[s][c] = p;
+    fill(st, { t: now, s, c, side: side > 0 ? 'buy' : 'short', qty, px: r2(fillPx), fee: r2(fee), why, perp: true, lev: CFG.perp.lev });
+    return p;
+  }
+  function perpClose(st, s, c, px, now, why) {
+    const p = st.pos[s][c], v = st.trade, f = VENUES[CFG.exec].taker, fillPx = px * (1 - p.side * CFG.slip), fee = p.qty * fillPx * f;
+    const gross = p.side * p.qty * (fillPx - p.entry);
+    v.usd += p.margin + gross - fee;
+    const pnl = gross - fee - p.fee - (p.fund || 0), R = p.risk > 0 ? pnl / p.risk : 0;
+    st.stats[s].n++; st.stats[s].pnl += pnl; st.stats[s].fees += fee;
+    (st.closed = st.closed || []).push({ t: now, s, c, pnl: r2(pnl), R: Math.round(R * 100) / 100, side: p.side });
+    if (st.closed.length > 500) st.closed.splice(0, st.closed.length - 500);
+    fill(st, { t: now, s, c, side: p.side > 0 ? 'sell' : 'cover', qty: p.qty, px: r2(fillPx), fee: r2(fee), pnl: r2(pnl), why, held: Math.round((now - p.t0) / 60e3), perp: true });
+    delete st.pos[s][c];
+  }
+  // closes a position whichever kind it is (spot held from before, or perpetual)
+  const exitPos = (st, s, c, B, now, why) => { const p = st.pos[s][c]; if (p.perp) perpClose(st, s, c, p.side > 0 ? B.bid : B.ask, now, why); else sell(st, s, c, B.bid, now, why); };
   function sell(st, s, c, px, now, why) {
     const p = st.pos[s][c], v = st.trade, f = VENUES[CFG.exec].taker, fillPx = px * (1 - CFG.slip), fee = p.qty * fillPx * f;
     v.usd += p.qty * fillPx - fee; v.coin[c] -= p.qty;
@@ -244,24 +272,42 @@
         else if (B.bid <= sp.entry * (1 - CFG.scalp.sl)) sell(st, 'scalp', c, B.bid, now, '손절');
         else if (now - sp.t0 >= CFG.scalp.maxMin * 60e3) sell(st, 'scalp', c, B.bid, now, '시간 청산');
       }
-      // trend: stop on every poll
+      // trend: funding, the margin guard and the stop on every poll
       const tp = st.pos.trend[c];
-      if (tp && B.bid <= tp.stop) sell(st, 'trend', c, B.bid, now, tp.stop > tp.stop0 ? '추적 손절' : '손절');
+      if (tp && tp.perp) {
+        const yrs = Math.max(0, now - (tp.fAt || tp.t0)) / (365 * 864e5);
+        if (yrs > 0 && yrs < 2 / 365) { const cost = tp.qty * m[c] * CFG.perp.fund * yrs; st.trade.usd -= cost; tp.fund = (tp.fund || 0) + cost; st.stats.trend.fees += cost; }
+        tp.fAt = now;
+      }
+      if (tp && tp.perp && -tp.side * tp.qty * ((tp.side > 0 ? B.bid : B.ask) - tp.entry) >= CFG.perp.guard * tp.margin) exitPos(st, 'trend', c, B, now, '증거금 80% 손실: 강제 청산 전 정리');
+      else if (tp && (tp.side < 0 ? B.ask >= tp.stop : B.bid <= tp.stop)) exitPos(st, 'trend', c, B, now, (tp.side < 0 ? tp.stop < tp.stop0 : tp.stop > tp.stop0) ? '추적 손절' : '손절');
       // trend: signals on a closed hourly bar
       if (hClosed && hb.length > CFG.trend.ema) {
         const done = hb.slice(0, -1), last = done[done.length - 1], prev = done.slice(-CFG.trend.hi - 1, -1);
         const a = atr(done, CFG.trend.atr), e = ema(done.map((b) => b.c), CFG.trend.ema);
         const p = st.pos.trend[c];
-        if (p) {
+        if (p && p.side < 0) {                                   // a short: the stop trails down; out on a 10-hour high
+          p.loC = Math.min(p.loC || Infinity, last.c);
+          p.stop = Math.min(p.stop, p.loC + CFG.trend.stopK * a);
+          const hi = Math.max(...done.slice(-CFG.trend.lo - 1, -1).map((b) => b.h));
+          if (last.c > hi) exitPos(st, 'trend', c, B, now, `${CFG.trend.lo}시간 최고가 돌파`);
+        } else if (p) {
           p.hiC = Math.max(p.hiC || 0, last.c);
           p.stop = Math.max(p.stop, p.hiC - CFG.trend.stopK * a);
           const lo = Math.min(...done.slice(-CFG.trend.lo - 1, -1).map((b) => b.l));
-          if (last.c < lo) sell(st, 'trend', c, B.bid, now, `${CFG.trend.lo}시간 최저가 이탈`);
-        } else if (!stopNew && last.c > Math.max(...prev.map((b) => b.h)) && last.c > e && a > 0) {
-          const risk = eq * CFG.trend.risk * st.w.trend * tiltOf(st, 'trend') * half, per = CFG.trend.stopK * a;
-          let qty = Math.min(risk / per, (CFG.trend.maxW * eq) / B.ask, st.trade.usd / (B.ask * 1.01));
+          if (last.c < lo) exitPos(st, 'trend', c, B, now, `${CFG.trend.lo}시간 최저가 이탈`);
+        } else if (!stopNew && a > 0 && ((last.c > Math.max(...prev.map((b) => b.h)) && last.c > e) || (last.c < Math.min(...prev.map((b) => b.l)) && last.c < e))) {
+          // a new 20-hour high above the 100-hour average → long; a new 20-hour low below it → short (perpetual, up to
+          // perp.lev × margin); size by risk to the stop, at most maxW × lev of the account in notional
+          const side = last.c > e ? 1 : -1, px = side > 0 ? B.ask : B.bid;
+          const risk = eq * CFG.trend.risk * st.w.trend * tiltOf(st, 'trend') * half * (side > 0 ? 1 : CFG.trend.shortW), per = CFG.trend.stopK * a;
+          const gross = Object.values(st.pos.trend).reduce((g, q2) => g + (q2 && q2.perp ? q2.qty * (st.last[q2.c] || q2.entry) : 0), 0);
+          let qty = Math.min(risk / per, (CFG.trend.maxW * CFG.perp.lev * eq) / px, (st.trade.usd * CFG.perp.lev) / (px * 1.02), Math.max(0, CFG.perp.gross * eq - gross) / px);
           qty = f8(qty);
-          if (qty * B.ask >= 20) buy(st, 'trend', c, qty, B.ask, now, `${CFG.trend.hi}시간 신고가(${r2(last.c)})·100시간 평균(${r2(e)}) 위, 손절 ${r2(B.ask - per)}(1시간 변동폭의 ${CFG.trend.stopK}배)`, { stop: B.ask - per, stop0: B.ask - per, hiC: last.c, risk: qty * per });
+          const stop = px + (side > 0 ? -per : per);
+          const why = side > 0 ? `${CFG.trend.hi}시간 신고가(${r2(last.c)})·100시간 평균(${r2(e)}) 위: 무기한 선물 매수(최대 ${CFG.perp.lev}배), 손절 ${r2(stop)}(1시간 변동폭의 ${CFG.trend.stopK}배)`
+            : `${CFG.trend.hi}시간 신저가(${r2(last.c)})·100시간 평균(${r2(e)}) 아래: 무기한 선물 공매도(최대 ${CFG.perp.lev}배), 손절 ${r2(stop)}(1시간 변동폭의 ${CFG.trend.stopK}배)`;
+          if (qty * px >= 20) perpOpen(st, 'trend', c, side, qty, px, now, why, { stop, stop0: stop, hiC: last.c, loC: last.c, risk: qty * per });
         }
       }
       // scalp: signals on a closed minute bar
@@ -372,6 +418,7 @@
       v: 1, at: st.at, start: st.start, funded: r2(st.funded), eq: st.eq, usd: r2(usd), hold, last: st.last,
       venues: Object.fromEntries(Object.entries(st.venues).map(([k, a]) => [k, { name: VENUES[k].name, taker: VENUES[k].taker, usd: r2(a.usd), coin: Object.fromEntries(COINS.map((c) => [c, r8(a.coin[c] || 0)])) }])),
       trade: { venue: VENUES[CFG.exec].name, usd: r2(st.trade.usd), coin: Object.fromEntries(COINS.map((c) => [c, r8(st.trade.coin[c] || 0)])) },
+      perps: Object.values(st.pos.trend || {}).filter((p) => p && p.perp).map((p) => ({ c: p.c, side: p.side, qty: r8(p.qty), entry: r2(p.entry), stop: r2(p.stop), lev: p.lev, margin: r2(p.margin), px: r2(st.last[p.c] || p.entry), pnl: r2(p.side * p.qty * ((st.last[p.c] || p.entry) - p.entry) - p.fee - (p.fund || 0)), t0: p.t0, why: p.why })),
       pos: st.pos, w: st.w, tilt: st.tilt || null, brake: st.brake, spreads: st.spreads, mkt,
       toks: Object.keys((st.tok && st.tok.hold) || {}).map((k) => { const T = st.tok, qq = T.q[k] || {}, p = T.pos[k] || null; return { s: k, name: TOKS[k] || k, qty: r8(T.hold[k]), bid: qq.bid || null, ask: qq.ask || null, value: r2(T.hold[k] * (qq.mid || 0)), entry: p ? r2(p.entry) : null, stop: p ? r2(p.stop) : null, t0: p ? p.t0 : null, pnl: p ? r2(T.hold[k] * ((qq.bid || 0) - p.entry) - p.fee) : null, why: p ? p.why : null }; }),
       tokQ: Object.fromEntries(Object.entries((st.tok && st.tok.q) || {}).map(([k, v]) => [k, { bid: v.bid, ask: v.ask }])),

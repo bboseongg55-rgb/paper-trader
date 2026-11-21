@@ -403,7 +403,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const dLabel = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일 (${WD[new Date(d + 'T12:00:00Z').getUTCDay()]})`;
   const PB = { bo: '돌파', pb: '눌림목', dt: '단타', bd: '채권', hedge: '헷지' };
-  const PB_LONG = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', hedge: 'S&P 500 인버스 헷지' };
+  const PB_LONG = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', sb: '하락 돌파 공매도', hedge: 'S&P 500 인버스 헷지' };
   const VIEWS = ['account', 'fills', 'profit', 'team'];
   const TITLES = { account: '통합계좌', fills: '체결내역', profit: '수익', team: 'AI 운용' };
   const HOLIDAYS = ['2026-11-26', '2026-12-25', '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24'];
@@ -685,18 +685,19 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const sum = (xs, f) => xs.reduce((t, x) => t + f(x), 0);
     const it = (nm, sub, v, id) => ({ nm, sub, v, id });
     const add = (key, name, items, col) => { const v = sum(items, (x) => x.v); if (v > 0.5) segs.push({ key, name, v, col, items: items.filter((x) => Math.abs(x.v) >= 0.005).sort((p, q) => q.v - p.v) }); };
-    const stockL = a.open.filter((p) => p.kind !== 'bond'), bondL = a.open.filter((p) => p.kind === 'bond');
+    const stockL = a.open.filter((p) => p.kind !== 'bond' && p.dir !== -1), bondL = a.open.filter((p) => p.kind === 'bond');
     add('stock', '주식', stockL.map((p) => it(p.sym, `${p.name} · ${p.qty.toLocaleString()}주`, p.value, 's:' + p.sym)).concat(dv ? (dv.stk || []).map((x) => it(x.sym, `${ETFN[x.sym] || x.sym} · ${x.qty}주 · 휠 전략`, x.value, 'k:' + x.sym)) : []), 'var(--s1)');
     add('bond', '채권', bondL.map((p) => it(p.sym, p.name + (p.yld != null ? ` · 금리 ${p.yld}%` : ''), p.value, 'b:' + p.sym)), 'var(--s2)');
     add('coin', '코인', funded() ? (CV.hold || []).map((h) => it(assetName(h.c), `${h.c} · ${fmt(h.qty, 6)}개 · 개당 ${usd(coinPx(h.c), 0)}`, h.qty * coinPx(h.c), 'c:' + h.c)) : [], 'var(--s3)');
     add('fut', '선물', dv ? dv.fut.map((f) => it(f.name.replace(/ 선물$/, ''), `${f.key} · ${f.qty > 0 ? '매수' : '매도'} ${Math.abs(f.qty)}계약 · 금액은 증거금`, f.margin, 'f:' + f.key)) : [], 'var(--s4)');
     add('opt', '옵션', dv ? dv.opt.map((o) => { const x = optKind(o); return it(x.title, `${x.tag} ${o.n}계약 · ${o.side === 'hedge' ? '평가액' : o.side === 'csp' ? '금액은 담보' : '금액은 손실 한도'}`, optTied(o), 'o:' + o.id); }) : [], 'var(--s5)');
     add('els', 'ELS', dv ? dv.els.map((e) => it(`ELS 연 ${fmt(e.coupon * 100, 1)}%`, `S&P 500·나스닥 100 · 가입 ${usd(e.amount, 0)}`, e.value, 'e:' + e.id)) : [], 'var(--s6)');
+    add('perp', '코인 선물', funded() ? (CV.perps || []).map((x) => it(`${assetName(x.c)} ${x.side > 0 ? '매수' : '공매도'}`, `${x.c} · 무기한 선물 ${x.lev}배 한도 · 금액은 증거금+평가손익`, x.margin + x.side * x.qty * (coinPx(x.c) - x.entry), 'p:' + x.c)) : [], '#0e9aa7');
     add('tok', '토큰화 주식', funded() ? (CV.toks || []).map((t) => it(`${t.name} 토큰`, `${t.s} · ${fmt(t.qty, 4)}주`, t.value || 0, 't:' + t.s)) : [], 'var(--s7)');
     if (a.hedge) add('hedge', '헷지', [it('S&P 500 인버스(SH)', `보유 주식의 ${Math.round((a.hedge.ratio || 0) * 100)}%만큼 · S&P 500이 내리면 이익`, a.hedge.value, 'h:SH')], 'var(--s-other)');
     // the cash is what is left of each part once its holdings are counted
     const total = totalNow(), cashT = total - segs.reduce((t, x) => t + x.v, 0), tr = inTransit(), cu = funded() ? CV.usd : 0;
-    const core = stockNow() - sum(a.open, (p) => p.value) - (a.hedge ? a.hedge.value : 0);
+    const core = stockNow() - sum(a.open.filter((p) => p.dir !== -1), (p) => p.value) - (a.hedge ? a.hedge.value : 0);   // shorts' buy-back cost comes off the cash
     const rp = S.rates && S.rates.rp != null ? `RP 연 ${fmt(S.rates.rp * 100, 2)}%로 운용` : '현금';
     const ur = funded() && CV.stake && CV.stake.net && CV.stake.net.USD;
     add('cash', '현금·RP', [it('주식·채권 쪽 현금', rp, core), it('선물·옵션 쪽 현금', '증거금을 뺀 나머지 · ' + rp, cashT - core - cu - tr), it('코인 거래소 달러', `코인·토큰 매매 대기 자금${ur ? ` · USDC 보상 연 ${fmt(ur * 100, 2)}%` : ''}`, cu), it('계좌 안에서 옮기는 중', '한쪽에서 나가 다른 쪽에 아직 도착 전', tr)], 'var(--s-cash)');
@@ -1013,8 +1014,8 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       if (!p._b) p._b = { price: p.price, value: p.value, pnl: p.pnl };
       const q = p.kind !== 'bond' && LQ[cnSym(p.sym)];
       if (!q || !(q.px > 0)) continue;
-      const d = (q.px - p._b.price) * p.qty;
-      p.price = q.px; p.value = r2(p._b.value + d); p.pnl = r2(p._b.pnl + d); if (p.entry > 0) p.pct = q.px / p.entry - 1; dc += d;
+      const sg = p.dir === -1 ? -1 : 1, d = (q.px - p._b.price) * p.qty * sg;
+      p.price = q.px; p.value = r2(p._b.value + d); p.pnl = r2(p._b.pnl + d); if (p.entry > 0) p.pct = sg * (q.px / p.entry - 1); dc += d;
     }
     const h = a.hedge, sq = LQ['.SPX'], s0 = h ? spxBook() : null;
     if (h) { if (!h._b) h._b = { value: h.value }; if (sq && s0) { const v = h._b.value * (1 - (sq.px / s0 - 1)); dc += v - h._b.value; h.value = r2(v); } }
@@ -1097,6 +1098,14 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const sideTag = (q) => (q > 0 ? '매수' : '매도');
   function coreA(p) {
     const bond = p.kind === 'bond', syn = bond, P = (v) => (syn ? fmt(v, 2) : usd(v)), q = !bond && LQ[cnSym(p.sym)];
+    const sh = p.dir === -1;
+    if (sh) return { id: 's:' + p.sym, grp: '주식', val: p.value, tag: '공매도', title: p.sym, sub: `${p.name} · ${p.qty.toLocaleString()}주 공매도`,
+      rb: usd(-p.value), rs: `${sgnUsd(p.pnl)} (${pct(p.pct)})`, rsC: cls(p.pnl), why: p.why,
+      name: `${p.sym} · ${p.name} (공매도)`, px: p.price, liveAt: q ? q.t : null, unit: '$', dp: 2, pnl: p.pnl,
+      entry: p.entry, entryL: '공매도 평단', lines: [{ v: p.stop, l: '손절(되사기)' }], src: { k: 'cnbc', sym: cnSym(p.sym), reg: true }, periods: null, note: '가격이 내리면 이익, 오르면 손실',
+      rows: [['공매도 평단(판 값)', usd(p.entry)], ['현재가', usd(p.price)], ['공매도', `${p.qty.toLocaleString()}주 · 되사는 데 ${usd(-p.value)}`],
+        ['손익', `<span class="${cls(p.pnl)}">${sgnUsd(p.pnl)} (${pct(p.pct)})</span>`], ['손절가(이 값 위로 오르면 되삼)', usd(p.stop)], ['주식 대여료', `${usd(p.borrow || 0)} (연 0.5%, 확인필요)`],
+        ['증거금', `판 금액의 150%를 묶어 둡니다(판 돈 + 50%)`], ['진입일', p.entryDate]] };
     return { id: (bond ? 'b:' : 's:') + p.sym, grp: bond ? '채권' : '주식', val: p.value, title: p.sym, sub: `${p.name}${bond ? (p.yld != null ? ` · 금리 ${p.yld}%` : '') : ` · ${p.qty.toLocaleString()}주`}`,
       rb: usd(p.value), rs: `${sgnUsd(p.pnl)} (${pct(p.pct)})`, rsC: cls(p.pnl), why: p.why,
       name: `${p.sym} · ${p.name}`, px: p.price, liveAt: q ? q.t : null, unit: syn ? '' : '$', dp: 2, pnl: p.pnl,
@@ -1176,6 +1185,15 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         earned ? ['받은 스테이킹 보상', `${fmt(earned, 8)}개 · ${usd(earned * px)}`] : null].concat(ps.map(([k, p]) => [SNAME[k], `${usd(p.entry)}에 매수${p.stop ? ` · 손절 ${usd(p.stop)}` : ''}`]))
         .concat([['평단 계산', '자금이 들어온 때의 가격(Coinbase 1분봉)과 진행 중인 매매의 매수가']]) };
   }
+  function perpA(x) {
+    const px = coinPx(x.c) || x.px, pnl = x.side * x.qty * (px - x.entry), notional = x.qty * px;
+    return { id: 'p:' + x.c, grp: '코인 선물', val: x.margin + pnl, tag: x.side > 0 ? '선물 매수' : '선물 공매도', title: assetName(x.c), sub: `${x.c} · ${fmt(x.qty, 6)}개 · 명목 ${usd(notional, 0)}`,
+      rb: usd(x.margin + pnl), rs: `${sgnUsd(pnl)} (${pct(x.side * (px / x.entry - 1))})`, rsC: cls(pnl), why: x.why,
+      name: `${assetName(x.c)} 무기한 선물 ${x.side > 0 ? '매수' : '공매도'}`, px, liveAt: Date.now(), unit: '$', dp: px >= 1000 ? 0 : 2, pnl,
+      entry: x.entry, entryL: x.side > 0 ? '평단' : '공매도 평단', lines: [{ v: x.stop, l: '손절' }], src: { k: 'kraken', pair: KPAIR[x.c] || x.c + 'USD' }, note: x.side > 0 ? '가격이 오르면 이익' : '가격이 내리면 이익',
+      rows: [[x.side > 0 ? '매수 평단' : '공매도 평단', usd(x.entry)], ['현재가', usd(px)], ['수량·명목', `${fmt(x.qty, 6)}개 · ${usd(notional)}`], ['증거금', `${usd(x.margin)} (레버리지 최대 ${x.lev}배)`],
+        ['평가손익', `<span class="${cls(pnl)}">${sgnUsd(pnl)}</span> (수수료·펀딩 반영 전)`], ['손절', usd(x.stop)], ['펀딩·대여 비용', '명목의 연 8%로 계산(확인필요)'], ['강제 청산 방지', '증거금의 80%를 잃기 전에 정리']] };
+  }
   function tokA(t) {
     const q = LQ['t:' + t.s], px = q ? q.px : t.qty > 0 ? t.value / t.qty : (t.bid + t.ask) / 2;
     return { id: 't:' + t.s, grp: '토큰화 주식', val: t.value, title: `${t.name} 토큰`, sub: `${t.s} · ${fmt(t.qty, 4)}주`,
@@ -1190,7 +1208,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const a = S.account, dv = S.deriv, out = a.open.map(coreA);
     if (a.hedge) out.push(hedgeA(a.hedge));
     if (dv) { (dv.stk || []).forEach((x) => out.push(stkA(x))); dv.fut.forEach((f) => out.push(futA(f))); dv.opt.forEach((o) => out.push(optA(o))); dv.els.forEach((e) => out.push(elsA(e))); }
-    if (funded()) { (CV.hold || []).forEach((x) => out.push(coinA(x))); (CV.toks || []).forEach((t) => out.push(tokA(t))); }
+    if (funded()) { (CV.hold || []).forEach((x) => out.push(coinA(x))); (CV.perps || []).forEach((x) => out.push(perpA(x))); (CV.toks || []).forEach((t) => out.push(tokA(t))); }
     return out;
   }
   const assetOf = (id) => (id ? assetList().find((x) => x.id === id) || null : null);
@@ -1199,8 +1217,8 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   function holdGroups() {
     const L = assetList(), g = [];
     const SRC = { 주식: 'CNBC 실시간', 채권: '매일 장 마감 값(금리·총수익 지수)', 헷지: 'CNBC 실시간', 선물: 'CNBC 1분봉 · 약 1분 지연', 옵션: 'CBOE 15분 지연',
-      ELS: '매일 장 마감 뒤 모형 평가', 코인: wsOk ? '거래소 실시간' : '거래소 · 약 15초 간격', '토큰화 주식': 'Kraken 실시간 호가' };
-    for (const grp of ['주식', '채권', '헷지', '선물', '옵션', 'ELS', '코인', '토큰화 주식']) {
+      ELS: '매일 장 마감 뒤 모형 평가', 코인: wsOk ? '거래소 실시간' : '거래소 · 약 15초 간격', '코인 선물': '무기한 선물 · 가격은 거래소 실시간', '토큰화 주식': 'Kraken 실시간 호가' };
+    for (const grp of ['주식', '채권', '헷지', '선물', '옵션', 'ELS', '코인', '코인 선물', '토큰화 주식']) {
       const xs = L.filter((x) => x.grp === grp);
       if (grp === '주식' || grp === '채권') xs.sort((p, q) => q.val - p.val);
       if (xs.length) g.push([grp, xs.map(rowHTML), SRC[grp]]);
