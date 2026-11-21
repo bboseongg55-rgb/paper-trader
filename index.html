@@ -336,6 +336,12 @@ details.teamlog { margin: 10px 20px 0; }
 ol.rdnext { margin: 0; padding: 4px 20px 0 44px; font-size: 16px; color: var(--sub); }
 ol.rdnext li { padding: 4px 0; }
 .nw { white-space: nowrap; }
+ol.lflow { list-style: none; margin: 10px 20px 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; counter-reset: none; }
+ol.lflow li { background: var(--band); border-radius: 12px; padding: 10px 8px; text-align: center; position: relative; }
+ol.lflow li b { display: block; font-size: 15px; }
+ol.lflow li span { display: block; font-size: 13px; color: var(--sub); margin-top: 2px; }
+ol.lflow li + li::before { content: '→'; position: absolute; left: -9px; top: 50%; transform: translateY(-50%); color: var(--sub); font-size: 12px; }
+.aisum .lline { margin: 8px 0 0; font-size: 15px; color: var(--sub); }
 details.teamlog > summary { cursor: pointer; font-size: 15px; font-weight: 600; color: var(--sub); padding: 8px 0; list-style: none; }
 details.teamlog > summary::-webkit-details-marker { display: none; }
 details.teamlog > summary::after { content: " 보기"; color: var(--muted); font-weight: 500; }
@@ -728,6 +734,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const top = c.items.filter((x) => x.on).slice(0, 3);
     return `<div class="band"></div><h2>AI 운용 방향</h2><div class="aisum"><p class="h">${esc(c.regime.label)}${c.regime.tags.length ? ' · ' + esc(c.regime.tags.slice(0, 2).join(' · ')) : ''}</p>
       <ol>${top.map((x) => `<li><i>${x.rank}</i><span>${esc(x.k === 'rp' ? x.name : x.name.replace(/\(.*\)/, ''))} <span class="tag">${esc(x.k === 'base' ? '기반' : x.lean)}${x.k === 'rp' || x.k === 'stake' || x.k === 'base' ? '' : ' ' + Math.round(x.w * 100) + '%'}</span></span></li>`).join('')}</ol>
+      ${c.learn && (c.learn.rows || []).length ? `<p class="lline">학습 중 · ${PHASE[c.learn.phase] || ''}: ${c.learn.rows.map((x) => `${esc((PB_LONG[x.k] || x.k).replace(/ .*/, ''))} ×${fmt(x.f, 2)}`).join(' · ')}</p>` : ''}
       <a href="#team">이유와 매크로 지표 전체 보기 →</a></div>`;
   }
   // exposure by asset class: face value bought and sold against the account's size, and what a normal day can move
@@ -1707,7 +1714,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       const name = m[1].replace(/<span class="count">([^<]*)<\/span>/, ' · $1').replace(/<[^>]+>/g, '').trim();
       return `<details class="fold"><summary><b>${name}</b><span>자세히</span></summary>${c.replace(m[0], '')}</details>`;
     }).join('');
-    put($('v-team'), prioHTML() + rdHTML() + `<div class="band"></div><h2 style="padding-top:8px">AI 팀</h2>` + h);
+    put($('v-team'), prioHTML() + learnHTML() + rdHTML() + `<div class="band"></div><h2 style="padding-top:8px">AI 팀</h2>` + h);
   }
 
   const SNAME = { arb: '거래소 간 차익거래', trend: '추세(1시간)', scalp: '초단타(1분)', tok: '토큰화 주식', move: '거래소 간 코인 이동' };
@@ -1731,6 +1738,24 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   // keeps signed amounts like −$8,323 or +0.4%p on one line
   const nw = (s) => esc(s).replace(/[−+-]?\$[\d,.]+|[−+-][\d,.]+%p?/g, (m) => `<span class="nw">${m}</span>`);
   const ym = (d) => `${d.slice(0, 4)}년 ${+d.slice(5, 7)}월`;
+  // the trading data → learning: the account's closed trades, grouped by the market phase at entry, set each method's risk now
+  const PHASE = { up: '상승장', mixed: '횡보장', down: '하락장' };
+  function learnHTML() {
+    const c = S.alloc && S.alloc.cio, lr = c && c.learn, ev = S.evolution || {}, se = ev.search;
+    if (!lr) return '';
+    const tb = lr.table || {}, all = Object.values(tb).flatMap((g) => Object.values(g));
+    const nAll = all.reduce((a, x) => a + (x.n || 0), 0), nLive = all.reduce((a, x) => a + (x.live || 0), 0);
+    const sells = (S.orders || []).filter((o) => o.R != null && o.side !== 'buy').slice(-5).reverse();
+    let h = `<div class="band"></div><h2>매매 데이터 학습 <span class="count">실거래 → 다음 매매</span></h2>
+      <p class="sumline" style="padding-top:4px">매매가 끝날 때마다 결과(R: 처음 정한 위험 대비 손익 배수)를 그때의 장세별로 모아, 지금 장세에서 잘 된 방법에는 위험을 더 주고 안 된 방법은 줄입니다. 실거래 1건은 백테스트 3건만큼 셉니다.</p>
+      <ol class="lflow"><li><b>${nAll.toLocaleString()}건</b><span>쌓인 매매(실거래 ${nLive}건)</span></li><li><b>장세별 성적표</b><span>상승·횡보·하락</span></li><li><b>지금 ${PHASE[lr.phase] || lr.phase}</b><span>방법별 위험 배수</span></li><li><b>다음 매매</b><span>크기에 반영</span></li></ol>`;
+    h += `<ul class="mix">` + ((lr.rows || []).length ? lr.rows.map((x) => `<li><span class="name">${esc(PB_LONG[x.k] || x.k)}</span><span class="pnl ${x.f > 1 ? 'up' : x.f < 1 ? 'down' : ''}">×${fmt(x.f, 2)}</span><span class="stat">${PHASE[lr.phase] || ''}에서 ${x.n}건(실거래 ${x.live}건) · 평균 ${x.avgR >= 0 ? '+' : '−'}${fmt(Math.abs(x.avgR), 2)}R · ${sgnUsd(x.pnl)}</span></li>`).join('')
+      : `<li><span class="stat">지금 장세에서 끝난 매매가 아직 없어 위험 배수를 바꾸지 않았습니다.</span></li>`) + '</ul>';
+    if (sells.length) h += `<h3 class="day">최근 끝난 실거래 → 성적표에 반영</h3><ul class="mix">` + sells.map((o) => `<li><span class="name">${esc(o.sym)} <span class="muted">${esc(PB_LONG[o.pb] || o.pb || '')}</span></span><span class="pnl ${cls(o.R * 100)}">${o.R >= 0 ? '+' : '−'}${fmt(Math.abs(o.R), 2)}R</span><span class="stat">${dLabel(o.date)} ${esc(o.time || '')} · ${o.pnl != null ? sgnUsd(o.pnl) : ''}</span></li>`).join('') + '</ul>';
+    if (Object.keys(tb).length) h += `<details class="teamlog"><summary>장세별 성적표 전체</summary>` + ['up', 'mixed', 'down'].filter((g) => tb[g]).map((g) => `<div class="logitem"><b>${PHASE[g]}${g === lr.phase ? ' (지금)' : ''}</b><p>` + Object.entries(tb[g]).map(([k, x]) => `${esc(PB_LONG[k] || k)} ${x.n}건 · ${x.avgR >= 0 ? '+' : '−'}${fmt(Math.abs(x.avgR), 2)}R`).join(' / ') + `</p></div>`).join('') + '</details>';
+    h += `<ul class="mix"><li><span class="name">매시간 규칙 후보 찾기</span><span class="pnl">${se ? `${se.passed}/${se.tried}` : '-'}</span><span class="stat">${se ? `오늘 ${se.rounds}번 · 후보 ${se.tried}개 시험, ${se.passed}개 통과 · 대기 ${ev.bench || 0}개 · 그림자 계좌 시험 중 ${(ev.shadows || []).length}개` : '장이 열리면 매시간 찾습니다'}</span></li></ul>`;
+    return h;
+  }
   function rdItem(x) {
     return `<div class="logitem"><span class="d">${dLabel(x.date)}</span><b>${esc(x.title)}<span class="tag ${AREA[x.area] || ''}">${esc(x.area)}</span></b><p>${nw(x.what)}</p>${x.why ? `<p>근거: ${nw(x.why)}</p>` : ''}${x.effect ? `<p>결과: ${nw(x.effect)}</p>` : ''}</div>`;
   }

@@ -225,7 +225,7 @@
       '배분은 매일 저녁 한 번 정하고, 각 매매는 이 한도 안에서 자기 규칙(손절·추세 확인)으로 사고팝니다',
     ];
     return {
-      v: V, date: p.date, regime: { key, label: LABEL[key], tags, off }, headline, items: it, signals, rules, learn: { phase: p.trend, rows: learned },
+      v: V, date: p.date, regime: { key, label: LABEL[key], tags, off }, headline, items: it, signals, rules, learn: { phase: p.trend, rows: learned, table: ctx.learn || null },
       tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { base, credit, callCredit, wheel, hedge, longOpt: OPEN, nakedCall: OPEN, bear, off: OPEN ? false : off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
         els: { on: elsOn, max: elsMax, minCoupon: 0.07, coupon: cpn != null ? r4(cpn) : null }, h24 },
       target, rp: isNum(rp) ? r4(rp / 100) : null,
