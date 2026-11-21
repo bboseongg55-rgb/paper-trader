@@ -79,6 +79,31 @@ if (book && (!evo || !evo.lastRun || evo.lastRun < book.date) && !(evo && evo.la
   }
   labMs = Date.now() - t1;
 }
+// every hour (New York clock, when the nightly lab did not just run): another search round for better rules
+const hourKey = `${new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())} ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }).format(new Date())}`;
+if (book && evo && labMs == null && Lab.hourly) {
+  const t1 = Date.now();
+  try { const r = Lab.hourly(E, D, book, evo, { tilt: tiltAt }, hourKey); if (r.changed) { evo = r.evo; evoChanged = true; labMs = Date.now() - t1; } } catch (e) { /* the next hour tries again */ }
+}
+// what the account's own trades say about each method in each market phase (the S&P 500 at entry: rising above its
+// 50-day average, between the averages, or at or below its 200-day average). The rules' 2-year record is the prior;
+// each live trade counts three times. The allocator turns it into risk multipliers for the phase it sees now
+function learnByPhase() {
+  const ks = Object.keys(MS['.SPX'] || {}).sort(), px = ks.map((k) => +MS['.SPX'][k]), ph = {};
+  for (let i = 0; i < ks.length; i++) {
+    if (i < 199) continue;
+    let a50 = 0, a200 = 0; for (let j = i - 199; j <= i; j++) { a200 += px[j]; if (j > i - 50) a50 += px[j]; }
+    ph[ks[i]] = px[i] <= a200 / 200 ? 'down' : px[i] <= a50 / 50 ? 'mixed' : 'up';
+  }
+  const phaseOf = (d) => { if (ph[d]) return ph[d]; let best = null; for (const k of ks) { if (k > d) break; if (ph[k]) best = ph[k]; } return best; };
+  const out = {}, add = (tr, w, src) => { const p = phaseOf(tr.entryDate), k = tr.pb; if (!p || !k || !isFinite(tr.R)) return; const c = (((out[p] = out[p] || {})[k] = out[p][k] || { n: 0, live: 0, w: 0, sumR: 0, pnl: 0 })); c.n++; if (src === 'live') c.live++; c.w += w; c.sumR += w * tr.R; c.pnl += tr.pnl || 0; };
+  const i0 = D.dates.findIndex((d) => d >= (settings.btStart || '2025-01-02'));
+  const bt = E.simulate(D, { from: Math.max(0, i0), to: T - 1, capital, params: book.state.P, adaptive: true, log: false, force: { lev: 1.5, regimeLevel: 0, shortAny: 1 } });
+  for (const tr of bt.trades || []) add(tr, 1, 'bt');
+  for (const tr of (book.hist && book.hist.trades) || []) add(tr, 3, 'live');
+  for (const p in out) for (const k in out[p]) { const c = out[p][k]; c.avgR = Math.round((c.sumR / c.w) * 1000) / 1000; c.pnl = Math.round(c.pnl); delete c.sumR; }
+  return out;
+}
 // ── the allocator and the other two parts of the account
 const r2 = (v) => Math.round(v * 100) / 100;
 const etToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
@@ -115,7 +140,8 @@ if (book && MS['.SPX'] && (!alloc.cio || alloc.cio.date < book.date || alloc.cio
   const iwm = (mk.ix && mk.ix.IWM && mk.ix.IWM.px) || (mk.chain && mk.chain.IWM && mk.chain.IWM.spot) || null;
   const acct0 = coreNow() + (dst ? Dv.equity(dst) : 0) + ((cv && cv.eq) || 0) + transit();
   const wheelHeld = dst ? Object.values(dst.stk || {}).reduce((a, x) => a + x.qty * x.px, 0) + dst.opt.filter((o) => o.side === 'csp').reduce((a, o) => a + o.n * 100 * o.k, 0) : 0;
-  const dec = CIO.decide(pic, { exposure: expo, elsCoupon, iwm, account: acct0, wheelHeld });
+  let learn = null; try { learn = learnByPhase(); } catch (e) { learn = null; }
+  const dec = CIO.decide(pic, { exposure: expo, elsCoupon, iwm, account: acct0, wheelHeld, learn });
   alloc.cio = dec; decided = true; allocChanged = true;
   alloc.history = (alloc.history || []).filter((h) => h.date !== book.date).concat([{ date: book.date, key: dec.regime.key, label: dec.regime.label, headline: dec.headline, target: dec.target }]).slice(-250);
   const lt = alloc.tilts[alloc.tilts.length - 1];

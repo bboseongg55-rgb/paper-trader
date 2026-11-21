@@ -12,7 +12,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const pct = (v, d = 1) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%' : '-');
   const pp = (v) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%p' : '-');
-  const V = 7;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30; 6: buying calls and puts, naked calls; 7: the long-term downtrend stance)
+  const V = 8;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30; 6: buying calls and puts, naked calls; 7: the long-term downtrend stance; 8: learning from the account's trades by phase)
   // the owner's settings (2026-11-21): every strategy may trade in every market phase (the regime only scales risk), and
   // the 24-hour part (coins) holds 30% of the account against 70% for stocks, futures and options
   const OPEN = true, COIN_SHARE = 0.3;
@@ -86,6 +86,16 @@
     // 1. the stock and bond engine: a multiplier on each method's 1-trade risk
     const C = { off: { bo: 0.5, pb: 0.5, dt: 1.25, bd: p.rates === 'hiking' ? 0.75 : 1.25 }, cut: { bo: 1, pb: 1, dt: 1, bd: 1.5 }, hike: { bo: 0.85, pb: 0.85, dt: 1.1, bd: 0.5 },
       bull: { bo: 1.25, pb: 1.1, dt: 0.85, bd: 0.75 }, mixed: { bo: 0.9, pb: 1, dt: 1.1, bd: 1 } }[key];
+    // learning: in the phase seen now (the S&P 500's trend), each stock method's average R from the account's own trades
+    // (the 2-year record as a prior, live trades counted three times) moves its risk: × e^(avg R × n / (n + 30)), kept
+    // within 0.5–1.6, so a handful of trades barely moves it and a long record in this phase moves it most
+    const LR = (ctx.learn && ctx.learn[p.trend]) || {}, learned = [];
+    for (const k of ['bo', 'pb', 'dt', 'bd', 'sb']) {
+      const c = LR[k]; if (!c || !(c.n > 0)) continue;
+      const f = Math.round(clamp(Math.exp(c.avgR * (c.n / (c.n + 30))), 0.5, 1.6) * 100) / 100;
+      C[k] = Math.round((isNum(C[k]) ? C[k] : 1) * f * 100) / 100;
+      learned.push({ k, n: c.n, live: c.live, avgR: c.avgR, pnl: c.pnl, f });
+    }
     // 2. futures: [long, short] multipliers by market group, and the futures risk budget (annual volatility / account)
     // a long-term downtrend (the S&P 500 at or below its 200-day average: p.trend 'down') turns the stance bearish: no
     // index longs, index shorts at twice the risk, and puts may be bought while dearer than usual (the owner's setting)
@@ -215,7 +225,7 @@
       '배분은 매일 저녁 한 번 정하고, 각 매매는 이 한도 안에서 자기 규칙(손절·추세 확인)으로 사고팝니다',
     ];
     return {
-      v: V, date: p.date, regime: { key, label: LABEL[key], tags, off }, headline, items: it, signals, rules,
+      v: V, date: p.date, regime: { key, label: LABEL[key], tags, off }, headline, items: it, signals, rules, learn: { phase: p.trend, rows: learned },
       tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { base, credit, callCredit, wheel, hedge, longOpt: OPEN, nakedCall: OPEN, bear, off: OPEN ? false : off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
         els: { on: elsOn, max: elsMax, minCoupon: 0.07, coupon: cpn != null ? r4(cpn) : null }, h24 },
       target, rp: isNum(rp) ? r4(rp / 100) : null,

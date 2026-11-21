@@ -15,7 +15,7 @@
   'use strict';
 
   const LAB = {
-    screened: 2, forward: 1, tries: 16,
+    screened: 3, forward: 1, tries: 16, hourMs: 30000, benchMax: 6,   // hourly: more variations searched, passers wait on a bench
     screenDays: 125, screenMinTrades: 15, screenMinGain: 0.002, screenMddSlack: 0.02,
     fwdMin: 20, fwdMax: 40, earlyAt: 10, earlyCut: -0.02,
     margin: 0.01, mddSlack: 0.01, minTrades: 4,
@@ -124,7 +124,7 @@
       for (const sh of evo.shadows) if (sh !== w) note(evo, { date: day, type: 'retire', id: sh.id, kind: sh.kind, diff: sh.diff, why: '세대 교체로 시험 종료', fwd: briefF(sh.fwd) });
       note(evo, { date: day, type: 'promote', id: w.id, kind: w.kind, diff: chg, gen: evo.gen, fwd: briefF(f) });
       promoted = { id: w.id, gen: evo.gen, diff: chg, fwd: briefF(f) };
-      evo.shadows = [];
+      evo.shadows = []; evo.bench = [];   // variations of the old rules no longer apply
       spawn(E, evo, out, 'previous', oldP, oldBase, diff(E, out.state.P, oldP), null);
     } else {
       // 3. shadows that ran out of time, or fell well behind, end
@@ -144,7 +144,10 @@
       const rnd = rng(`${day}|${evo.gen}|${evo.seq}|past`);
       const z = screen(E, D, td, champ.P, champ.M);
       const tested = [];
-      for (let k = 0; k < LAB.tries * 4 && tested.length < LAB.tries; k++) {
+      // the bench first (found by the hourly searches, screened again on today's window), then fresh variations
+      for (const b of evo.bench || []) { const kb = keyOf(E, b.Q); if (seen.has(kb)) continue; seen.add(kb); tested.push({ Q: b.Q, s: screen(E, D, td, b.Q, champ.M) }); }
+      evo.bench = [];
+      for (let k = 0; k < LAB.tries * 4 && tested.length < LAB.tries + 6; k++) {
         const Q = mutate(champ.P, PAST_KEYS, rnd, L);
         const kq = keyOf(E, Q);
         if (seen.has(kq)) continue;
@@ -171,6 +174,32 @@
     return { book: out, evo, changed: true, promoted };
   }
 
+  // every hour of the day: another round of variations screened on the past year (a different random draw each hour);
+  // the ones that pass both halves wait on a bench, and fill a free shadow place at once
+  function hourly(E, D, book, evo0, opts, key) {
+    TILT = (opts && opts.tilt) || null;
+    if (!evo0 || !book || evo0.lastHour === key) return { evo: evo0, changed: false };
+    const evo = JSON.parse(JSON.stringify(evo0)), day = book.date, td = D.dates.indexOf(day);
+    if (td < 0) return { evo: evo0, changed: false };
+    const t0 = Date.now(), L = limits(E), champ = book.state;
+    const seen = new Set([keyOf(E, champ.P), ...evo.shadows.map((s) => keyOf(E, s.params)), ...(evo.bench || []).map((b) => keyOf(E, b.Q))]);
+    const rnd = rng(`${day}|${key}|${evo.gen}|hour`), z = screen(E, D, td, champ.P, champ.M), found = [];
+    let tried = 0;
+    for (let k = 0; k < LAB.tries * 4 && tried < LAB.tries && Date.now() - t0 < LAB.hourMs; k++) {
+      const Q = mutate(champ.P, PAST_KEYS, rnd, L), kq = keyOf(E, Q);
+      if (seen.has(kq)) continue;
+      seen.add(kq); tried++;
+      const s = screen(E, D, td, Q, champ.M);
+      if (passes(s, z)) found.push({ Q, s: s.map(briefS), gain: s[0].fit - z[0].fit + s[1].fit - z[1].fit, diff: diff(E, champ.P, Q), at: key });
+    }
+    evo.bench = (evo.bench || []).concat(found).sort((a, b) => b.gain - a.gain).slice(0, LAB.benchMax);
+    const nS = evo.shadows.filter((s) => s.kind === 'screened').length;
+    for (const c of evo.bench.splice(0, Math.max(0, LAB.screened - nS))) spawn(E, evo, book, 'screened', c.Q, c.Q, c.diff, { cand: c.s, champ: z.map(briefS) });
+    const same = evo.search && evo.search.date === day;
+    evo.search = { date: day, hour: key, rounds: (same ? evo.search.rounds : 0) + 1, tried: (same ? evo.search.tried : 0) + tried, passed: (same ? evo.search.passed : 0) + found.length, bench: evo.bench.length, ms: Date.now() - t0 };
+    evo.lastHour = key;
+    return { evo, changed: true };
+  }
   // what the page shows
   function view(E, evo) {
     if (!evo) return null;
@@ -178,12 +207,12 @@
       gen: evo.gen, since: evo.since, lastRun: evo.lastRun, error: evo.lastError || null,
       rules: { tries: LAB.tries, screenDays: LAB.screenDays, fwdMin: LAB.fwdMin, fwdMax: LAB.fwdMax, margin: LAB.margin, mddSlack: LAB.mddSlack, minTrades: LAB.minTrades, earlyAt: LAB.earlyAt, earlyCut: LAB.earlyCut },
       shadows: evo.shadows.map((s) => ({ id: s.id, kind: s.kind, born: s.born, diff: s.diff, fwd: briefF(s.fwd), screen: s.screen })),
-      lastScreen: evo.lastScreen,
+      lastScreen: evo.lastScreen, search: evo.search || null, bench: (evo.bench || []).length,
       history: evo.history.slice(-15).reverse(),
     };
   }
 
-  const api = { LAB, STEP, night, view, screen, forward, mutate, rng };
+  const api = { LAB, STEP, night, hourly, view, screen, forward, mutate, rng };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PaperLab = api;
 })(typeof self !== 'undefined' ? self : this);
