@@ -60,7 +60,8 @@
     // the stress test over every short option together: if the S&P 500 (and IWM) moved `move` against them overnight,
     // the loss may not pass `max` of the account; a new short option that would break it is not opened
     stress: { move: 0.15, max: 0.2 },
-    longOpt: { und: 'SPY', dteMin: 30, dteMax: 60, dteAim: 45, delta: 0.4, riskPer: 0.01, maxRisk: 0.04, take: 1, stop: 0.5, exitDte: 10 },
+    // bear: in a long-term downtrend (allocator's opt.bear) puts may cost up to bearIv × the realised-vol forecast, at bearSize × the size
+    longOpt: { und: 'SPY', dteMin: 30, dteMax: 60, dteAim: 45, delta: 0.4, riskPer: 0.01, maxRisk: 0.04, take: 1, stop: 0.5, exitDte: 10, bearIv: 1.5, bearSize: 1.5, oneMax: 0.03 },
     nakedCall: { und: 'SPY', dteMin: 21, dteMax: 45, dteAim: 30, delta: 0.15, maxNotional: 0.8, take: 0.5, stopX: 3, exitDte: 7 },
     base: { und: 'SPY', dteMin: 21, dteMax: 45, dteAim: 30, wing: 0.9, budget: 0.12, startBudget: 0.06, startCycles: 3, cap: 1.5, lam: 0.94 },
     els: { tenor: 3, obs: [0.9, 0.9, 0.85, 0.85, 0.8, 0.75], ki: 0.45, fvTarget: 0.98, lot: 5000, qSpx: 0.012, qNdx: 0.007, earlySale: 0.95, paths: 6000, markPaths: 1500 },
@@ -496,11 +497,14 @@
     if (O.longOpt && side && !st.opt.some((o) => o.side === side)) {
       const r = side === 'lcall' ? 'C' : 'P', e = pickExp(ch, d, L.dteMin, L.dteMax, L.dteAim), iv = e && ivAt(e, r);
       const spent = st.opt.filter((o) => o.long).reduce((t, o) => t + o.n * 100 * o.cost, 0);
-      if (e && isNum(iv) && iv < rv) {
+      const bold = side === 'lput' && O.bear, ivCap = rv * (bold ? L.bearIv : 1), sz = bold ? L.bearSize : 1;
+      if (e && isNum(iv) && iv < ivCap) {
         const row = nearD(legs(ch, e, r).filter((x) => x[2] > 0), L.delta, r);
-        const n = row ? Math.min(Math.floor((acct * L.riskPer) / (row[2] * 100)), Math.floor((acct * L.maxRisk - spent) / (row[2] * 100))) : 0;
+        let n = row ? Math.min(Math.floor((acct * L.riskPer * sz) / (row[2] * 100)), Math.floor((acct * L.maxRisk * sz - spent) / (row[2] * 100))) : 0;
+        // one contract is allowed even above the per-trade budget while it costs at most oneMax of the account (high-vol markets)
+        if (row && n < 1 && row[2] * 100 <= acct * L.oneMax * sz && spent + row[2] * 100 <= acct * L.maxRisk * sz) n = 1;
         if (row && n >= 1 && free(st) > row[2] * 100 * n) openOpt(st, { side, long: true, und: 'SPY', right: r, exp: e, k: row[0], n, cost: row[2], spot: S, iv: r4(iv), rv: r4(rv),
-          why: `${side === 'lcall' ? '콜' : '풋'} 매수: S&P 500이 ${tr === 'up' ? '상승' : '하락'} 추세이고 옵션값(내재 변동성 ${(iv * 100).toFixed(1)}%)이 실제 흔들림 예측(${(rv * 100).toFixed(1)}%)보다 싸서 SPY ${row[0]}${side === 'lcall' ? '콜' : '풋'}(델타 ${Math.abs(row[4]).toFixed(2)}) ${n}계약을 삽니다. 최대 손실은 낸 값 $${(row[2] * 100 * n).toFixed(0)}, +100%면 이익 실현, −50%면 손절.` }, now, d);
+          why: `${side === 'lcall' ? '콜' : '풋'} 매수: S&P 500이 ${tr === 'up' ? '상승' : '하락'} 추세이고 옵션값(내재 변동성 ${(iv * 100).toFixed(1)}%)이 ${bold ? `장기 하락 추세라 허용하는 상한(실제 흔들림 예측 ${(rv * 100).toFixed(1)}%의 ${L.bearIv}배)보다 낮아 1.5배 크기로` : `실제 흔들림 예측(${(rv * 100).toFixed(1)}%)보다 싸서`} SPY ${row[0]}${side === 'lcall' ? '콜' : '풋'}(델타 ${Math.abs(row[4]).toFixed(2)}) ${n}계약을 삽니다. 최대 손실은 낸 값 $${(row[2] * 100 * n).toFixed(0)}, +100%면 이익 실현, −50%면 손절.` }, now, d);
       }
     }
     // selling a naked call: dear options, a market that is not rising
