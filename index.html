@@ -1190,11 +1190,11 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         .concat([['평단 계산', '자금이 들어온 때의 가격(Coinbase 1분봉)과 진행 중인 매매의 매수가']]) };
   }
   function perpA(x) {
-    const px = coinPx(x.c) || x.px, pnl = x.side * x.qty * (px - x.entry), notional = x.qty * px;
+    const lq = x.tok ? LQ['t:' + x.c] : null, px = (x.tok ? lq && lq.px : coinPx(x.c)) || x.px, pnl = x.side * x.qty * (px - x.entry), notional = x.qty * px;
     return { id: 'p:' + x.c, grp: '코인 선물', val: x.margin + pnl, tag: x.side > 0 ? '선물 매수' : '선물 공매도', title: assetName(x.c), sub: `${x.c} · ${fmt(x.qty, 6)}개 · 명목 ${usd(notional, 0)}`,
       rb: usd(x.margin + pnl), rs: `${sgnUsd(pnl)} (${pct(x.side * (px / x.entry - 1))})`, rsC: cls(pnl), why: x.why,
       name: `${assetName(x.c)} 무기한 선물 ${x.side > 0 ? '매수' : '공매도'}`, px, liveAt: Date.now(), unit: '$', dp: px >= 1000 ? 0 : 2, pnl,
-      entry: x.entry, entryL: x.side > 0 ? '평단' : '공매도 평단', lines: [{ v: x.stop, l: '손절' }], src: { k: 'kraken', pair: KPAIR[x.c] || x.c + 'USD' }, note: x.side > 0 ? '가격이 오르면 이익' : '가격이 내리면 이익',
+      entry: x.entry, entryL: x.side > 0 ? '평단' : '공매도 평단', lines: [{ v: x.stop, l: '손절' }], src: x.tok ? { k: 'kraken', pair: x.c + 'USD', tok: true } : { k: 'kraken', pair: KPAIR[x.c] || x.c + 'USD' }, note: x.side > 0 ? '가격이 오르면 이익' : '가격이 내리면 이익',
       rows: [[x.side > 0 ? '매수 평단' : '공매도 평단', usd(x.entry)], ['현재가', usd(px)], ['수량·명목', `${fmt(x.qty, 6)}개 · ${usd(notional)}`], ['증거금', `${usd(x.margin)} (레버리지 최대 ${x.lev}배)`],
         ['평가손익', `<span class="${cls(pnl)}">${sgnUsd(pnl)}</span> (수수료·펀딩 반영 전)`], ['손절', usd(x.stop)], ['펀딩·대여 비용', '명목의 연 8%로 계산(확인필요)'], ['강제 청산 방지', '증거금의 80%를 잃기 전에 정리']] };
   }
