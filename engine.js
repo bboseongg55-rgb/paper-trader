@@ -889,7 +889,7 @@
           opened++;
         }
       }
-      if (!blocked.length && !prov && (!only || only === 'sb') && !regimeOk(D, t, 1) && riskMul('sb') > 0) {
+      if (!blocked.length && !prov && (!only || only === 'sb') && (P.shortAny || !regimeOk(D, t, 1)) && riskMul('sb') > 0) {   // shortAny: in every market phase
         const held = new Set(positions.map((p) => p.i)), cands = [];
         for (let i = 0; i < (D.bond0 != null ? D.bond0 : D.S.length); i++) {
           const x = D.S[i];

@@ -170,7 +170,9 @@ if (evoChanged) fs.writeFileSync('data/evolution.json', JSON.stringify(evo));
 // what the page shows: the book, plus today while the market is open
 // leverage for the stock account: buying power up to 1.5 × its value (margin interest on what is borrowed); shorts need
 // 150% of their value set aside. Sizing still goes by the risk to each stop, so this is a ceiling, not a target
-const FORCE = { lev: 1.5 };
+// the owner's settings (2026-11-21): long entries in every market phase (regimeLevel 0: the S&P 500's trend no longer
+// blocks them; the drawdown brake still does), shorts in every phase too
+const FORCE = { lev: 1.5, regimeLevel: 0, shortAny: 1 };
 const lv = book ? E.simulate(D, { resume: book, to: T - 1, adaptive: true, log: true, tilt: tiltAt, force: FORCE }) : null;
 const mv = E.marketView(D, lv ? lv.params : null);
 const res = { D: { last: D.dates[T - 1], lastTime: D.times[T - 1] || null, prov: D.prov ? { date: D.dates[D.prov.t], time: D.prov.time } : null },

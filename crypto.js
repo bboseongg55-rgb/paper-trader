@@ -35,12 +35,12 @@
   const WD_FEE = { BTC: 0.0002, ETH: 0.002, SOL: 0.01 };
   const CFG = {
     arbShare: 0.3, arbMinEdge: 0.0005, arbMaxUsd: 1500, slip: 0.0002, exec: 'binanceus',
-    trend: { hi: 20, lo: 10, atr: 14, ema: 100, stopK: 3, risk: 0.01, maxW: 0.3, shortW: 0.5 },
+    trend: { hi: 20, lo: 10, atr: 14, ema: 100, stopK: 3, risk: 0.01, maxW: 0.3, shortW: 1 },
     // perpetual futures for the trend strategy: longs and shorts, up to `lev` times the margin. Each position keeps its
     // margin (notional ÷ lev) aside; funding and borrowing cost `fund` a year on the notional (확인필요: real funding swings
     // around this and is often paid to shorts); a position is closed before 80% of its margin could be lost. Shorts start
-    // at shortW of the long risk until they have their own record
-    perp: { lev: 3, fund: 0.08, guard: 0.8, gross: 1.5 },     // gross: all perpetual notional together ≤ 1.5 × the account (the coins move together)
+    // at shortW of the long risk (owner's setting: the same as longs)
+    perp: { lev: 5, fund: 0.08, guard: 0.8, gross: 3 },       // owner's setting (2026-11-21): up to 5× margin, all perpetual notional together ≤ 3 × the coin account
     tok: { hi: 20, lo: 10, atr: 14, ema: 100, stopK: 3, risk: 0.005, maxW: 0.2, maxAll: 0.6, maxSpread: 0.003 },
     scalp: { look: 15, mom: 0.003, tp: 0.005, sl: 0.0035, maxMin: 20, risk: 0.0025, maxW: 0.2 },
     brakes: { day: 0.03, half: 0.15, stop: 0.25 },

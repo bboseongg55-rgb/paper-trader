@@ -12,7 +12,10 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const pct = (v, d = 1) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%' : '-');
   const pp = (v) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%p' : '-');
-  const V = 4;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage)
+  const V = 5;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30)
+  // the owner's settings (2026-11-21): every strategy may trade in every market phase (the regime only scales risk), and
+  // the 24-hour part (coins) holds 30% of the account against 70% for stocks, futures and options
+  const OPEN = true, COIN_SHARE = 0.3;
   const RULES = {
     vol: [16, 22, 30],             // VIX: low < 16 ≤ normal < 22 ≤ high < 30 ≤ extreme
     hyStress: 5, hyJump: 0.75, hyWiden: 0.4,
@@ -101,25 +104,26 @@
     // forecast (checked on the closing chain). It replaces the 20-delta put spreads and the IWM wheel, which sold the
     // same premium without its loss budget, so short puts never stack
     const base = true;
-    const credit = !base && !off && ((p.trend === 'up' && vixIn(15)) || (p.trend === 'mixed' && vixIn(18)));
-    const callCredit = p.credit !== 'stress' && vixIn(18) && (p.trend === 'down' || (p.trend === 'mixed' && !off));
+    const credit = OPEN || (!base && !off && ((p.trend === 'up' && vixIn(15)) || (p.trend === 'mixed' && vixIn(18))));
+    const callCredit = OPEN || (p.credit !== 'stress' && vixIn(18) && (p.trend === 'down' || (p.trend === 'mixed' && !off)));
     // the wheel on IWM (cash-secured put, then covered calls): when the market is not falling and premiums pay; it ties
     // up IWM's price × 100 in cash, at most 30% of the account
     const iwm = isNum(ctx.iwm) ? ctx.iwm : null, acct = isNum(ctx.account) && ctx.account > 0 ? ctx.account : null;
     const wheelShare = iwm && acct ? (iwm * 100 * 1.05) / acct : null, affordable = wheelShare != null && wheelShare <= 0.3;
-    const wheel = !base && !off && p.trend !== 'down' && vixIn(15) && affordable;
+    const wheel = OPEN ? affordable : !base && !off && p.trend !== 'down' && vixIn(15) && affordable;
     const heldShare = acct && isNum(ctx.wheelHeld) ? ctx.wheelHeld / acct : 0;
     // protection is bought only while it is still cheap (VIX under 22): bought after a crash it costs more than it saves
-    const expo = isNum(ctx.exposure) ? ctx.exposure : 0, hedge = off && expo >= 20000 && isNum(p.vix) && p.vix < 22;
+    const expo = isNum(ctx.exposure) ? ctx.exposure : 0, hedge = OPEN ? expo >= 20000 : off && expo >= 20000 && isNum(p.vix) && p.vix < 22;
     const cpn = isNum(ctx.elsCoupon) ? ctx.elsCoupon : null;
-    const elsOn = isNum(p.vix) && p.vix >= 20 && !(p.trend === 'down' && p.volLv === 'extreme') && p.credit !== 'stress' && (cpn == null || cpn >= 0.07);
+    const elsOn = OPEN || (isNum(p.vix) && p.vix >= 20 && !(p.trend === 'down' && p.volLv === 'extreme') && p.credit !== 'stress' && (cpn == null || cpn >= 0.07));
     const elsMax = off ? 0.05 : 0.1;
     // 4. the 24-hour market (coins and tokenized stocks): multipliers on its own weights
-    const h24 = { trend: p.btcTrend === 'up' ? 1.2 : p.btcTrend === 'down' ? 0.7 : 1, scalp: p.volLv === 'extreme' ? 0.75 : 1, arb: 1,
+    const h24 = { trend: OPEN ? 1 : p.btcTrend === 'up' ? 1.2 : p.btcTrend === 'down' ? 0.7 : 1,   // coin trends trade both ways now, so a falling bitcoin no longer cuts them scalp: p.volLv === 'extreme' ? 0.75 : 1, arb: 1,
       tok: off ? 0.5 : key === 'bull' ? 1.25 : 1, tokSmall: p.sc === 'lead' ? 1.3 : 1 };
     // 5. each part's share of the account
-    const h24T = p.volLv === 'extreme' ? 0.05 : off ? 0.07 : key === 'bull' && p.btcTrend === 'up' ? 0.12 : 0.1;
-    const derivT = Math.min(0.7, 0.12 + (elsOn ? elsMax : 0) + Math.max(wheel ? wheelShare : 0, heldShare) + (base ? 0.15 : 0));
+    const h24T = OPEN ? COIN_SHARE : p.volLv === 'extreme' ? 0.05 : off ? 0.07 : key === 'bull' && p.btcTrend === 'up' ? 0.12 : 0.1;
+    // derivatives take at most half of the non-coin part, so individual stocks and bonds keep at least the other half
+    const derivT = Math.min(OPEN ? (1 - h24T) / 2 : 0.7, 0.12 + (elsOn ? elsMax : 0) + Math.max(wheel ? wheelShare : 0, heldShare) + (base ? 0.15 : 0));
     const target = { core: Math.round((1 - h24T - derivT) * 100) / 100, deriv: Math.round(derivT * 100) / 100, h24: h24T };
 
     // what to do first, and why (the numbers that decided it)
@@ -131,12 +135,12 @@
     const it = [
       { k: 'dt', name: '단타(주식, 당일 청산)', w: C.dt, on: true,
         why: off ? `${spxTxt}, ${vixTxt}: 시황이 나빠 밤사이 위험이 없는 단타를 앞세웁니다.` : `그날 시장보다 강한 종목만 짧게 노립니다(위험 ${Math.round(C.dt * 100)}%).` },
-      { k: 'bo', name: '신고가 돌파 스윙', w: C.bo, on: p.trend !== 'down',
+      { k: 'bo', name: '신고가 돌파 스윙', w: C.bo, on: OPEN || p.trend !== 'down',
         why: p.trend === 'down' ? `${spxTxt}: 하락 추세에서는 신고가 돌파가 되밀리기 쉬워 새 매수를 쉽니다.` : key === 'bull' ? `${spxTxt}, ${vixTxt}: 안정된 상승장이라 돌파 종목의 추세가 이어지기 쉽습니다.` : `${spxTxt}: 위험을 ${Math.round(C.bo * 100)}%로 둡니다.` },
-      { k: 'pb', name: '눌림목 스윙', w: C.pb, on: p.trend !== 'down', why: p.trend === 'down' ? '하락 추세의 눌림은 반등보다 추가 하락이 잦아 쉽니다.' : `상승 추세 안의 짧은 하락을 삽니다(위험 ${Math.round(C.pb * 100)}%).` },
+      { k: 'pb', name: '눌림목 스윙', w: C.pb, on: OPEN || p.trend !== 'down', why: p.trend === 'down' ? '하락 추세의 눌림은 반등보다 추가 하락이 잦아 쉽니다.' : `상승 추세 안의 짧은 하락을 삽니다(위험 ${Math.round(C.pb * 100)}%).` },
       { k: 'bd', name: '채권(각국 국채·회사채)', w: C.bd, on: true,
         why: p.rates === 'cutting' ? `${rateTxt}: 금리 인하 사이클에는 채권 가격이 오르기 쉬워 채권 비중을 늘립니다.` : p.rates === 'hiking' ? `${rateTxt}: 금리가 오르는 동안 채권 가격은 내리기 쉬워 줄입니다.` : `${rateTxt}: 추세가 확인된 채권만 삽니다.` },
-      { k: 'sc', name: '중소형주 스윙(러셀 2000 선물)', w: sc[0], on: p.trend !== 'down' && p.sc !== 'lag',
+      { k: 'sc', name: '중소형주 스윙(러셀 2000 선물)', w: sc[0], on: OPEN || (p.trend !== 'down' && p.sc !== 'lag'),
         why: [scTxt, p.rates === 'cutting' ? '금리 인하 사이클은 빚이 많은 중소형주에 유리' : ''].filter(Boolean).join(', ') + (p.sc === 'lead' || p.rates === 'cutting' ? ' → 중소형주 매수 비중을 늘립니다.' : '. 추세가 맞을 때만 삽니다.') },
       { k: 'cta', name: '선물 추세추종(지수·국채·원자재·코인)', w: off ? 1 : futBudget / 0.05, on: true,
         why: `선물 위험 한도 연 ${Math.round(futBudget * 100)}%(계좌 대비 변동성). ${off ? '하락 추세 시장은 매도 포지션도 잡습니다.' : '여러 시장에 나눠 추세를 따릅니다.'}${p.cmd === 'hot' ? ` 원유·구리 3개월 ${pct(p.cmdMove)}로 원자재 매수 쪽을 늘립니다.` : ''}` },
@@ -162,9 +166,9 @@
         why: elsOn ? `${vixTxt}: 변동성이 높아 ELS 쿠폰이 높습니다${cpn != null ? `(지금 조건이면 연 ${(cpn * 100).toFixed(1)}%)` : ''}. 계좌의 ${Math.round(elsMax * 100)}% 한도 안에서 삽니다.`
           : cpn != null && isNum(p.vix) && p.vix >= 20 ? `지금 조건의 ELS 쿠폰이 연 ${(cpn * 100).toFixed(1)}%로 기준(연 7%)보다 낮아 사지 않습니다.` : 'VIX가 20 이상이고 쿠폰이 연 7% 이상일 때만 삽니다.' },
       { k: 'sb', name: '하락 돌파 공매도(주식)', w: 1 / 6, on: true,
-        why: `S&P 500이 200일 평균 아래일 때만, 50일 최저가를 깬 하락 추세·상대강도 하위 30% 종목을 공매도합니다(손절은 위쪽, 대여료 연 0.5%, 판 금액의 150% 증거금). 2년 시험이 21건 −$315라 보통의 1/6 위험으로 시작합니다. 주식 쪽 레버리지는 계좌의 1.5배까지 허용합니다.` },
+        why: `시장 국면과 상관없이, 50일 최저가를 깬 하락 추세·상대강도 하위 30% 종목을 공매도합니다(손절은 위쪽, 대여료 연 0.5%, 판 금액의 150% 증거금). 2년 시험이 손실이라 보통의 1/6 위험으로 시작합니다. 주식 쪽 레버리지는 계좌의 1.5배까지 허용합니다.` },
       { k: 'perp', name: '코인 무기한 선물(매수·공매도)', w: h24.trend, on: true,
-        why: '코인 추세 매매를 무기한 선물로 합니다: 20시간 신고가면 매수, 20시간 신저가(100시간 평균 아래)면 공매도, 증거금의 최대 3배, 선물 전체 명목은 코인 계좌의 1.5배 이내, 공매도는 매수의 절반 위험. 증거금 80%를 잃기 전에 정리합니다.' },
+        why: '코인 추세 매매를 무기한 선물로 합니다: 20시간 신고가면 매수, 20시간 신저가(100시간 평균 아래)면 공매도, 매수·공매도 같은 위험, 증거금의 최대 5배, 선물 전체 명목은 코인 계좌의 3배 이내. 증거금 80%를 잃기 전에 정리합니다.' },
       { k: 'crypto', name: '코인(거래소 간 차익·추세·초단타)', w: h24.trend, on: true,
         why: p.btcTrend ? `비트코인이 100일 평균 ${p.btcTrend === 'up' ? '위' : '아래'}(${pct(p.btc / p.btc100 - 1)})라 추세 매매 위험을 ${Math.round(h24.trend * 100)}%로 둡니다.` : '코인 추세 자료 없음.' },
       { k: 'tok', name: '토큰화 주식(코인 거래소, 24시간)', w: h24.tok, on: true,
@@ -202,7 +206,7 @@
     ];
     return {
       v: V, date: p.date, regime: { key, label: LABEL[key], tags, off }, headline, items: it, signals, rules,
-      tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { base, credit, callCredit, wheel, hedge, off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
+      tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { base, credit, callCredit, wheel, hedge, off: OPEN ? false : off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
         els: { on: elsOn, max: elsMax, minCoupon: 0.07, coupon: cpn != null ? r4(cpn) : null }, h24 },
       target, rp: isNum(rp) ? r4(rp / 100) : null,
       pic: Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === 'number' ? r4(v) : v])),
