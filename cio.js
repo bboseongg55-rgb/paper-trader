@@ -87,7 +87,7 @@
     const C = { off: { bo: 0.5, pb: 0.5, dt: 1.25, bd: p.rates === 'hiking' ? 0.75 : 1.25 }, cut: { bo: 1, pb: 1, dt: 1, bd: 1.5 }, hike: { bo: 0.85, pb: 0.85, dt: 1.1, bd: 0.5 },
       bull: { bo: 1.25, pb: 1.1, dt: 0.85, bd: 0.75 }, mixed: { bo: 0.9, pb: 1, dt: 1.1, bd: 1 } }[key];
     // 2. futures: [long, short] multipliers by market group, and the futures risk budget (annual volatility / account)
-    // a long-term downtrend (the S&P 500 below a falling 200-day average: p.trend 'down') turns the stance bearish: no
+    // a long-term downtrend (the S&P 500 at or below its 200-day average: p.trend 'down') turns the stance bearish: no
     // index longs, index shorts at twice the risk, and puts may be bought while dearer than usual (the owner's setting)
     const bear = OPEN && p.trend === 'down';
     const eq = bear ? [0, 2] : { off: [0.5, 1.25], cut: [1.1, 0.75], hike: [0.85, 1], bull: [1.25, 0.5], mixed: [1, 1] }[key];
@@ -169,8 +169,8 @@
         why: elsOn ? `${vixTxt}: 변동성이 높아 ELS 쿠폰이 높습니다${cpn != null ? `(지금 조건이면 연 ${(cpn * 100).toFixed(1)}%)` : ''}. 계좌의 ${Math.round(elsMax * 100)}% 한도 안에서 삽니다.`
           : cpn != null && isNum(p.vix) && p.vix >= 20 ? `지금 조건의 ELS 쿠폰이 연 ${(cpn * 100).toFixed(1)}%로 기준(연 7%)보다 낮아 사지 않습니다.` : 'VIX가 20 이상이고 쿠폰이 연 7% 이상일 때만 삽니다.' },
       { k: 'bear', name: '장기 하락 추세 대응(지수 선물 매도·풋 매수)', w: bear ? 2 : 0, on: bear,
-        why: bear ? 'S&P 500이 떨어지는 200일 평균 아래라 장기 하락 추세로 판단합니다: 지수 선물은 매수하지 않고 매도 위험을 2배로, 선물 위험 예산 7%, 풋은 옵션값이 실제 흔들림 예측의 1.5배까지 비싸도 1.5배 크기로 삽니다.'
-          : 'S&P 500의 50일 평균이 200일 평균 위라 장기 하락 추세가 아닙니다. 하락 추세로 바뀌면 지수 선물 매도와 풋 매수를 크게 합니다.' },
+        why: bear ? 'S&P 500이 200일 평균 아래라 장기 하락 추세로 판단합니다: 지수 선물은 매수하지 않고 매도 위험을 2배로, 선물 위험 예산 7%, 풋은 옵션값이 실제 흔들림 예측의 1.5배까지 비싸도 1.5배 크기로 삽니다.'
+          : 'S&P 500이 200일 평균 위라 장기 하락 추세가 아닙니다. 200일 평균 아래로 내려가면 지수 선물 매도와 풋 매수를 크게 합니다.' },
       { k: 'longOpt', name: '콜·풋 매수(SPY)', w: 1, on: OPEN,
         why: `옵션값(내재 변동성)이 실제 흔들림 예측보다 쌀 때만, S&P 500 추세 방향으로 삽니다(오르면 콜, 내리면 풋, 델타 0.4, 약 45일). 한 번에 계좌의 1%, 합계 4% 안, +100% 이익 실현, −50% 손절.` },
       { k: 'nakedCall', name: '콜 매도(무담보, SPY)', w: 1, on: OPEN,

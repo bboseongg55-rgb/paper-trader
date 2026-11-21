@@ -493,7 +493,7 @@
     const ivAt = (e, r) => { const rows = legs(ch, e, r).filter((x) => x[1] > 0 && x[2] > 0); const a = rows.sort((x, y) => Math.abs(x[0] - S) - Math.abs(y[0] - S))[0];
       return a ? (isNum(a[3]) && a[3] > 0 ? a[3] : r === 'P' ? ivFromPut(midOf(a), S, a[0], days(d, e) / 365, rf) : null) : null; };
     // buying: cheap options, with the trend
-    const L = CFG.longOpt, side = tr === 'up' ? 'lcall' : tr === 'down' ? 'lput' : null;
+    const L = CFG.longOpt, side = O.bear ? 'lput' : tr === 'up' ? 'lcall' : tr === 'down' ? 'lput' : null;   // the allocator's long-term downtrend wins
     if (O.longOpt && side && !st.opt.some((o) => o.side === side)) {
       const r = side === 'lcall' ? 'C' : 'P', e = pickExp(ch, d, L.dteMin, L.dteMax, L.dteAim), iv = e && ivAt(e, r);
       const spent = st.opt.filter((o) => o.long).reduce((t, o) => t + o.n * 100 * o.cost, 0);
@@ -504,7 +504,7 @@
         // one contract is allowed even above the per-trade budget while it costs at most oneMax of the account (high-vol markets)
         if (row && n < 1 && row[2] * 100 <= acct * L.oneMax * sz && spent + row[2] * 100 <= acct * L.maxRisk * sz) n = 1;
         if (row && n >= 1 && free(st) > row[2] * 100 * n) openOpt(st, { side, long: true, und: 'SPY', right: r, exp: e, k: row[0], n, cost: row[2], spot: S, iv: r4(iv), rv: r4(rv),
-          why: `${side === 'lcall' ? '콜' : '풋'} 매수: S&P 500이 ${tr === 'up' ? '상승' : '하락'} 추세이고 옵션값(내재 변동성 ${(iv * 100).toFixed(1)}%)이 ${bold ? `장기 하락 추세라 허용하는 상한(실제 흔들림 예측 ${(rv * 100).toFixed(1)}%의 ${L.bearIv}배)보다 낮아 1.5배 크기로` : `실제 흔들림 예측(${(rv * 100).toFixed(1)}%)보다 싸서`} SPY ${row[0]}${side === 'lcall' ? '콜' : '풋'}(델타 ${Math.abs(row[4]).toFixed(2)}) ${n}계약을 삽니다. 최대 손실은 낸 값 $${(row[2] * 100 * n).toFixed(0)}, +100%면 이익 실현, −50%면 손절.` }, now, d);
+          why: `${side === 'lcall' ? '콜' : '풋'} 매수: S&P 500이 ${O.bear ? '장기 하락(200일 평균 아래)' : tr === 'up' ? '상승' : '하락'} 추세이고 옵션값(내재 변동성 ${(iv * 100).toFixed(1)}%)이 ${bold ? `장기 하락 추세라 허용하는 상한(실제 흔들림 예측 ${(rv * 100).toFixed(1)}%의 ${L.bearIv}배)보다 낮아 1.5배 크기로` : `실제 흔들림 예측(${(rv * 100).toFixed(1)}%)보다 싸서`} SPY ${row[0]}${side === 'lcall' ? '콜' : '풋'}(델타 ${Math.abs(row[4]).toFixed(2)}) ${n}계약을 삽니다. 최대 손실은 낸 값 $${(row[2] * 100 * n).toFixed(0)}, +100%면 이익 실현, −50%면 손절.` }, now, d);
       }
     }
     // selling a naked call: dear options, a market that is not rising
