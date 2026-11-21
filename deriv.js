@@ -49,6 +49,19 @@
     // credit) × 100; contracts so the worst case stays within `budget` of the account (startBudget for the first
     // startCycles months, until it has its own record) and the notional within `cap` × account. Held to expiry, opened
     // only at night on closing quotes (the model in tools/pf_lab.mjs decides at the close too).
+    // owner's settings (2026-11-21: buying and selling calls and puts, the risky ones too). The rule is the same as the
+    // base layer's, from the other side: options are BOUGHT only while cheap (implied vol of the at-the-money option
+    // below the realised-vol forecast), in the direction of the S&P 500's trend (calls when it rises, puts when it
+    // falls), at most riskPer of the account per trade and maxRisk in all; out at +100% or −50% of the price paid, or
+    // 10 days before expiry. A call is SOLD naked only while options are dear and the market is not rising, ~0.15 delta,
+    // one contract whose notional fits within maxNotional × account, Reg T margin held aside (20% of the stock less the
+    // out-of-the-money amount, at least 10%, plus the premium); bought back at 50% of the premium, at 3× it, or 7 days
+    // before expiry
+    // the stress test over every short option together: if the S&P 500 (and IWM) moved `move` against them overnight,
+    // the loss may not pass `max` of the account; a new short option that would break it is not opened
+    stress: { move: 0.15, max: 0.2 },
+    longOpt: { und: 'SPY', dteMin: 30, dteMax: 60, dteAim: 45, delta: 0.4, riskPer: 0.01, maxRisk: 0.04, take: 1, stop: 0.5, exitDte: 10 },
+    nakedCall: { und: 'SPY', dteMin: 21, dteMax: 45, dteAim: 30, delta: 0.15, maxNotional: 0.8, take: 0.5, stopX: 3, exitDte: 7 },
     base: { und: 'SPY', dteMin: 21, dteMax: 45, dteAim: 30, wing: 0.9, budget: 0.12, startBudget: 0.06, startCycles: 3, cap: 1.5, lam: 0.94 },
     els: { tenor: 3, obs: [0.9, 0.9, 0.85, 0.85, 0.8, 0.75], ki: 0.45, fvTarget: 0.98, lot: 5000, qSpx: 0.012, qNdx: 0.007, earlySale: 0.95, paths: 6000, markPaths: 1500 },
   };
@@ -119,25 +132,28 @@
   function futMark(st, key) { const p = st.fut[key]; return p ? p.mark : 0; }
   // options: spreads (side credit, ccall, hedge: kLong/kShort) and single short legs (csp, cc: k); value per share,
   // negative for what is owed. Positions from before calls existed have no 'right' and are puts.
-  const single = (o) => o.side === 'csp' || o.side === 'cc';
-  const rightOf = (o) => o.right || (o.side === 'cc' || o.side === 'ccall' ? 'C' : 'P');
+  const single = (o) => o.side === 'csp' || o.side === 'cc' || o.side === 'ncall' || o.side === 'lcall' || o.side === 'lput';
+  const rightOf = (o) => o.right || (o.side === 'cc' || o.side === 'ccall' || o.side === 'ncall' || o.side === 'lcall' ? 'C' : 'P');
   const legs = (ch, e, right) => (ch && ch.exps && ch.exps[e] && ch.exps[e][right === 'C' ? 'calls' : 'puts']) || [];
   const rowAt = (ch, e, right, K) => legs(ch, e, right).find((x) => Math.abs(x[0] - K) < 1e-9);
   const midOf = (r) => (r && r[1] >= 0 && r[2] > 0 ? (r[1] + r[2]) / 2 : null);
   function optMid(o, ch) {           // value per spread (long − short) or of the short option (negative), from the chain
     const r = rightOf(o);
-    if (single(o)) { const m = midOf(rowAt(ch, o.exp, r, o.k)); return m != null ? -m : null; }
+    if (single(o)) { const m = midOf(rowAt(ch, o.exp, r, o.k)); return m != null ? (o.long ? m : -m) : null; }
     const a = midOf(rowAt(ch, o.exp, r, o.kLong)), b = midOf(rowAt(ch, o.exp, r, o.kShort));
     return a != null && b != null ? a - b : null;
   }
   function intrinsic(o, S) {
     const r = rightOf(o), iv = (K) => (r === 'C' ? Math.max(0, S - K) : Math.max(0, K - S));
-    return single(o) ? -iv(o.k) : iv(o.kLong) - iv(o.kShort);
+    return single(o) ? (o.long ? 1 : -1) * iv(o.k) : iv(o.kLong) - iv(o.kShort);
   }
   function optName(o) {
     const u = o.und || 'SPY', e = o.exp.slice(2).replace(/-/g, '');
     if (o.side === 'csp') return `${u} ${e} ${o.k} 풋(현금 담보)`;
     if (o.side === 'cc') return `${u} ${e} ${o.k} 콜(커버드콜)`;
+    if (o.side === 'lcall') return `${u} ${e} ${o.k} 콜 매수`;
+    if (o.side === 'lput') return `${u} ${e} ${o.k} 풋 매수`;
+    if (o.side === 'ncall') return `${u} ${e} ${o.k} 콜 매도(무담보)`;
     if (o.side === 'ccall') return `${u} ${e} ${o.kShort}/${o.kLong} 콜 스프레드`;
     if (o.side === 'base') return `${u} ${e} ${o.kShort}/${o.kLong} 풋 스프레드(기반층)`;
     return `${u} ${e} ${o.kLong}/${o.kShort} 풋 스프레드`;
@@ -153,7 +169,7 @@
   function marginUsed(st) { let m = 0; for (const k in st.fut) { const p = st.fut[k], f = FUT_BY[k]; m += Math.abs(p.qty) * p.px * f.mult * f.mr; } return r2(m); }
   // cash the options tie up: a spread's width, a cash-secured put's whole strike (covered calls are covered by the shares)
   const spreadRisk = (o) => (o.side === 'credit' || o.side === 'base' ? o.n * 100 * (o.kShort - o.kLong) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort) : 0);
-  function optRisk(st) { let m = 0; for (const o of st.opt) m += o.side === 'csp' ? o.n * 100 * o.k : spreadRisk(o); return m; }
+  function optRisk(st) { let m = 0; for (const o of st.opt) m += o.side === 'csp' ? o.n * 100 * o.k : o.side === 'ncall' ? o.margin || 0 : spreadRisk(o); return m; }
   function free(st) { return st.cash - marginUsed(st) - optRisk(st); }
 
   // ── futures: close-to-close history (front contract) with today's settlement appended
@@ -236,7 +252,7 @@
     const held = Object.keys(st.fut);
     let risk2 = 0;
     for (const k of held) { const t = sig[k], p = st.fut[k]; if (t) { const r = Math.abs(p.qty) * t.sd * p.px * p.mult; risk2 += r * r; } }
-    const cands = FUT.filter((f) => !st.fut[f.key] && sig[f.key] && Math.abs(sig[f.key].s) === 1).map((f) => ({ f, t: sig[f.key], dir: Math.sign(sig[f.key].s) }))
+    const cands = ctx.brake ? [] : FUT.filter((f) => !st.fut[f.key] && sig[f.key] && Math.abs(sig[f.key].s) === 1).map((f) => ({ f, t: sig[f.key], dir: Math.sign(sig[f.key].s) }))
       .filter((c) => tilt(c.f, c.dir) > 0).sort((a, b) => b.t.strength * tilt(b.f, b.dir) - a.t.strength * tilt(a.f, a.dir));
     for (const c of cands) {
       if (Object.keys(st.fut).length >= CFG.cta.maxPos) break;
@@ -370,6 +386,7 @@
   }
   function manageOptions(st, ctx, night) {
     const chs = ctx.chain || {}, d = ctx.date, now = ctx.now, cio = ctx.cio || {}, O = cio.opt || {}, acct = Math.max(1, ctx.account || equity(st));
+    RISK = { acct, spots: { SPY: (chs.SPY && chs.SPY.spot) || (ctx.px && ctx.px.SPY), IWM: (chs.IWM && chs.IWM.spot) || (ctx.px && ctx.px.IWM) } };
     const pxOf = (u) => (chs[u] && chs[u].spot) || (ctx.px && ctx.px[u]) || (u === 'SPY' ? ctx.spy : null);
     // 1. expiry at the intrinsic value; a short put ending in the money buys the shares (the strike in all), a covered
     //    call ending in the money sells them (the strike in all)
@@ -395,6 +412,16 @@
         else if (owe >= got * c.stopX) why = `손절(되사는 값이 받은 값의 ${c.stopX}배)`;
         else if (left <= c.exitDte) why = `만기 ${left}일 전 정리`;
         else if (off) why = 'AI 배분: 시장 국면이 바뀌어 프리미엄 매도를 쉼';
+      } else if (o.side === 'lcall' || o.side === 'lput') {
+        const c = CFG.longOpt, v = o.val != null ? o.val : o.cost;
+        if (v >= o.cost * (1 + c.take)) why = `이익 실현(산 값의 ${Math.round((1 + c.take) * 100)}%)`;
+        else if (v <= o.cost * (1 - c.stop)) why = `손절(산 값의 ${Math.round(c.stop * 100)}% 손실)`;
+        else if (left <= c.exitDte) why = `만기 ${left}일 전 정리(시간 가치 소멸 전)`;
+      } else if (o.side === 'ncall') {
+        const c = CFG.nakedCall;
+        if (owe <= got * (1 - c.take)) why = `이익 실현(받은 프리미엄의 ${Math.round(c.take * 100)}%)`;
+        else if (owe >= got * c.stopX) why = `손절(되사는 값이 받은 값의 ${c.stopX}배)`;
+        else if (left <= c.exitDte) why = `만기 ${left}일 전 정리`;
       } else if (o.side === 'hedge') {
         if (left <= CFG.hedge.exitDte) why = `만기 ${left}일 전 정리`;
         else if (cio.opt && !O.hedge) why = 'AI 배분: 위험 회피 국면이 끝나 보호를 풂';
@@ -409,8 +436,10 @@
       const p = pxOf(u);
       if (p > 0 && !st.opt.some((o) => o.side === 'cc' && (o.und || 'SPY') === u)) stockSell(st, u, st.stk[u].qty, p, now, d, 'AI 배분: 위험 회피 국면이라 휠 전략의 주식을 정리');
     }
-    // 3. new positions
+    // 3. new positions (none on a day the whole account has lost its daily limit)
+    if (ctx.brake) return;
     const spy = chs.SPY;
+    if (spy && spy.exps && night && (O.longOpt || O.nakedCall)) openDirectional(st, spy, ctx, acct, O);
     if (spy && spy.exps && night && O.base && !st.opt.some((o) => o.side === 'base')) openBase(st, spy, ctx, acct);
     if (spy && spy.exps) {
       if (O.credit) openCreditSpread(st, spy, ctx, 'P', acct);
@@ -447,25 +476,79 @@
       }
     }
   }
+  // the S&P 500's trend from its closes: up (above a rising 50-day average), down (below a falling one), otherwise mixed
+  function spxTrend(hs) {
+    const p = Object.keys(hs).sort().map((k) => +hs[k]).filter((v) => v > 0);
+    if (p.length < 200) return 'mixed';
+    const avg = (n) => p.slice(-n).reduce((a, b) => a + b, 0) / n, S = p[p.length - 1], a50 = avg(50), a200 = avg(200);
+    return S > a50 && a50 > a200 ? 'up' : S < a50 && a50 < a200 ? 'down' : 'mixed';
+  }
+  function openDirectional(st, ch, ctx, acct, O) {
+    const d = ctx.date, now = ctx.now, S = ch.spot, rf = isNum(ctx.rf) ? ctx.rf : 0.04;
+    const hs = Object.assign({}, ctx.hist && ctx.hist['.SPX']);
+    if (isNum(ctx.spxNow) && ctx.spxNow > 0 && !hs[d]) hs[d] = ctx.spxNow;
+    const rv = rvForecast(hs, CFG.base.lam), tr = spxTrend(hs);
+    if (!(S > 0) || !isNum(rv)) return;
+    const ivAt = (e, r) => { const rows = legs(ch, e, r).filter((x) => x[1] > 0 && x[2] > 0); const a = rows.sort((x, y) => Math.abs(x[0] - S) - Math.abs(y[0] - S))[0];
+      return a ? (isNum(a[3]) && a[3] > 0 ? a[3] : r === 'P' ? ivFromPut(midOf(a), S, a[0], days(d, e) / 365, rf) : null) : null; };
+    // buying: cheap options, with the trend
+    const L = CFG.longOpt, side = tr === 'up' ? 'lcall' : tr === 'down' ? 'lput' : null;
+    if (O.longOpt && side && !st.opt.some((o) => o.side === side)) {
+      const r = side === 'lcall' ? 'C' : 'P', e = pickExp(ch, d, L.dteMin, L.dteMax, L.dteAim), iv = e && ivAt(e, r);
+      const spent = st.opt.filter((o) => o.long).reduce((t, o) => t + o.n * 100 * o.cost, 0);
+      if (e && isNum(iv) && iv < rv) {
+        const row = nearD(legs(ch, e, r).filter((x) => x[2] > 0), L.delta, r);
+        const n = row ? Math.min(Math.floor((acct * L.riskPer) / (row[2] * 100)), Math.floor((acct * L.maxRisk - spent) / (row[2] * 100))) : 0;
+        if (row && n >= 1 && free(st) > row[2] * 100 * n) openOpt(st, { side, long: true, und: 'SPY', right: r, exp: e, k: row[0], n, cost: row[2], spot: S, iv: r4(iv), rv: r4(rv),
+          why: `${side === 'lcall' ? '콜' : '풋'} 매수: S&P 500이 ${tr === 'up' ? '상승' : '하락'} 추세이고 옵션값(내재 변동성 ${(iv * 100).toFixed(1)}%)이 실제 흔들림 예측(${(rv * 100).toFixed(1)}%)보다 싸서 SPY ${row[0]}${side === 'lcall' ? '콜' : '풋'}(델타 ${Math.abs(row[4]).toFixed(2)}) ${n}계약을 삽니다. 최대 손실은 낸 값 $${(row[2] * 100 * n).toFixed(0)}, +100%면 이익 실현, −50%면 손절.` }, now, d);
+      }
+    }
+    // selling a naked call: dear options, a market that is not rising
+    const N = CFG.nakedCall;
+    if (O.nakedCall && tr !== 'up' && !st.opt.some((o) => o.side === 'ncall')) {
+      const e = pickExp(ch, d, N.dteMin, N.dteMax, N.dteAim), iv = e && ivAt(e, 'C');
+      if (e && isNum(iv) && iv > rv && S * 100 <= acct * N.maxNotional) {
+        const row = nearD(legs(ch, e, 'C').filter((x) => x[1] > 0 && x[0] > S), N.delta, 'C');
+        const margin = row ? (Math.max(0.2 * S - (row[0] - S), 0.1 * S) + row[1]) * 100 : 0;
+        if (row && free(st) >= margin) openOpt(st, { side: 'ncall', und: 'SPY', right: 'C', exp: e, k: row[0], n: 1, cost: -row[1], spot: S, margin: r2(margin), iv: r4(iv), rv: r4(rv),
+          why: `콜 매도(무담보): 옵션값(내재 변동성 ${(iv * 100).toFixed(1)}%)이 실제 흔들림 예측(${(rv * 100).toFixed(1)}%)보다 비싸고 S&P 500이 오르는 추세가 아니라 SPY ${row[0]}콜(델타 ${row[4].toFixed(2)})을 팔아 $${(row[1] * 100).toFixed(0)}를 받습니다. 증거금 ${usd(margin)}, 되사는 값이 받은 값의 ${N.stopX}배가 되면 손절합니다.` }, now, d);
+      }
+    }
+  }
+  let RISK = null;   // { spots, acct } for the stress test, set by manageOptions
+  function stressLoss(list, spots) {
+    let down = 0, up = 0;
+    for (const o of list) {
+      if (o.long || o.side === 'hedge') continue;
+      const S = spots[o.und || 'SPY'] || o.spot; if (!(S > 0)) continue;
+      const loss = (x) => Math.max(0, -(intrinsic(o, x) - o.cost) * o.n * 100);
+      if (rightOf(o) === 'P') down += loss(S * (1 - CFG.stress.move)); else up += loss(S * (1 + CFG.stress.move));
+    }
+    return Math.max(down, up);
+  }
   function openOpt(st, o, now, d) {
+    if (RISK && !o.long && o.side !== 'hedge') {
+      const now0 = stressLoss(st.opt, RISK.spots), next = stressLoss(st.opt.concat([o]), RISK.spots);
+      if (next > CFG.stress.max * RISK.acct && next > now0) { st.stressNote = { date: d, side: o.side, loss: r2(next), cap: r2(CFG.stress.max * RISK.acct) }; return false; }
+    }
     const fee = r2(o.n * (single(o) ? 1 : 2) * CFG.optFee);
     st.cash = r2(st.cash - o.n * 100 * o.cost - fee); st.fees = r2(st.fees + fee);
     const id = 'o' + (++st.seq);
     o.cost = r4(o.cost);
     st.opt.push(Object.assign({ id, date: d, t: now, val: o.cost, fees: fee }, o));
-    fill(st, { t: now, date: d, kind: 'opt', id, name: optName(o), side: o.side === 'hedge' ? 'buy' : 'sell', qty: o.n, px: r4(Math.abs(o.cost)), fee, why: o.why });
+    fill(st, { t: now, date: d, kind: 'opt', id, name: optName(o), side: o.side === 'hedge' || o.long ? 'buy' : 'sell', qty: o.n, px: r4(Math.abs(o.cost)), fee, why: o.why });
   }
   function closeOpt(st, o, value, now, d, why, expired, ch) {
     let v = value;
     if (v == null) {                       // a short position is bought back at the ask, a long one sold at the bid
       const r = rightOf(o);
-      if (single(o)) { const row = rowAt(ch, o.exp, r, o.k); v = row && row[2] > 0 ? -row[2] : (o.val != null ? o.val : o.cost); }
+      if (single(o)) { const row = rowAt(ch, o.exp, r, o.k); v = o.long ? (row && row[1] >= 0 ? row[1] : (o.val != null ? o.val : o.cost)) : row && row[2] > 0 ? -row[2] : (o.val != null ? o.val : o.cost); }
       else { const L = rowAt(ch, o.exp, r, o.kLong), S = rowAt(ch, o.exp, r, o.kShort); v = L && S && L[1] >= 0 && S[2] > 0 ? L[1] - S[2] : (o.val != null ? o.val : o.cost); }
     }
     const fee = expired ? 0 : r2(o.n * (single(o) ? 1 : 2) * CFG.optFee);
     st.cash = r2(st.cash + o.n * 100 * v - fee); st.fees = r2(st.fees + fee);
     const pnl = r2(o.n * 100 * (v - o.cost) - (o.fees || 0) - fee);
-    fill(st, { t: now, date: d, kind: 'opt', id: o.id, name: optName(o), side: o.side === 'hedge' ? 'sell' : 'buy', qty: o.n, px: r4(Math.abs(v)), fee, pnl, why });
+    fill(st, { t: now, date: d, kind: 'opt', id: o.id, name: optName(o), side: o.side === 'hedge' || o.long ? 'sell' : 'buy', qty: o.n, px: r4(Math.abs(v)), fee, pnl, why });
     st.closed.push({ kind: 'opt', s: o.side, id: o.id, und: o.und || 'SPY', exp: o.exp, k: o.k, kLong: o.kLong, kShort: o.kShort, n: o.n, from: o.date, to: d, pnl, why });
     st.opt = st.opt.filter((x) => x !== o);
   }
@@ -541,8 +624,8 @@
       stop: p.best && sdOf(p.key) ? r4(p.qty > 0 ? p.best * (1 - CFG.cta.stopK * sdOf(p.key)) : p.best * (1 + CFG.cta.stopK * sdOf(p.key))) : null,
       notional: r2(Math.abs(p.qty) * p.px * p.mult), margin: r2(Math.abs(p.qty) * p.px * p.mult * FUT_BY[p.key].mr), pnl: r2((p.real || 0) + p.qty * p.mult * (p.px - p.mark) - (p.feesPaid || 0)), date: p.date, why: p.why }));
     const maxLossOf = (o) => (o.side === 'credit' || o.side === 'base' ? o.n * 100 * (o.kShort - o.kLong + o.cost) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort + o.cost)
-      : o.side === 'csp' ? o.n * 100 * (o.k + o.cost) : o.side === 'cc' ? null : o.n * 100 * o.cost);
-    const opt = st.opt.map((o) => ({ id: o.id, side: o.side, und: o.und || 'SPY', right: rightOf(o), exp: o.exp, k: o.k, kLong: o.kLong, kShort: o.kShort, n: o.n, cost: o.cost, val: o.val,
+      : o.side === 'csp' ? o.n * 100 * (o.k + o.cost) : o.side === 'cc' || o.side === 'ncall' ? null : o.n * 100 * o.cost);
+    const opt = st.opt.map((o) => ({ id: o.id, side: o.side, und: o.und || 'SPY', right: rightOf(o), exp: o.exp, k: o.k, kLong: o.kLong, kShort: o.kShort, n: o.n, cost: o.cost, val: o.val, margin: o.margin,
       value: r2(o.n * 100 * (o.val != null ? o.val : o.cost)), pnl: r2(o.n * 100 * ((o.val != null ? o.val : o.cost) - o.cost) - (o.fees || 0)),
       maxLoss: maxLossOf(o) != null ? r2(maxLossOf(o)) : null, date: o.date, why: o.why }));
     const stk = Object.values(st.stk || {}).map((x) => ({ sym: x.sym, qty: x.qty, cost: r4(x.cost), px: x.px, value: r2(x.qty * x.px), pnl: r2((x.px - x.cost) * x.qty), since: x.since }));
@@ -551,7 +634,7 @@
     const by = {};
     for (const c of st.closed) { const b = (by[c.s] = by[c.s] || { n: 0, wins: 0, pnl: 0 }); b.n++; if (c.pnl > 0) b.wins++; b.pnl = r2(b.pnl + c.pnl); }
     return { v: 1, at: st.at, date: st.date, funded: st.funded, cash: st.cash, eq: equity(st), margin: marginUsed(st), optRisk: r2(optRisk(st)), rp: st.rp, fees: st.fees,
-      fut, opt, els, stk, by, base: st.base || null, signals: st.signals || {}, fills: st.fills.slice(-120).reverse(), hist: st.hist.slice(-400), log: st.log.slice(-40).reverse(), transfers: st.transfers };
+      fut, opt, els, stk, by, base: st.base || null, stress: { move: CFG.stress.move, max: CFG.stress.max, loss: r2(stressLoss(st.opt, (RISK && RISK.spots) || {})), note: st.stressNote || null }, signals: st.signals || {}, fills: st.fills.slice(-120).reverse(), hist: st.hist.slice(-400), log: st.log.slice(-40).reverse(), transfers: st.transfers };
   }
 
   const api = { FUT, FUT_BY, GROUP_NAME, CFG, init, fund, nightly, session, view, equity, marginUsed, free, elsValue, bsPut, trend };

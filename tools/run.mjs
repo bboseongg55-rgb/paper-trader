@@ -147,6 +147,8 @@ if (decided && book) {
   }
 }
 // the derivatives part: one closed day (settle, decide), or a session pass (marks, options)
+// the account-wide daily brake, set by an earlier run today (see the end of this file)
+const brakeNow = alloc.brake && alloc.brake.date === etToday ? alloc.brake : null;
 if (dst && book) {
   const d = book.date, coreV = coreNow(), derivV = Dv.equity(dst), cryptoV = (cv && cv.eq) || 0, total = coreV + derivV + cryptoV + transit();
   const stocksLong = book.state.positions.filter((p) => p.pb !== 'bd').reduce((a, p) => a + p.qty * (p.lastPx || p.fill || 0), 0);
@@ -158,7 +160,7 @@ if (dst && book) {
     exposure: stocksLong + futLong + toksLong, spx: valAt('.SPX', d), ndx: valAt('.NDX', d), vix: valAt('.VIX', d), vxn: valAt('.VXN', d), y2: valAt('US2Y', d), rp: valAt('US1M', d), rho,
     spy: mk.chain && mk.chain.SPY ? mk.chain.SPY.spot : null, today: etToday,
     px: { SPY: (mk.ix && mk.ix.SPY && mk.ix.SPY.px) || null, IWM: (mk.ix && mk.ix.IWM && mk.ix.IWM.px) || null },
-    spxNow: (mk.ix && mk.ix['.SPX'] && mk.ix['.SPX'].px) || null, rf: mk.ix && mk.ix.US3M && mk.ix.US3M.px > 0 ? mk.ix.US3M.px / 100 : null };
+    spxNow: (mk.ix && mk.ix['.SPX'] && mk.ix['.SPX'].px) || null, rf: mk.ix && mk.ix.US3M && mk.ix.US3M.px > 0 ? mk.ix.US3M.px / 100 : null, brake: brakeNow };
   if (!dst.date || dst.date < d) { Dv.nightly(dst, ctx); const h = dst.hist[dst.hist.length - 1]; if (h) h.pre = r2(h.eq - (dst.transfers || []).filter((x) => x.date === d).reduce((a, x) => a + x.amount, 0)); }
   else Dv.session(dst, ctx);
   derivChanged = true;
@@ -173,7 +175,8 @@ if (evoChanged) fs.writeFileSync('data/evolution.json', JSON.stringify(evo));
 // the owner's settings (2026-11-21): long entries in every market phase (regimeLevel 0: the S&P 500's trend no longer
 // blocks them; the drawdown brake still does), shorts in every phase too
 const FORCE = { lev: 1.5, regimeLevel: 0, shortAny: 1 };
-const lv = book ? E.simulate(D, { resume: book, to: T - 1, adaptive: true, log: true, tilt: tiltAt, force: FORCE }) : null;
+const tiltLive = (dt) => (brakeNow && dt === brakeNow.date ? { bo: 0, pb: 0, dt: 0, sb: 0, bd: 0 } : tiltAt(dt));   // a brake day opens nothing new
+const lv = book ? E.simulate(D, { resume: book, to: T - 1, adaptive: true, log: true, tilt: tiltLive, force: FORCE }) : null;
 const mv = E.marketView(D, lv ? lv.params : null);
 const res = { D: { last: D.dates[T - 1], lastTime: D.times[T - 1] || null, prov: D.prov ? { date: D.dates[D.prov.t], time: D.prov.time } : null },
   regime: mv.regime, gate: mv.gate, capital, liveStart, live: lv };
@@ -277,6 +280,24 @@ const state = {
   data: { liveBuilt: live.built || null, sources: readJSON('data/source.json', null) },
 };
 fs.writeFileSync('data/state.json', JSON.stringify(state));
+// the account-wide daily brake (checked after every run, acted on from the next one, five minutes later): once the whole
+// account (stocks, derivatives, coins) is 3% below where it stood at the New York day's first run, no part opens new
+// risk for the rest of that day; open positions keep their own stops and exits. The evening decision lifts it
+{
+  const BRAKE = 0.03, le = lv && lv.equity.length ? lv.equity[lv.equity.length - 1] : null;
+  if (le && isFinite(le.eq)) {
+    const tot = le.eq + ((state.account && state.account.flowsAfter) || 0) + (dst ? Dv.equity(dst) : 0) + ((cv && cv.eq) || 0) + transit();
+    let ch = false;
+    if (!alloc.day || alloc.day.date !== etToday) { alloc.day = { date: etToday, start: Math.round(tot * 100) / 100 }; ch = true; }
+    const chg = alloc.day.start > 0 ? tot / alloc.day.start - 1 : 0;
+    if (chg <= -BRAKE && !(alloc.brake && alloc.brake.date === etToday)) {
+      alloc.brake = { date: etToday, loss: Math.round(chg * 1e4) / 1e4, at: new Date().toISOString(), why: `계좌 전체가 오늘 ${(chg * 100).toFixed(1)}%: 하루 손실 한도(−3%)에 닿아 오늘은 새 매매를 멈춥니다` };
+      if (alloc.cio && alloc.cio.tilt && alloc.cio.tilt.h24) alloc.cio.tilt.h24 = Object.assign({}, alloc.cio.tilt.h24, { trend: 0, scalp: 0, tok: 0 });
+      ch = true;
+    }
+    if (ch) fs.writeFileSync('data/alloc.json', JSON.stringify(alloc, null, 1));
+  }
+}
 // the stocks held, for the next intraday quotes (bonds are not quoted: under their names CNBC gives the yield)
 fs.writeFileSync('data/held.json', JSON.stringify({ syms: lv ? lv.open.filter((p) => p.kind !== 'bond').map((p) => p.sym).sort() : [] }));
 // the earlier summary kept in the repository

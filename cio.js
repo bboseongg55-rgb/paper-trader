@@ -12,7 +12,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const pct = (v, d = 1) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%' : '-');
   const pp = (v) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%p' : '-');
-  const V = 5;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30)
+  const V = 6;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30; 6: buying calls and puts, naked calls)
   // the owner's settings (2026-11-21): every strategy may trade in every market phase (the regime only scales risk), and
   // the 24-hour part (coins) holds 30% of the account against 70% for stocks, futures and options
   const OPEN = true, COIN_SHARE = 0.3;
@@ -104,18 +104,18 @@
     // forecast (checked on the closing chain). It replaces the 20-delta put spreads and the IWM wheel, which sold the
     // same premium without its loss budget, so short puts never stack
     const base = true;
-    const credit = OPEN || (!base && !off && ((p.trend === 'up' && vixIn(15)) || (p.trend === 'mixed' && vixIn(18))));
-    const callCredit = OPEN || (p.credit !== 'stress' && vixIn(18) && (p.trend === 'down' || (p.trend === 'mixed' && !off)));
+    const credit = OPEN ? p.trend === 'up' : !base && !off && ((p.trend === 'up' && vixIn(15)) || (p.trend === 'mixed' && vixIn(18)));
+    const callCredit = OPEN ? p.trend !== 'up' : p.credit !== 'stress' && vixIn(18) && (p.trend === 'down' || (p.trend === 'mixed' && !off));
     // the wheel on IWM (cash-secured put, then covered calls): when the market is not falling and premiums pay; it ties
     // up IWM's price × 100 in cash, at most 30% of the account
     const iwm = isNum(ctx.iwm) ? ctx.iwm : null, acct = isNum(ctx.account) && ctx.account > 0 ? ctx.account : null;
     const wheelShare = iwm && acct ? (iwm * 100 * 1.05) / acct : null, affordable = wheelShare != null && wheelShare <= 0.3;
-    const wheel = OPEN ? affordable : !base && !off && p.trend !== 'down' && vixIn(15) && affordable;
+    const wheel = OPEN ? affordable && p.trend !== 'down' : !base && !off && p.trend !== 'down' && vixIn(15) && affordable;
     const heldShare = acct && isNum(ctx.wheelHeld) ? ctx.wheelHeld / acct : 0;
     // protection is bought only while it is still cheap (VIX under 22): bought after a crash it costs more than it saves
-    const expo = isNum(ctx.exposure) ? ctx.exposure : 0, hedge = OPEN ? expo >= 20000 : off && expo >= 20000 && isNum(p.vix) && p.vix < 22;
+    const expo = isNum(ctx.exposure) ? ctx.exposure : 0, hedge = OPEN ? expo >= 20000 && (off || p.trend === 'down') : off && expo >= 20000 && isNum(p.vix) && p.vix < 22;
     const cpn = isNum(ctx.elsCoupon) ? ctx.elsCoupon : null;
-    const elsOn = OPEN || (isNum(p.vix) && p.vix >= 20 && !(p.trend === 'down' && p.volLv === 'extreme') && p.credit !== 'stress' && (cpn == null || cpn >= 0.07));
+    const elsOn = isNum(p.vix) && p.vix >= 20 && !(p.trend === 'down' && p.volLv === 'extreme') && p.credit !== 'stress' && (cpn == null || cpn >= 0.07);
     const elsMax = off ? 0.05 : 0.1;
     // 4. the 24-hour market (coins and tokenized stocks): multipliers on its own weights
     const h24 = { trend: OPEN ? 1 : p.btcTrend === 'up' ? 1.2 : p.btcTrend === 'down' ? 0.7 : 1,   // coin trends trade both ways now, so a falling bitcoin no longer cuts them scalp: p.volLv === 'extreme' ? 0.75 : 1, arb: 1,
@@ -165,6 +165,10 @@
       { k: 'els', name: 'ELS(S&P 500·나스닥 100 스텝다운)', w: elsOn ? 0.9 : 0, on: elsOn,
         why: elsOn ? `${vixTxt}: 변동성이 높아 ELS 쿠폰이 높습니다${cpn != null ? `(지금 조건이면 연 ${(cpn * 100).toFixed(1)}%)` : ''}. 계좌의 ${Math.round(elsMax * 100)}% 한도 안에서 삽니다.`
           : cpn != null && isNum(p.vix) && p.vix >= 20 ? `지금 조건의 ELS 쿠폰이 연 ${(cpn * 100).toFixed(1)}%로 기준(연 7%)보다 낮아 사지 않습니다.` : 'VIX가 20 이상이고 쿠폰이 연 7% 이상일 때만 삽니다.' },
+      { k: 'longOpt', name: '콜·풋 매수(SPY)', w: 1, on: OPEN,
+        why: `옵션값(내재 변동성)이 실제 흔들림 예측보다 쌀 때만, S&P 500 추세 방향으로 삽니다(오르면 콜, 내리면 풋, 델타 0.4, 약 45일). 한 번에 계좌의 1%, 합계 4% 안, +100% 이익 실현, −50% 손절.` },
+      { k: 'nakedCall', name: '콜 매도(무담보, SPY)', w: 1, on: OPEN,
+        why: `옵션값이 실제 흔들림 예측보다 비싸고 S&P 500이 오르는 추세가 아닐 때만, 델타 0.15 콜을 1계약 팝니다(증거금 별도). 되사는 값이 받은 값의 3배면 손절, 50%면 이익 실현.` },
       { k: 'sb', name: '하락 돌파 공매도(주식)', w: 1 / 6, on: true,
         why: `시장 국면과 상관없이, 50일 최저가를 깬 하락 추세·상대강도 하위 30% 종목을 공매도합니다(손절은 위쪽, 대여료 연 0.5%, 판 금액의 150% 증거금). 2년 시험이 손실이라 보통의 1/6 위험으로 시작합니다. 주식 쪽 레버리지는 계좌의 1.5배까지 허용합니다.` },
       { k: 'perp', name: '코인 무기한 선물(매수·공매도)', w: h24.trend, on: true,
@@ -206,7 +210,7 @@
     ];
     return {
       v: V, date: p.date, regime: { key, label: LABEL[key], tags, off }, headline, items: it, signals, rules,
-      tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { base, credit, callCredit, wheel, hedge, off: OPEN ? false : off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
+      tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { base, credit, callCredit, wheel, hedge, longOpt: OPEN, nakedCall: OPEN, off: OPEN ? false : off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
         els: { on: elsOn, max: elsMax, minCoupon: 0.07, coupon: cpn != null ? r4(cpn) : null }, h24 },
       target, rp: isNum(rp) ? r4(rp / 100) : null,
       pic: Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === 'number' ? r4(v) : v])),

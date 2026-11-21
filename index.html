@@ -792,9 +792,12 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       hedge: { title: `${u} ${md} ${o.kLong}/${o.kShort} 풋`, tag: '보호 풋 스프레드', be: o.kLong - prem, lines: [{ v: o.kLong, l: '매수 행사가', keep: true }, { v: o.kShort, l: '매도 행사가', keep: true }], how: '하락 대비 보호', strikes: `${o.kLong} 풋 매수 · ${o.kShort} 풋 매도` },
       csp: { title: `${u} ${md} ${o.k} 풋`, tag: '현금 담보 풋', be: o.k - prem, lines: [{ v: o.k, l: '행사가', keep: true }], how: '현금 담보 풋 매도(휠)', strikes: `${o.k} 풋 매도` },
       cc: { title: `${u} ${md} ${o.k} 콜`, tag: '커버드콜', be: null, lines: [{ v: o.k, l: '콜 행사가', keep: true }], how: '커버드콜(휠)', strikes: `${o.k} 콜 매도` },
+      lcall: { title: `${u} ${md} ${o.k} 콜`, tag: '콜 매수', be: o.k + prem, lines: [{ v: o.k, l: '행사가', keep: true }], how: '콜 매수(옵션이 쌀 때, 상승 추세)', strikes: `${o.k} 콜 매수` },
+      lput: { title: `${u} ${md} ${o.k} 풋`, tag: '풋 매수', be: o.k - prem, lines: [{ v: o.k, l: '행사가', keep: true }], how: '풋 매수(옵션이 쌀 때, 하락 추세)', strikes: `${o.k} 풋 매수` },
+      ncall: { title: `${u} ${md} ${o.k} 콜`, tag: '콜 매도(무담보)', be: o.k + prem, lines: [{ v: o.k, l: '행사가', keep: true }], how: '콜 매도(무담보, 옵션이 비쌀 때)', strikes: `${o.k} 콜 매도` },
     })[o.side] || { title: `${u} ${md}`, tag: '옵션', be: null, lines: [], how: '옵션', strikes: '' };
   }
-  const optTied = (o) => (o.side === 'credit' || o.side === 'base' ? o.n * 100 * (o.kShort - o.kLong) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort) : o.side === 'csp' ? o.n * 100 * o.k : o.side === 'cc' ? 0 : o.value);
+  const optTied = (o) => (o.side === 'credit' || o.side === 'base' ? o.n * 100 * (o.kShort - o.kLong) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort) : o.side === 'csp' ? o.n * 100 * o.k : o.side === 'cc' ? 0 : o.side === 'ncall' ? o.margin || 0 : o.value);
   function allocInHTML(x, all) {
     if (!x) return '<p class="ain-hint">항목이나 고리를 누르면 그 안에 든 자산을 보여 줍니다.</p>';
     const pc = (v) => { const p = v / (all || 1) * 100; return fmt(p, p < 1 ? 2 : 1) + '%'; };
@@ -1135,16 +1138,17 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         ['진입', f.date ? dLabel(f.date) : '—'], ['방법', '선물 추세추종']] };
   }
   function optA(o) {
-    const u = o.und || 'SPY', q = LQ[u], prem = Math.abs(o.cost), K = optKind(o), short = o.side !== 'hedge';
+    const u = o.und || 'SPY', q = LQ[u], prem = Math.abs(o.cost), K = optKind(o), short = o.side !== 'hedge' && o.side !== 'lcall' && o.side !== 'lput';
     const stk = ((S.deriv && S.deriv.stk) || []).find((x) => x.sym === u);
     const entry = o.side === 'cc' ? (stk ? stk.cost : null) : K.be;
     return { id: 'o:' + o.id, grp: '옵션', short: `${u} 옵션`, val: Math.abs(optTied(o)), title: K.title, tag: K.tag,
-      sub: `${o.n}계약 · ${o.maxLoss != null ? `최대 손실 ${usd(o.maxLoss, 0)}` : '주식으로 덮인 콜'}`, rb: sgnUsd(o.pnl), rbC: cls(o.pnl),
+      sub: `${o.n}계약 · ${o.maxLoss != null ? `최대 손실 ${usd(o.maxLoss, 0)}` : o.side === 'ncall' ? '손실 한도 없음 · 3배 손절' : '주식으로 덮인 콜'}`, rb: sgnUsd(o.pnl), rbC: cls(o.pnl),
       rs: `${short ? '되사는 값' : '평가액'} ${usd(Math.abs(o.value), 0)}`, rsC: 'muted', why: o.why,
       name: `${K.title} ${K.tag}`, chartName: u === 'SPY' ? 'SPY(S&P 500 ETF)' : u === 'IWM' ? 'IWM(러셀 2000 ETF)' : u, px: q ? q.px : null, liveAt: q ? q.t : null, unit: '$', dp: 2, pnl: o.pnl,
       entry, entryL: o.side === 'cc' ? '주식 평단' : '손익분기', lines: K.lines, src: { k: 'cnbc', sym: u, reg: true }, note: `${u}는 CNBC 실시간 · 옵션 값은 CBOE 15분 지연`,
       rows: [['만기', esc(o.exp)], ['행사가', K.strikes], [short ? '받은 값(평단)' : '낸 값(평단)', `계약당 $${fmt(prem * 100, 0)}`], K.be != null ? [`손익분기(${u})`, usd(K.be)] : null,
-        o.side === 'cc' && stk ? ['주식 평단', usd(stk.cost)] : null, ['최대 손실', o.maxLoss != null ? usd(o.maxLoss, 0) : '없음(주식이 담보, 대신 행사가 위 상승분을 포기)'],
+        o.side === 'cc' && stk ? ['주식 평단', usd(stk.cost)] : null, ['최대 손실', o.maxLoss != null ? usd(o.maxLoss, 0) : o.side === 'ncall' ? '이론상 한도 없음(되사는 값이 받은 값의 3배가 되면 손절)' : '없음(주식이 담보, 대신 행사가 위 상승분을 포기)'],
+        o.side === 'ncall' ? ['묶인 증거금', usd(o.margin || 0, 0)] : null,
         o.side === 'csp' ? ['묶인 현금(담보)', usd(o.k * 100 * o.n, 0)] : null, ['손익', `<span class="${cls(o.pnl)}">${sgnUsd(o.pnl)}</span>`], ['진입', dLabel(o.date)], ['방법', K.how]] };
   }
   function stkA(x) {
@@ -1577,7 +1581,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         <span class="stat">매도 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''} · AI 위험 배분 ${Math.round((mm[k] == null ? 0 : mm[k]) * 100)}%${k === 'dt' && a.dtPaused ? ' · 쉬는 중' : ''}</span></li>`;
     }).join('') + (bp.hedge ? `<li><span class="name">S&amp;P 500 인버스 헷지 ${matTag('hedge')}</span><span class="pnl ${cls(bp.hedge.pnl + (bp.hedge.open || 0))}">${sgnUsd(bp.hedge.pnl + (bp.hedge.open || 0))}</span>
         <span class="stat">헷지 ${bp.hedge.n}번 정리${bp.hedge.open ? ' · 지금 보유 중' : ''} · 리스크·헷지팀 담당</span></li>` : '')
-      + (dv ? [['cta', '선물 추세추종'], ['base', 'S&P 500 기반층(풋 스프레드)'], ['credit', '옵션 풋 스프레드 매도'], ['ccall', '옵션 콜 스프레드 매도'], ['hedge', '보호 풋 스프레드'], ['csp', '현금 담보 풋(IWM 휠)'], ['cc', '커버드콜(IWM 휠)'], ['wheel', '휠 주식(IWM)'], ['els', 'ELS']]
+      + (dv ? [['cta', '선물 추세추종'], ['base', 'S&P 500 기반층(풋 스프레드)'], ['lcall', '콜 매수'], ['lput', '풋 매수'], ['ncall', '콜 매도(무담보)'], ['credit', '옵션 풋 스프레드 매도'], ['ccall', '옵션 콜 스프레드 매도'], ['hedge', '보호 풋 스프레드'], ['csp', '현금 담보 풋(IWM 휠)'], ['cc', '커버드콜(IWM 휠)'], ['wheel', '휠 주식(IWM)'], ['els', 'ELS']]
           .filter(([k]) => ['cta', 'credit', 'hedge', 'els'].includes(k) || (dv.by || {})[k] || dv.opt.some((o) => o.side === k) || (k === 'wheel' && (dv.stk || []).length)).map(([k, nm]) => { const b = (dv.by || {})[k] || { n: 0, wins: 0, pnl: 0 };
           const open = k === 'cta' ? dv.fut.reduce((t, p) => t + p.pnl, 0) : k === 'els' ? dv.els.reduce((t, e) => t + e.value - e.amount, 0) : k === 'wheel' ? (dv.stk || []).reduce((t, x) => t + x.pnl, 0) : dv.opt.filter((o) => o.side === k).reduce((t, o) => t + o.pnl, 0);
           const nOpen = k === 'cta' ? dv.fut.length : k === 'els' ? dv.els.length : k === 'wheel' ? (dv.stk || []).length : dv.opt.filter((o) => o.side === k).length;
@@ -1726,7 +1730,9 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const sig = dv.signals || {}, held = new Map(dv.fut.map((p) => [p.key, p]));
     let h = `<div class="band"></div><h2>파생팀 <span class="count">선물·옵션·ELS</span></h2><p class="sumline" style="padding-top:4px">CME 마이크로 선물 등 14개 시장의 추세를 매일 장 마감 뒤 봅니다. 60일·120일 수익률과 20일·100일 평균이 모두 같은 방향일 때만 새로 들어가고(하락이면 매도), 추세가 꺾이거나 추적 손절에 닿으면 나옵니다. 옵션과 ELS는 AI 운용 방향이 허용할 때만 삽니다.</p>`;
     const ks = Object.keys(FUTN).filter((k) => sig[k]);
-    h += '<p class="sumline" style="padding-top:8px">옵션: S&amp;P 500 기반층(매달 SPY 등가격 풋 매도·10% 아래 풋 매수, 옵션값이 실제 흔들림 예측보다 비쌀 때만), 콜 스프레드 매도(하락·횡보), 보호 풋 스프레드(위험 회피). 기반층이 켜져 있는 동안 예전 풋 스프레드와 IWM 휠은 풋 매도가 겹치지 않게 쉽니다. 손실이 끝없이 커질 수 있는 맨 콜 매도는 하지 않습니다.</p>';
+    h += '<p class="sumline" style="padding-top:8px">옵션: 옵션값이 실제 흔들림 예측보다 비쌀 때는 팔고(S&amp;P 500 기반층, 콜 스프레드·무담보 콜은 오르는 장이 아닐 때, 풋 스프레드·IWM 휠은 내리는 장이 아닐 때), 쌀 때는 추세 방향으로 삽니다(오르면 콜, 내리면 풋). 파는 옵션 전체는 15% 급변 시 손실이 계좌의 20%를 넘지 않게 묶고, 계좌 전체가 하루 3% 잃으면 그날 새 매매를 멈춥니다.</p>';
+    const ss = dv.stress;   // every short option together under a 15% overnight move against it
+    if (ss) h += `<ul class="mix" style="padding-top:6px"><li><span class="name">옵션 스트레스 시험</span><span class="pnl">${usd(ss.loss, 0)}</span><span class="stat">S&amp;P 500이 하룻밤에 ${Math.round(ss.move * 100)}% 반대로 움직이면 파는 옵션 전체의 손실 · 한도 계좌의 ${Math.round(ss.max * 100)}%${ss.note ? ` · ${dLabel(ss.note.date)} 한도에 걸려 새 ${esc(ss.note.side)} 매도를 건너뜀` : ''}</span></li></ul>`;
     const bg = dv.base;   // the base layer's last nightly check
     if (bg) h += `<ul class="mix" style="padding-top:6px"><li><span class="name">기반층 판단 (${dLabel(bg.date)} 장 마감)</span><span class="pnl ${bg.open ? 'up' : ''}">${bg.open ? '매도함' : '쉼'}</span><span class="stat">옵션 내재 변동성 ${bg.iv != null ? fmt(bg.iv * 100, 1) + '%' : '-'} · 실제 흔들림 예측 ${bg.rv != null ? fmt(bg.rv * 100, 1) + '%' : '-'} · 최악 손실 한도 계좌의 ${Math.round((bg.budget || 0) * 100)}%${bg.why ? ' · ' + esc(bg.why) : ''}</span></li></ul>`;
     h += '<ul class="mix" style="padding-top:10px">' + ks.map((k) => { const g = sig[k], p = held.get(k), dir = g.s >= 0.99 ? '상승 추세' : g.s <= -0.99 ? '하락 추세' : '혼조';
