@@ -1,8 +1,8 @@
 {
- "built": "2026-11-23T14:35:33.049Z",
+ "built": "2026-11-23T14:40:27.481Z",
  "asOf": {
   "date": "2026-11-23",
-  "time": "09:35",
+  "time": "09:40",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
@@ -14,12 +14,12 @@
    "hedge": 0,
    "n": 0,
    "dd": 0,
-   "bench": 365049.54,
-   "time": "09:35",
+   "bench": 362681.99,
+   "time": "09:40",
    "prov": true
   },
   "ret": 0.00042259999999982867,
-  "bench": 0.04299868571428567,
+  "bench": 0.03623425714285711,
   "trades": 0,
   "fees": 0,
   "open": [],
@@ -44,19 +44,25 @@
  },
  "signals": [
   {
+   "sym": "BDX",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "MPC",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "PSX",
+   "sym": "ROP",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "ROP",
+   "sym": "PSX",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
