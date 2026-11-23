@@ -1,25 +1,25 @@
 {
- "built": "2026-11-23T18:00:29.196Z",
+ "built": "2026-11-23T18:05:27.176Z",
  "asOf": {
   "date": "2026-11-23",
-  "time": "13:00",
+  "time": "13:05",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-23",
-   "eq": 349886.19,
+   "eq": 349909.84,
    "cash": 317670.59,
    "hedge": 0,
    "n": 2,
    "dd": 0.0004,
-   "bench": 365675.64,
-   "time": "13:00",
+   "bench": 365690.28,
+   "time": "13:05",
    "prov": true
   },
-  "ret": -0.0003251714285714691,
-  "bench": 0.044787542857142926,
+  "ret": -0.00025759999999996896,
+  "bench": 0.04482937142857146,
   "trades": 1,
   "fees": 0.38,
   "open": [
@@ -27,17 +27,17 @@
     "sym": "VIK",
     "qty": 211,
     "entry": 98.46,
-    "price": 99.16,
+    "price": 99.11,
     "stop": 96.7,
-    "pnl": 148.05
+    "pnl": 137.5
    },
    {
     "sym": "INSM",
     "qty": 76,
     "entry": 148.88,
-    "price": 148.59,
+    "price": 149.04,
     "stop": 144.02,
-    "pnl": -21.94
+    "pnl": 12.26
    }
   ],
   "lastTrades": [
@@ -74,14 +74,14 @@
  },
  "signals": [
   {
-   "sym": "MPC",
-   "pb": "pb",
+   "sym": "LH",
+   "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "LH",
-   "pb": "bo",
+   "sym": "MPC",
+   "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
@@ -98,12 +98,6 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "DGX",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "PSX",
    "pb": "pb",
    "taken": false,
@@ -112,6 +106,12 @@
   {
    "sym": "VLO",
    "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "DGX",
+   "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
