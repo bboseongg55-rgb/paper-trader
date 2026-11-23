@@ -1,25 +1,25 @@
 {
- "built": "2026-11-23T17:15:29.749Z",
+ "built": "2026-11-23T17:20:26.863Z",
  "asOf": {
   "date": "2026-11-23",
-  "time": "12:15",
+  "time": "12:20",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-23",
-   "eq": 349939.88,
+   "eq": 349943.08,
    "cash": 299299.36,
    "hedge": 0,
    "n": 3,
    "dd": 0.0003,
-   "bench": 366417.36,
-   "time": "12:15",
+   "bench": 365914.46,
+   "time": "12:20",
    "prov": true
   },
-  "ret": -0.00017177142857138783,
-  "bench": 0.0469067428571428,
+  "ret": -0.00016262857142856912,
+  "bench": 0.045469885714285674,
   "trades": 0,
   "fees": 0,
   "open": [
@@ -27,25 +27,25 @@
     "sym": "VIK",
     "qty": 211,
     "entry": 98.46,
-    "price": 98.96,
+    "price": 99,
     "stop": 96.7,
-    "pnl": 105.85
+    "pnl": 114.29
    },
    {
     "sym": "RCL",
     "qty": 60,
     "entry": 312.65,
-    "price": 308.33,
+    "price": 308.23,
     "stop": 306.55,
-    "pnl": -259.34
+    "pnl": -265.34
    },
    {
     "sym": "INSM",
     "qty": 76,
     "entry": 148.88,
-    "price": 148.16,
+    "price": 148.17,
     "stop": 144.02,
-    "pnl": -54.62
+    "pnl": -53.86
    }
   ],
   "lastTrades": [],
@@ -69,6 +69,12 @@
  },
  "signals": [
   {
+   "sym": "SNDK",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "MPC",
    "pb": "pb",
    "taken": false,
@@ -87,18 +93,6 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "VLO",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "DGX",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "TAK",
    "pb": "bo",
    "taken": false,
@@ -111,6 +105,18 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
+   "sym": "VLO",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "DGX",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "BIIB",
    "pb": "bo",
    "taken": false,
@@ -118,12 +124,6 @@
   },
   {
    "sym": "TGT",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "SONY",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
