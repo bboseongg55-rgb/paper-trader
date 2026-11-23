@@ -1,25 +1,25 @@
 {
- "built": "2026-11-23T15:45:28.754Z",
+ "built": "2026-11-23T15:50:26.174Z",
  "asOf": {
   "date": "2026-11-23",
-  "time": "10:45",
+  "time": "10:50",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-23",
-   "eq": 350238.99,
+   "eq": 350262.2,
    "cash": 329373.2,
    "hedge": 0,
    "n": 1,
    "dd": 0,
-   "bench": 363802.4,
-   "time": "10:45",
+   "bench": 366401.71,
+   "time": "10:50",
    "prov": true
   },
-  "ret": 0.0006828285714286508,
-  "bench": 0.03943542857142868,
+  "ret": 0.0007491428571428926,
+  "bench": 0.04686202857142874,
   "trades": 0,
   "fees": 0,
   "open": [
@@ -27,9 +27,9 @@
     "sym": "VIK",
     "qty": 211,
     "entry": 98.46,
-    "price": 98.89,
+    "price": 99,
     "stop": 96.7,
-    "pnl": 91.08
+    "pnl": 114.29
    }
   ],
   "lastTrades": [],
@@ -59,14 +59,20 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "ROP",
-   "pb": "pb",
+   "sym": "LH",
+   "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
    "sym": "TAK",
    "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "ROP",
+   "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
@@ -83,6 +89,12 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
+   "sym": "DGX",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "BIIB",
    "pb": "bo",
    "taken": false,
@@ -95,20 +107,8 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "LNG",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "SONY",
    "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "COR",
-   "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   }
