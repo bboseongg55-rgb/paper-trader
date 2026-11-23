@@ -1,25 +1,25 @@
 {
- "built": "2026-11-23T15:35:29.906Z",
+ "built": "2026-11-23T15:40:27.050Z",
  "asOf": {
   "date": "2026-11-23",
-  "time": "10:35",
+  "time": "10:40",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-23",
-   "eq": 350281.19,
+   "eq": 350300.18,
    "cash": 329373.2,
    "hedge": 0,
    "n": 1,
    "dd": 0,
-   "bench": 363802.4,
-   "time": "10:35",
+   "bench": 365302.5,
+   "time": "10:40",
    "prov": true
   },
-  "ret": 0.0008033999999998986,
-  "bench": 0.03943542857142868,
+  "ret": 0.0008576571428571267,
+  "bench": 0.04372142857142847,
   "trades": 0,
   "fees": 0,
   "open": [
@@ -27,9 +27,9 @@
     "sym": "VIK",
     "qty": 211,
     "entry": 98.46,
-    "price": 99.09,
+    "price": 99.18,
     "stop": 96.7,
-    "pnl": 133.28
+    "pnl": 152.27
    }
   ],
   "lastTrades": [],
@@ -53,14 +53,14 @@
  },
  "signals": [
   {
-   "sym": "MPC",
-   "pb": "pb",
+   "sym": "LH",
+   "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "LH",
-   "pb": "bo",
+   "sym": "MPC",
+   "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
@@ -101,13 +101,13 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "SONY",
-   "pb": "bo",
+   "sym": "MDT",
+   "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "CCEP",
+   "sym": "LNG",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
