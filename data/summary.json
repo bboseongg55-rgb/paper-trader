@@ -1,25 +1,25 @@
 {
- "built": "2026-11-23T20:40:25.359Z",
+ "built": "2026-11-23T20:45:26.012Z",
  "asOf": {
   "date": "2026-11-23",
-  "time": "15:40",
+  "time": "15:45",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-23",
-   "eq": 350082.45,
+   "eq": 350131.28,
    "cash": 302341.05,
    "hedge": 0,
    "n": 3,
    "dd": 0,
-   "bench": 366396.66,
-   "time": "15:40",
+   "bench": 366500.16,
+   "time": "15:45",
    "prov": true
   },
-  "ret": 0.0002355714285715571,
-  "bench": 0.04684759999999999,
+  "ret": 0.0003750857142856834,
+  "bench": 0.04714331428571428,
   "trades": 1,
   "fees": 0.38,
   "open": [
@@ -27,25 +27,25 @@
     "sym": "VIK",
     "qty": 211,
     "entry": 98.46,
-    "price": 100.55,
+    "price": 100.53,
     "stop": 98.46,
-    "pnl": 441.34
+    "pnl": 437.12
    },
    {
     "sym": "INSM",
     "qty": 76,
     "entry": 148.88,
-    "price": 148.92,
+    "price": 149.7,
     "stop": 144.02,
-    "pnl": 3.14
+    "pnl": 62.42
    },
    {
     "sym": "CDW",
     "qty": 89,
     "entry": 172.24,
-    "price": 170.87,
+    "price": 170.8,
     "stop": 168.11,
-    "pnl": -122.11
+    "pnl": -128.34
    }
   ],
   "lastTrades": [
@@ -82,12 +82,6 @@
  },
  "signals": [
   {
-   "sym": "MPC",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "LH",
    "pb": "bo",
    "taken": false,
@@ -100,13 +94,13 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "ROP",
+   "sym": "MPC",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "VLO",
+   "sym": "ROP",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
@@ -124,6 +118,12 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
+   "sym": "VLO",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "TGT",
    "pb": "bo",
    "taken": false,
@@ -136,8 +136,8 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "SONY",
-   "pb": "bo",
+   "sym": "LNG",
+   "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   }
