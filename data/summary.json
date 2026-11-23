@@ -1,25 +1,25 @@
 {
- "built": "2026-11-23T15:50:26.174Z",
+ "built": "2026-11-23T15:55:26.780Z",
  "asOf": {
   "date": "2026-11-23",
-  "time": "10:50",
+  "time": "10:55",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-23",
-   "eq": 350262.2,
-   "cash": 329373.2,
+   "eq": 350277.22,
+   "cash": 310614.06,
    "hedge": 0,
-   "n": 1,
+   "n": 2,
    "dd": 0,
-   "bench": 366401.71,
-   "time": "10:50",
+   "bench": 362184.64,
+   "time": "10:55",
    "prov": true
   },
-  "ret": 0.0007491428571428926,
-  "bench": 0.04686202857142874,
+  "ret": 0.0007920571428570167,
+  "bench": 0.03481325714285721,
   "trades": 0,
   "fees": 0,
   "open": [
@@ -27,9 +27,17 @@
     "sym": "VIK",
     "qty": 211,
     "entry": 98.46,
-    "price": 99,
+    "price": 99.16,
     "stop": 96.7,
-    "pnl": 114.29
+    "pnl": 148.05
+   },
+   {
+    "sym": "RCL",
+    "qty": 60,
+    "entry": 312.65,
+    "price": 312.34,
+    "stop": 306.55,
+    "pnl": -18.74
    }
   ],
   "lastTrades": [],
@@ -65,25 +73,25 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "TAK",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "ROP",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "PSX",
+   "sym": "VLO",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "VLO",
+   "sym": "TAK",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "PSX",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
@@ -101,14 +109,14 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "MDT",
-   "pb": "pb",
+   "sym": "TGT",
+   "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "SONY",
-   "pb": "bo",
+   "sym": "MDT",
+   "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   }
