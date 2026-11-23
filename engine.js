@@ -1156,13 +1156,13 @@
       const tb = D.dates.indexOf(o.book.date);
       if (tb < 0) throw new Error('book day missing from the price data: ' + o.book.date);
       if (tb >= lf) return { book: o.book, added: [] };
-      const res = simulate(D, { resume: o.book, to: lf, adaptive: true, log: true, snapshot: true, tilt: o.tilt || null });
+      const res = simulate(D, { resume: o.book, to: lf, adaptive: true, log: true, snapshot: true, tilt: o.tilt || null, force: o.force || null });
       return { book: bookOf(D, res, o.book.from0, o.book.capital), added: D.dates.slice(tb + 1, lf + 1) };
     }
     // first book: the account from its first day, starting from the fixed snapshot of what the past test learned
     const w = o.warm, capital = o.capital;
     const P0 = Object.assign({}, DEFAULTS, w.params);
-    const res = simulate(D, { from: li, to: lf, capital, params: P0, scores: w.scores, mults: w.mults, evidence: w.evidence, adaptive: true, log: true, snapshot: true });
+    const res = simulate(D, { from: li, to: lf, capital, params: P0, scores: w.scores, mults: w.mults, evidence: w.evidence, adaptive: true, log: true, snapshot: true, tilt: o.tilt || null, force: o.force || null });
     const bi = D.dates.findIndex((d) => d >= (o.btStart || '2025-01-02'));
     res.changes.unshift({ date: D.dates[li], t: li, kind: 'start', title: '연습 계좌 시작', body: `시작 자금 $${capital.toLocaleString('en-US')}. 과거 검증(${D.dates[bi]}~${D.dates[li - 1]}) 동안 스스로 고친 규칙에서 출발합니다. (출발 상태 고정: ${w.saved || ''})`, changes: Object.keys(DEFAULTS).filter((k) => P0[k] !== DEFAULTS[k]).map((k) => ({ key: k, label: LABELS[k], from: DEFAULTS[k], to: P0[k] })) });
     return { book: bookOf(D, res, D.dates[li], capital), added: D.dates.slice(li, lf + 1) };

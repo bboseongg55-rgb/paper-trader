@@ -31,6 +31,14 @@ if (fs.existsSync('data/intraday')) for (const f of fs.readdirSync('data/intrada
 }
 const L = Object.assign({}, live, { days });
 const capital = settings.capital || 100000, liveStart = settings.liveStart || '2026-11-17';
+// after the owner's reset the stock book holds only its own share (bookCapital); capital is the whole account's start.
+// quietDay: the book's first day is the last closed one, replayed without new trades so the account starts flat
+const bookCapital = settings.bookCapital || capital, QUIET = { bo: 0, pb: 0, dt: 0, sb: 0, bd: 0 };
+// leverage for the stock account: buying power up to 1.5 × its value (margin interest on what is borrowed); shorts need
+// 150% of their value set aside. Sizing still goes by the risk to each stop, so this is a ceiling, not a target
+// the owner's settings (2026-11-21): long entries in every market phase (regimeLevel 0: the S&P 500's trend no longer
+// blocks them; the drawdown brake still does), shorts in every phase too
+const FORCE = { lev: 1.5, regimeLevel: 0, shortAny: 1 };
 // the live account's starting state, saved once (data/warm.json) from what the past test learned
 let warm = readJSON('data/warm.json', null);
 let book = readJSON('data/book.json', null);
@@ -61,7 +69,7 @@ const rpFor = (dates) => {
 const D = E.prepare(seed, L, intra, { instruments: bondsHist ? (dates) => Bonds.build(bondsHist, L.days, dates) : null, rp: rpFor });
 const T = D.dates.length;
 // days whose closing prices are final go into the book
-const adv = warm || book ? E.advanceBook(D, { book, warm, capital, liveStart, btStart: settings.btStart, tilt: tiltAt }) : { book: null, added: [] };
+const adv = warm || book ? E.advanceBook(D, { book, warm, capital: bookCapital, liveStart, btStart: settings.btStart, tilt: (dt) => (dt === settings.quietDay ? QUIET : tiltAt(dt)), force: FORCE }) : { book: null, added: [] };
 book = adv.book;
 let bookChanged = adv.added.length > 0;
 // the evolution lab, once for each evening (a failure is noted once for that day and does not stop the account)
@@ -101,6 +109,7 @@ function learnByPhase() {
   const bt = E.simulate(D, { from: Math.max(0, i0), to: T - 1, capital, params: book.state.P, adaptive: true, log: false, force: { lev: 1.5, regimeLevel: 0, shortAny: 1 } });
   for (const tr of bt.trades || []) add(tr, 1, 'bt');
   for (const tr of (book.hist && book.hist.trades) || []) add(tr, 3, 'live');
+  for (const tr of readJSON('data/trades_archive.json', [])) add(tr, 3, 'live');   // live trades from before the account reset
   for (const p in out) for (const k in out[p]) { const c = out[p][k]; c.avgR = Math.round((c.sumR / c.w) * 1000) / 1000; c.pnl = Math.round(c.pnl); delete c.sumR; }
   return out;
 }
@@ -196,11 +205,7 @@ if (allocChanged) fs.writeFileSync('data/alloc.json', JSON.stringify(alloc, null
 if (bookChanged) fs.writeFileSync('data/book.json', JSON.stringify(book));
 if (evoChanged) fs.writeFileSync('data/evolution.json', JSON.stringify(evo));
 // what the page shows: the book, plus today while the market is open
-// leverage for the stock account: buying power up to 1.5 × its value (margin interest on what is borrowed); shorts need
-// 150% of their value set aside. Sizing still goes by the risk to each stop, so this is a ceiling, not a target
-// the owner's settings (2026-11-21): long entries in every market phase (regimeLevel 0: the S&P 500's trend no longer
-// blocks them; the drawdown brake still does), shorts in every phase too
-const FORCE = { lev: 1.5, regimeLevel: 0, shortAny: 1 };
+
 const tiltLive = (dt) => (brakeNow && dt === brakeNow.date ? { bo: 0, pb: 0, dt: 0, sb: 0, bd: 0 } : tiltAt(dt));   // a brake day opens nothing new
 const lv = book ? E.simulate(D, { resume: book, to: T - 1, adaptive: true, log: true, tilt: tiltLive, force: FORCE }) : null;
 const mv = E.marketView(D, lv ? lv.params : null);

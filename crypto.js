@@ -92,6 +92,23 @@
     if (capital > 0) fund(st, capital, q, now, 'start');
     return st;
   }
+  // the owner's account reset: every position is closed at the current quotes (recorded like any exit), then the account
+  // starts again with no money; the records (fills, closed trades, statistics, price bars) and the transfers already
+  // seen are kept, so the allocator's next transfer funds it once
+  function reset(st, q, now, id) {
+    const m = mids(q), eq0 = equity(st, m);
+    for (const s of ['trend', 'scalp']) for (const c of Object.keys(st.pos[s] || {})) {
+      const p = st.pos[s][c], b = (q.books[CFG.exec] || {})[c] || Object.values(q.books).map((v) => v && v[c]).find((x) => x && x.bid > 0); if (!p || !b) continue;
+      if (p.perp) perpClose(st, s, c, p.side > 0 ? b.bid : b.ask, now, '계좌 초기화 정리'); else sell(st, s, c, b.bid, now, '계좌 초기화 정리');
+    }
+    if (st.tok) for (const k of Object.keys(st.tok.pos || {})) { const x = st.tok.q[k]; if (x && x.bid > 0) tokSell(st, k, st.tok.pos[k].side < 0 ? x.ask : x.bid, now, '계좌 초기화 정리'); }
+    const fresh = init(0, q, now);
+    for (const k of ['fills', 'closed', 'stats', 'bars', 'transfers', 'w', 'stake']) if (st[k] != null) fresh[k] = st[k];
+    if (st.tok) { fresh.tok.bars = st.tok.bars || {}; fresh.tok.q = st.tok.q || {}; }
+    fresh.resetId = id;
+    (fresh.resets = st.resets || []).push({ id, t: now, eqBefore: r2(eq0) });
+    return fresh;
+  }
   // money in (or out) from the main account; arbitrage inventory is topped up to its share, the rest goes to trading cash
   function fund(st, amount, q, now, id) {
     const m = mids(q), ks = Object.keys(VENUES);
@@ -473,7 +490,7 @@
     list.sort((a, b) => a.t - b.t);
     if (list.length > CFG.keepBarsH) list.splice(0, list.length - CFG.keepBarsH);
   }
-  const api = { COINS, TOKS, TOK_FEE, VENUES, CFG, WD_FEE, init, fund, freeUsd, step, view, mids, equity, seed, seedTok };
+  const api = { COINS, TOKS, TOK_FEE, VENUES, CFG, WD_FEE, init, fund, reset, freeUsd, step, view, mids, equity, seed, seedTok };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PaperCrypto = api;
 })(typeof self !== 'undefined' ? self : this);

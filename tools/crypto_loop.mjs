@@ -106,6 +106,11 @@ while (Date.now() < END) {
   if (Object.keys(q.books).length >= 3) {
     // the allocator: money in (already paid by the main book), money out (when the dollars are free), and the tilts
     const alloc = readJSON('data/alloc.json', null);
+    // the owner's account reset comes before any transfer: close everything, keep the records, wait for new money
+    if (st && alloc && alloc.reset && alloc.reset.id && st.resetId !== alloc.reset.id) {
+      st = C.reset(st, q, q.at, alloc.reset.id); if (alloc.reset.crypto > 0) C.fund(st, alloc.reset.crypto, q, q.at, alloc.reset.id + '-crypto');
+      console.log('reset', alloc.reset.id, st.eq); lastView = 0; lastState = 0;
+    }
     for (const tr of (alloc && alloc.transfers) || []) {
       if (st && (st.transfers || []).some((x) => x.id === tr.id)) continue;
       if (tr.to === 'crypto' && tr.stockDone) {
