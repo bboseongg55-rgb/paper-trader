@@ -1,5 +1,5 @@
 {
- "built": "2026-11-21T18:49:52.638Z",
+ "built": "2026-11-23T02:16:23.311Z",
  "asOf": {
   "date": "2026-11-20",
   "time": "15:50",
@@ -9,122 +9,104 @@
  "account": {
   "equity": {
    "date": "2026-11-20",
-   "eq": 76115.88,
-   "cash": 46139.79,
+   "eq": 350036.98,
+   "cash": 350036.98,
    "hedge": 0,
-   "n": 4,
-   "dd": 0.0041,
-   "bench": 94432.42,
+   "n": 0,
+   "dd": 0,
+   "bench": 350000,
    "time": "15:50"
   },
-  "ret": -0.23884119999999998,
-  "bench": -0.05567580000000005,
-  "trades": 9,
-  "fees": 1.26,
-  "open": [
-   {
-    "sym": "KR10Y",
-    "qty": 25,
-    "entry": 102.66,
-    "price": 102.11,
-    "stop": 100.39,
-    "pnl": -13.85
-   },
-   {
-    "sym": "CN10Y",
-    "qty": 96,
-    "entry": 123.29,
-    "price": 123.09,
-    "stop": 122.7,
-    "pnl": -18.86
-   },
-   {
-    "sym": "US2Y",
-    "qty": 108,
-    "entry": 111.69,
-    "price": 111.9,
-    "stop": 111.49,
-    "pnl": 22.52
-   },
-   {
-    "sym": "JP10Y",
-    "qty": 45,
-    "entry": 77.36,
-    "price": 78.26,
-    "stop": 77.01,
-    "pnl": 40.26
-   }
-  ],
-  "lastTrades": [
-   {
-    "sym": "A",
-    "exit": "2026-11-19",
-    "R": -1.09,
-    "pnl": -103.5,
-    "reason": "단타 손절, 장중 10:50"
-   },
-   {
-    "sym": "TGT",
-    "exit": "2026-11-19",
-    "R": -1.11,
-    "pnl": -105.43,
-    "reason": "단타 손절, 장중 10:55"
-   },
-   {
-    "sym": "ITW",
-    "exit": "2026-11-20",
-    "R": -1.13,
-    "pnl": -49.05,
-    "reason": "단타 손절, 장중 11:45"
-   },
-   {
-    "sym": "ICE",
-    "exit": "2026-11-20",
-    "R": -1.13,
-    "pnl": -48.94,
-    "reason": "단타 손절, 장중 13:00"
-   },
-   {
-    "sym": "BR",
-    "exit": "2026-11-20",
-    "R": -1.11,
-    "pnl": -49.12,
-    "reason": "단타 손절, 장중 13:20"
-   }
-  ],
+  "ret": 0.00010565714285704075,
+  "bench": 0,
+  "trades": 0,
+  "fees": 0,
+  "open": [],
+  "lastTrades": [],
   "lastChanges": [
    {
     "date": "2026-11-20",
-    "kind": "loss",
-    "title": "ITW 손실 복기"
+    "kind": "start",
+    "title": "연습 계좌 시작"
    },
    {
     "date": "2026-11-20",
-    "kind": "risk",
-    "title": "단타 일시 중지"
+    "kind": "pick",
+    "title": "종목선정팀 점검"
    },
    {
     "date": "2026-11-20",
-    "kind": "loss",
-    "title": "ICE 손실 복기"
-   },
-   {
-    "date": "2026-11-20",
-    "kind": "loss",
-    "title": "BR 손실 복기"
-   },
-   {
-    "date": "2026-11-20",
-    "kind": "risk",
-    "title": "리스크 브레이크 작동"
+    "kind": "budget",
+    "title": "전략 선택: 위험 예산 재배분"
    }
   ]
  },
- "signals": [],
+ "signals": [
+  {
+   "sym": "U",
+   "pb": "pb",
+   "taken": false,
+   "why": "위험 한도(열린 위험 6%) 소진"
+  },
+  {
+   "sym": "IQV",
+   "pb": "pb",
+   "taken": false,
+   "why": "위험 한도(열린 위험 6%) 소진"
+  },
+  {
+   "sym": "MTD",
+   "pb": "pb",
+   "taken": false,
+   "why": "위험 한도(열린 위험 6%) 소진"
+  },
+  {
+   "sym": "SNOW",
+   "pb": "pb",
+   "taken": false,
+   "why": "위험 한도(열린 위험 6%) 소진"
+  },
+  {
+   "sym": "TMO",
+   "pb": "pb",
+   "taken": false,
+   "why": "위험 한도(열린 위험 6%) 소진"
+  },
+  {
+   "sym": "MPC",
+   "pb": "pb",
+   "taken": false,
+   "why": "위험 한도(열린 위험 6%) 소진"
+  },
+  {
+   "sym": "REGN",
+   "pb": "pb",
+   "taken": false,
+   "why": "위험 한도(열린 위험 6%) 소진"
+  },
+  {
+   "sym": "IBN",
+   "pb": "bo",
+   "taken": false,
+   "why": "위험 한도(열린 위험 6%) 소진"
+  },
+  {
+   "sym": "ROP",
+   "pb": "pb",
+   "taken": false,
+   "why": "위험 한도(열린 위험 6%) 소진"
+  },
+  {
+   "sym": "PSX",
+   "pb": "pb",
+   "taken": false,
+   "why": "위험 한도(열린 위험 6%) 소진"
+  }
+ ],
  "book": "2026-11-20",
  "evolution": {
   "gen": 0,
-  "shadows": 4,
+  "shadows": 3,
   "lastRun": "2026-11-20",
   "error": null
  }
