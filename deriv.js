@@ -60,6 +60,11 @@
     // the stress test over every short option together: if the S&P 500 (and IWM) moved `move` against them overnight,
     // the loss may not pass `max` of the account; a new short option that would break it is not opened
     stress: { move: 0.15, max: 0.2 },
+    // quant risk on the options and index futures: Black–Scholes Greeks per leg, and a 1-day 99% VaR by full revaluation
+    // under the S&P 500's last 500 daily moves (implied vol moves the other way: IV × (1 − volBeta × move), the usual
+    // spot–vol pattern). A new option that would lift the VaR past varMax of the account, or the net vega past vegaMax
+    // per vol point, is not opened
+    risk: { days: 500, volBeta: 4, varMax: 0.04, vegaMax: 0.01, deltaMax: 1, iwmBeta: 1.15 },   // deltaMax: |net equity delta| ≤ 1 × account
     // bear: in a long-term downtrend (allocator's opt.bear) puts may cost up to bearIv × the realised-vol forecast, at bearSize × the size
     longOpt: { und: 'SPY', dteMin: 30, dteMax: 60, dteAim: 45, delta: 0.4, riskPer: 0.01, maxRisk: 0.04, take: 1, stop: 0.5, exitDte: 10, bearIv: 1.5, bearSize: 1.5, oneMax: 0.03 },
     nakedCall: { und: 'SPY', dteMin: 21, dteMax: 45, dteAim: 30, delta: 0.15, maxNotional: 0.8, take: 0.5, stopX: 3, exitDte: 7 },
@@ -387,7 +392,7 @@
   }
   function manageOptions(st, ctx, night) {
     const chs = ctx.chain || {}, d = ctx.date, now = ctx.now, cio = ctx.cio || {}, O = cio.opt || {}, acct = Math.max(1, ctx.account || equity(st));
-    RISK = { acct, spots: { SPY: (chs.SPY && chs.SPY.spot) || (ctx.px && ctx.px.SPY), IWM: (chs.IWM && chs.IWM.spot) || (ctx.px && ctx.px.IWM) } };
+    RISK = { acct, date: d, chains: chs, hist: ctx.hist && ctx.hist['.SPX'], rf: ctx.rf, spots: { SPY: (chs.SPY && chs.SPY.spot) || (ctx.px && ctx.px.SPY), IWM: (chs.IWM && chs.IWM.spot) || (ctx.px && ctx.px.IWM) } };
     const pxOf = (u) => (chs[u] && chs[u].spot) || (ctx.px && ctx.px[u]) || (u === 'SPY' ? ctx.spy : null);
     // 1. expiry at the intrinsic value; a short put ending in the money buys the shares (the strike in all), a covered
     //    call ending in the money sells them (the strike in all)
@@ -519,7 +524,46 @@
       }
     }
   }
-  let RISK = null;   // { spots, acct } for the stress test, set by manageOptions
+  let RISK = null;   // { spots, acct, chains, hist, rf } for the stress test and the VaR, set by manageOptions
+  // Black–Scholes per share: price, delta, gamma, vega (per 1 vol point), theta (per calendar day)
+  function greeks(S, K, T, r, q, v, right) {
+    if (!(T > 1e-6) || !(v > 0)) { const iv = right === 'C' ? Math.max(0, S - K) : Math.max(0, K - S); return { px: iv, d: iv > 0 ? (right === 'C' ? 1 : -1) : 0, g: 0, vg: 0, th: 0 }; }
+    const sq = v * Math.sqrt(T), d1 = (Math.log(S / K) + (r - q + v * v / 2) * T) / sq, d2 = d1 - sq;
+    const n1 = Math.exp(-d1 * d1 / 2) / Math.sqrt(2 * Math.PI), eq = Math.exp(-q * T), er = Math.exp(-r * T);
+    const g = (eq * n1) / (S * sq), vg = (S * eq * n1 * Math.sqrt(T)) / 100, decay = -(S * eq * n1 * v) / (2 * Math.sqrt(T));
+    return right === 'C'
+      ? { px: S * eq * ncdf(d1) - K * er * ncdf(d2), d: eq * ncdf(d1), g, vg, th: (decay - r * K * er * ncdf(d2) + q * S * eq * ncdf(d1)) / 365 }
+      : { px: K * er * ncdf(-d2) - S * eq * ncdf(-d1), d: -eq * ncdf(-d1), g, vg, th: (decay + r * K * er * ncdf(-d2) - q * S * eq * ncdf(-d1)) / 365 };
+  }
+  // each option position as legs: { und, right, k, exp, q (+long/−short shares), iv }
+  function legsOf(o) {
+    const r = rightOf(o), u = o.und || 'SPY', ch = RISK && RISK.chains && RISK.chains[u];
+    const ivOf = (k) => { const row = ch ? rowAt(ch, o.exp, r, k) : null; return row && isNum(row[3]) && row[3] > 0 ? row[3] : o.iv || 0.25; };
+    if (single(o)) return [{ und: u, right: r, k: o.k, exp: o.exp, q: (o.long ? 1 : -1) * o.n * 100, iv: ivOf(o.k) }];
+    return [{ und: u, right: r, k: o.kLong, exp: o.exp, q: o.n * 100, iv: ivOf(o.kLong) }, { und: u, right: r, k: o.kShort, exp: o.exp, q: -o.n * 100, iv: ivOf(o.kShort) }];
+  }
+  // the book's Greeks in dollars and its 1-day 99% VaR / CVaR (expected shortfall), for st.opt plus index futures
+  function riskOf(st, extra) {
+    if (!RISK) return null;
+    const C = CFG.risk, d0 = RISK.date || new Date().toISOString().slice(0, 10), rf = isNum(RISK.rf) ? RISK.rf : 0.04;
+    const legs = st.opt.concat(extra ? [extra] : []).flatMap(legsOf), spot = (u) => RISK.spots[u] || null;
+    let dD = 0, gD = 0, vD = 0, tD = 0;
+    const base = legs.map((l) => { const S = spot(l.und); if (!(S > 0)) return null; const T = Math.max(0, days(d0, l.exp)) / 365, gk = greeks(S, l.k, T, rf, 0.012, l.iv, l.right);
+      const b = l.und === 'IWM' ? C.iwmBeta : 1; dD += l.q * gk.d * S * b; gD += 0.5 * l.q * gk.g * (S * 0.01) ** 2 * b * b; vD += l.q * gk.vg; tD += l.q * gk.th; return { l, S, T, b, px: gk.px }; }).filter(Boolean);
+    let fD = 0;
+    for (const p of Object.values(st.fut || {})) if (p && p.g === 'eq') fD += p.qty * p.mult * p.px;
+    // full revaluation under past S&P 500 daily moves
+    const ks = Object.keys(RISK.hist || {}).sort().slice(-(C.days + 1)), ps = ks.map((k) => +RISK.hist[k]).filter((v) => v > 0), pnl = [];
+    for (let i = 1; i < ps.length; i++) {
+      const m = ps[i] / ps[i - 1] - 1;
+      let v = fD * m;
+      for (const x of base) { const S1 = x.S * (1 + x.b * m), iv1 = Math.max(0.05, x.l.iv * (1 - C.volBeta * m)); v += x.l.q * (greeks(S1, x.l.k, Math.max(0, x.T - 1 / 365), rf, 0.012, iv1, x.l.right).px - x.px); }
+      pnl.push(v);
+    }
+    pnl.sort((a, b) => a - b);
+    const n = pnl.length, k = Math.max(1, Math.floor(n * 0.01)), var99 = n ? -pnl[k - 1] : 0, cvar99 = n ? -pnl.slice(0, k).reduce((a, b) => a + b, 0) / k : 0;
+    return { delta1: r2((dD + fD) * 0.01), gamma1: r2(gD), vega: r2(vD), theta: r2(tD), var99: r2(Math.max(0, var99)), cvar99: r2(Math.max(0, cvar99)), n, futDelta1: r2(fD * 0.01) };
+  }
   function stressLoss(list, spots) {
     let down = 0, up = 0;
     for (const o of list) {
@@ -534,6 +578,14 @@
     if (RISK && !o.long && o.side !== 'hedge') {
       const now0 = stressLoss(st.opt, RISK.spots), next = stressLoss(st.opt.concat([o]), RISK.spots);
       if (next > CFG.stress.max * RISK.acct && next > now0) { st.stressNote = { date: d, side: o.side, loss: r2(next), cap: r2(CFG.stress.max * RISK.acct) }; return false; }
+    }
+    if (RISK) {
+      const r0 = riskOf(st), r1 = riskOf(st, o), cap = CFG.risk.varMax * RISK.acct, vcap = CFG.risk.vegaMax * RISK.acct;
+      const dcap = CFG.risk.deltaMax * RISK.acct;
+      if (r0 && r1 && ((r1.var99 > cap && r1.var99 > r0.var99) || (Math.abs(r1.vega) > vcap && Math.abs(r1.vega) > Math.abs(r0.vega)) || (Math.abs(r1.delta1) * 100 > dcap && Math.abs(r1.delta1) > Math.abs(r0.delta1)))) {
+        st.riskNote = { date: d, side: o.side, var99: r1.var99, vega: r1.vega, varCap: r2(cap), vegaCap: r2(vcap) };
+        return false;
+      }
     }
     const fee = r2(o.n * (single(o) ? 1 : 2) * CFG.optFee);
     st.cash = r2(st.cash - o.n * 100 * o.cost - fee); st.fees = r2(st.fees + fee);
@@ -638,7 +690,7 @@
     const by = {};
     for (const c of st.closed) { const b = (by[c.s] = by[c.s] || { n: 0, wins: 0, pnl: 0 }); b.n++; if (c.pnl > 0) b.wins++; b.pnl = r2(b.pnl + c.pnl); }
     return { v: 1, at: st.at, date: st.date, funded: st.funded, cash: st.cash, eq: equity(st), margin: marginUsed(st), optRisk: r2(optRisk(st)), rp: st.rp, fees: st.fees,
-      fut, opt, els, stk, by, base: st.base || null, stress: { move: CFG.stress.move, max: CFG.stress.max, loss: r2(stressLoss(st.opt, (RISK && RISK.spots) || {})), note: st.stressNote || null }, signals: st.signals || {}, fills: st.fills.slice(-120).reverse(), hist: st.hist.slice(-400), log: st.log.slice(-40).reverse(), transfers: st.transfers };
+      fut, opt, els, stk, by, base: st.base || null, risk: RISK ? Object.assign(riskOf(st) || {}, { varMax: CFG.risk.varMax, vegaMax: CFG.risk.vegaMax, deltaMax: CFG.risk.deltaMax, acct: r2(RISK.acct), note: st.riskNote || null }) : null, stress: { move: CFG.stress.move, max: CFG.stress.max, loss: r2(stressLoss(st.opt, (RISK && RISK.spots) || {})), note: st.stressNote || null }, signals: st.signals || {}, fills: st.fills.slice(-120).reverse(), hist: st.hist.slice(-400), log: st.log.slice(-40).reverse(), transfers: st.transfers };
   }
 
   const api = { FUT, FUT_BY, GROUP_NAME, CFG, init, fund, nightly, session, view, equity, marginUsed, free, elsValue, bsPut, trend };
