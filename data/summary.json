@@ -1,25 +1,24 @@
 {
- "built": "2026-11-24T20:45:27.750Z",
+ "built": "2026-11-24T20:50:34.840Z",
  "asOf": {
   "date": "2026-11-24",
-  "time": "15:45",
-  "prov": true
+  "time": "15:50",
+  "prov": false
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-24",
-   "eq": 349977.56,
-   "cash": 133151.43,
-   "hedge": 7252.77,
-   "n": 10,
-   "dd": 0.0002,
-   "bench": 362786,
-   "time": "15:45",
-   "prov": true
+   "eq": 349915.26,
+   "cash": 129535.55,
+   "hedge": 9510.69,
+   "n": 15,
+   "dd": 0.0003,
+   "bench": 363370.19,
+   "time": "15:50"
   },
-  "ret": -0.00006411428571428957,
-  "bench": 0.03653142857142866,
+  "ret": -0.00024211428571430105,
+  "bench": 0.038200542857142805,
   "trades": 4,
   "fees": 1.38,
   "open": [
@@ -27,56 +26,56 @@
     "sym": "LH",
     "qty": 8,
     "entry": 374.18,
-    "price": 377.27,
-    "stop": 349.29,
-    "pnl": 24.69
+    "price": 377.53,
+    "stop": 360.94,
+    "pnl": 26.77
    },
    {
     "sym": "TAK",
     "qty": 253,
     "entry": 22.12,
-    "price": 22.6,
-    "stop": 21.24,
-    "pnl": 120.91
+    "price": 22.59,
+    "stop": 22,
+    "pnl": 118.38
    },
    {
     "sym": "MPC",
     "qty": 43,
     "entry": 358.09,
-    "price": 356.98,
+    "price": 356.78,
     "stop": 328.15,
-    "pnl": -47.63
+    "pnl": -56.23
    },
    {
     "sym": "HAL",
     "qty": 203,
     "entry": 30.46,
-    "price": 31.07,
+    "price": 31.06,
     "stop": 32.37,
-    "pnl": -124.15
+    "pnl": -122.12
    },
    {
     "sym": "ENB",
     "qty": 298,
     "entry": 45.32,
-    "price": 46.19,
+    "price": 46.22,
     "stop": 46.63,
-    "pnl": -258.35
+    "pnl": -267.29
    },
    {
     "sym": "CVS",
     "qty": 44,
     "entry": 79.68,
-    "price": 81.24,
+    "price": 81.18,
     "stop": 88.45,
-    "pnl": -68.76
+    "pnl": -66.12
    },
    {
     "sym": "KR10Y",
     "qty": 501,
     "entry": 102.81,
     "price": 102.83,
-    "stop": 100.54,
+    "stop": 100.55,
     "pnl": 6.78
    },
    {
@@ -91,17 +90,57 @@
     "sym": "JP10Y",
     "qty": 673,
     "entry": 77.93,
-    "price": 78.43,
-    "stop": 76.62,
-    "pnl": 335.61
+    "price": 78.41,
+    "stop": 77.1,
+    "pnl": 322.35
    },
    {
     "sym": "US2Y",
     "qty": 469,
     "entry": 111.92,
-    "price": 111.85,
+    "price": 111.84,
     "stop": 111.46,
-    "pnl": -29.93
+    "pnl": -37.85
+   },
+   {
+    "sym": "SN",
+    "qty": 11,
+    "entry": 230.25,
+    "price": 230.02,
+    "stop": 210.42,
+    "pnl": -2.53
+   },
+   {
+    "sym": "A",
+    "qty": 17,
+    "entry": 183.92,
+    "price": 183.74,
+    "stop": 171.36,
+    "pnl": -3.12
+   },
+   {
+    "sym": "REGN",
+    "qty": 2,
+    "entry": 986.71,
+    "price": 985.72,
+    "stop": 884.38,
+    "pnl": -1.97
+   },
+   {
+    "sym": "CLS",
+    "qty": 9,
+    "entry": 197.47,
+    "price": 197.67,
+    "stop": 240.11,
+    "pnl": -1.82
+   },
+   {
+    "sym": "VALE",
+    "qty": 483,
+    "entry": 9.34,
+    "price": 9.35,
+    "stop": 10.14,
+    "pnl": -4.62
    }
   ],
   "lastTrades": [
@@ -164,71 +203,71 @@
  },
  "signals": [
   {
+   "sym": "SN",
+   "pb": "bo",
+   "taken": true,
+   "why": ""
+  },
+  {
    "sym": "DLTR",
    "pb": "bo",
    "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "why": "위험 한도(열린 위험 6%) 소진"
   },
   {
    "sym": "A",
    "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "taken": true,
+   "why": ""
   },
   {
    "sym": "REGN",
    "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "taken": true,
+   "why": ""
   },
   {
    "sym": "BDX",
    "pb": "bo",
    "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "why": "하루 신규 3종목 한도"
   },
   {
    "sym": "ROIV",
    "pb": "bo",
    "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "why": "하루 신규 3종목 한도"
   },
   {
    "sym": "ABBV",
    "pb": "bo",
    "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "BIIB",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "why": "하루 신규 3종목 한도"
   },
   {
    "sym": "DGX",
    "pb": "bo",
    "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "why": "하루 신규 3종목 한도"
   },
   {
    "sym": "IBN",
    "pb": "bo",
    "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "why": "하루 신규 3종목 한도"
   },
   {
    "sym": "TGT",
    "pb": "bo",
    "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "why": "하루 신규 3종목 한도"
   }
  ],
- "book": "2026-11-23",
+ "book": "2026-11-24",
  "evolution": {
   "gen": 0,
   "shadows": 4,
-  "lastRun": "2026-11-23",
+  "lastRun": "2026-11-24",
   "error": null
  }
 }
