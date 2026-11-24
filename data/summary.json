@@ -1,24 +1,25 @@
 {
- "built": "2026-11-24T02:37:39.037Z",
+ "built": "2026-11-24T14:35:24.177Z",
  "asOf": {
-  "date": "2026-11-23",
-  "time": "15:50",
-  "prov": false
+  "date": "2026-11-24",
+  "time": "09:35",
+  "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
-   "date": "2026-11-23",
-   "eq": 349735.5,
-   "cash": 133140.13,
-   "hedge": 7189.25,
+   "date": "2026-11-24",
+   "eq": 350156.14,
+   "cash": 133151.45,
+   "hedge": 7280.61,
    "n": 10,
-   "dd": 0.0009,
-   "bench": 366033.12,
-   "time": "15:50"
+   "dd": 0,
+   "bench": 361368.7,
+   "time": "09:35",
+   "prov": true
   },
-  "ret": -0.000755714285714304,
-  "bench": 0.04580891428571432,
+  "ret": 0.00044611428571439404,
+  "bench": 0.03248200000000012,
   "trades": 4,
   "fees": 1.38,
   "open": [
@@ -26,81 +27,81 @@
     "sym": "LH",
     "qty": 8,
     "entry": 374.18,
-    "price": 373.81,
+    "price": 371.47,
     "stop": 349.29,
-    "pnl": -2.99
+    "pnl": -21.71
    },
    {
     "sym": "TAK",
     "qty": 253,
     "entry": 22.12,
-    "price": 22.1,
+    "price": 22.38,
     "stop": 21.24,
-    "pnl": -5.59
+    "pnl": 65.25
    },
    {
     "sym": "MPC",
     "qty": 43,
     "entry": 358.09,
-    "price": 357.73,
+    "price": 350.37,
     "stop": 328.15,
-    "pnl": -15.38
+    "pnl": -331.86
    },
    {
     "sym": "HAL",
     "qty": 203,
     "entry": 30.46,
-    "price": 30.49,
+    "price": 30.34,
     "stop": 32.37,
-    "pnl": -6.32
+    "pnl": 24.04
    },
    {
     "sym": "ENB",
     "qty": 298,
     "entry": 45.32,
-    "price": 45.37,
+    "price": 45.23,
     "stop": 46.63,
-    "pnl": -13.8
+    "pnl": 27.73
    },
    {
     "sym": "CVS",
     "qty": 44,
     "entry": 79.68,
-    "price": 79.76,
+    "price": 79.55,
     "stop": 88.45,
-    "pnl": -3.59
+    "pnl": 5.6
    },
    {
     "sym": "KR10Y",
     "qty": 501,
     "entry": 102.81,
-    "price": 102.71,
+    "price": 102.81,
     "stop": 100.54,
-    "pnl": -51.46
+    "pnl": -2.81
    },
    {
     "sym": "CN10Y",
     "qty": 423,
     "entry": 123.93,
-    "price": 123.81,
+    "price": 123.82,
     "stop": 123.19,
-    "pnl": -53.22
+    "pnl": -48.59
    },
    {
     "sym": "JP10Y",
     "qty": 673,
     "entry": 77.93,
-    "price": 77.85,
+    "price": 78.47,
     "stop": 76.62,
-    "pnl": -57.5
+    "pnl": 364.67
    },
    {
     "sym": "US2Y",
     "qty": 469,
     "entry": 111.92,
-    "price": 111.81,
+    "price": 111.87,
     "stop": 111.46,
-    "pnl": -52.51
+    "pnl": -21.01
    }
   ],
   "lastTrades": [
@@ -163,64 +164,64 @@
  },
  "signals": [
   {
-   "sym": "LH",
-   "pb": "bo",
-   "taken": true,
-   "why": ""
-  },
-  {
-   "sym": "TAK",
-   "pb": "bo",
-   "taken": true,
-   "why": ""
-  },
-  {
-   "sym": "MPC",
-   "pb": "pb",
-   "taken": true,
-   "why": ""
-  },
-  {
-   "sym": "ROP",
-   "pb": "pb",
-   "taken": false,
-   "why": "하루 신규 3종목 한도"
-  },
-  {
-   "sym": "DGX",
+   "sym": "A",
    "pb": "bo",
    "taken": false,
-   "why": "하루 신규 3종목 한도"
+   "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "PSX",
-   "pb": "pb",
+   "sym": "DLTR",
+   "pb": "bo",
    "taken": false,
-   "why": "하루 신규 3종목 한도"
+   "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "VLO",
-   "pb": "pb",
+   "sym": "ROIV",
+   "pb": "bo",
    "taken": false,
-   "why": "하루 신규 3종목 한도"
+   "why": "장 마감 무렵 다시 판단"
   },
   {
    "sym": "TGT",
    "pb": "bo",
    "taken": false,
-   "why": "하루 신규 3종목 한도"
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "CAH",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
   },
   {
    "sym": "BIIB",
    "pb": "bo",
    "taken": false,
-   "why": "하루 신규 3종목 한도"
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "PSX",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "VLO",
+   "pb": "pb",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "RPRX",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
   },
   {
    "sym": "LNG",
    "pb": "pb",
    "taken": false,
-   "why": "하루 신규 3종목 한도"
+   "why": "장 마감 무렵 다시 판단"
   }
  ],
  "book": "2026-11-23",
