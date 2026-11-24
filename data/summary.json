@@ -1,25 +1,25 @@
 {
- "built": "2026-11-24T19:05:25.217Z",
+ "built": "2026-11-24T19:10:25.952Z",
  "asOf": {
   "date": "2026-11-24",
-  "time": "14:05",
+  "time": "14:10",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-24",
-   "eq": 349788.2,
+   "eq": 349813.46,
    "cash": 133151.44,
-   "hedge": 7251.3,
+   "hedge": 7247.08,
    "n": 10,
-   "dd": 0.0007,
-   "bench": 362860.73,
-   "time": "14:05",
+   "dd": 0.0006,
+   "bench": 363075.82,
+   "time": "14:10",
    "prov": true
   },
-  "ret": -0.0006051428571428596,
-  "bench": 0.036744942857142915,
+  "ret": -0.0005329714285713383,
+  "bench": 0.03735948571428582,
   "trades": 4,
   "fees": 1.38,
   "open": [
@@ -27,57 +27,57 @@
     "sym": "LH",
     "qty": 8,
     "entry": 374.18,
-    "price": 376.75,
+    "price": 377.65,
     "stop": 349.29,
-    "pnl": 20.53
+    "pnl": 27.73
    },
    {
     "sym": "TAK",
     "qty": 253,
     "entry": 22.12,
-    "price": 22.62,
+    "price": 22.61,
     "stop": 21.24,
-    "pnl": 125.97
+    "pnl": 123.44
    },
    {
     "sym": "MPC",
     "qty": 43,
     "entry": 358.09,
-    "price": 354.02,
+    "price": 354.65,
     "stop": 328.15,
-    "pnl": -174.91
+    "pnl": -147.82
    },
    {
     "sym": "HAL",
     "qty": 203,
     "entry": 30.46,
-    "price": 30.99,
+    "price": 31.02,
     "stop": 32.37,
-    "pnl": -107.91
+    "pnl": -114
    },
    {
     "sym": "ENB",
     "qty": 298,
     "entry": 45.32,
-    "price": 46.13,
+    "price": 46.1,
     "stop": 46.63,
-    "pnl": -240.47
+    "pnl": -231.53
    },
    {
     "sym": "CVS",
     "qty": 44,
     "entry": 79.68,
-    "price": 81.75,
+    "price": 81.91,
     "stop": 88.45,
-    "pnl": -91.2
+    "pnl": -98.24
    },
    {
     "sym": "KR10Y",
     "qty": 501,
     "entry": 102.81,
-    "price": 102.74,
+    "price": 102.75,
     "stop": 100.54,
-    "pnl": -34.65
+    "pnl": -32.74
    },
    {
     "sym": "CN10Y",
@@ -164,6 +164,12 @@
  },
  "signals": [
   {
+   "sym": "SN",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "DLTR",
    "pb": "bo",
    "taken": false,
@@ -200,25 +206,19 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "DGX",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "BIIB",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "IBN",
+   "sym": "DGX",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "TGT",
+   "sym": "IBN",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
