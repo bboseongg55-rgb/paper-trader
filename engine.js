@@ -677,7 +677,7 @@
           // d) account value at this time (last day only)
           if (t === to) {
             let eqK = cash;
-            for (const p of positions) { const v = px[p.i]; eqK += p.qty * (isNum(v) ? v : isNum(p.lastPx) ? p.lastPx : price(D.S[p.i], t - 1)); }
+            for (const p of positions) { const v = px[p.i]; eqK += sgn(p) * p.qty * (isNum(v) ? v : isNum(p.lastPx) ? p.lastPx : price(D.S[p.i], t - 1)); }   // a short is owed back: it lowers the value
             if (hedge) eqK += isNum(sm.spx) && isNum(spPrev) ? hedge.prev * (1 - (sm.spx / spPrev - 1)) : hedge.value;
             intraday.push({ t: tm, eq: round(eqK, 2), spx: isNum(sm.spx) ? sm.spx : null });
           }

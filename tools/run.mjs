@@ -294,7 +294,7 @@ const withHist = (p) => {
 const state = {
   v: 2, built: new Date().toISOString(),
   asOf: { date: res.D.last, time: res.D.lastTime, prov: !!res.D.prov },
-  regime: res.regime, gate: res.gate, capital: res.capital, liveStart: res.liveStart,
+  regime: res.regime, gate: res.gate, capital: res.capital, liveStart: res.liveStart, rebase: (settings.rebases || []).slice(-1)[0] || null,
   account: lv ? { equity: lv.equity, intraday: lv.intraday, open: lv.open.map(withHist), stats: fin(lv.stats), mults: lv.mults, dtPaused: lv.dtPaused, risk: lv.risk,
     hedge: lv.hedge, hedgeFees: Math.round((lv.hedgeFills || []).reduce((a, h) => a + (h.fee || 0), 0) * 100) / 100, lockedThrough: book ? book.date : null,
     marginPaid: lv.marginPaid || 0, rpGot: lv.rpGot || 0, lev: lv.lev || 1, flows: (book && book.flows) || [],
@@ -310,6 +310,19 @@ const state = {
   orders, daily, byPb,
   data: { liveBuilt: live.built || null, sources: readJSON('data/source.json', null) },
 };
+// the derivatives part's value at each run of the day, so the account's one-day chart follows it like the stock book and
+// the coins (one point a run, kept for the last day only)
+if (state.deriv && state.asOf) {
+  const di0 = readJSON('data/deriv/intra.json', null);
+  let di = di0 && di0.date === state.asOf.date && Array.isArray(di0.pts) ? di0 : null;
+  if (state.asOf.prov && state.asOf.time && isFinite(state.deriv.eq)) {
+    di = di || { date: state.asOf.date, pts: [] };
+    const pt = [state.asOf.time, Math.round(state.deriv.eq * 100) / 100], lp = di.pts[di.pts.length - 1];
+    if (lp && lp[0] === pt[0]) lp[1] = pt[1]; else if (!lp || lp[0] < pt[0]) di.pts.push(pt);
+    fs.writeFileSync('data/deriv/intra.json', JSON.stringify(di));
+  }
+  if (di) state.deriv.intra = di.pts;
+}
 fs.writeFileSync('data/state.json', JSON.stringify(state));
 // the account-wide daily brake (checked after every run, acted on from the next one, five minutes later): once the whole
 // account (stocks, derivatives, coins) is 3% below where it stood at the New York day's first run, no part opens new

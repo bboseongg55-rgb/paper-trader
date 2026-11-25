@@ -36,6 +36,7 @@
   --down-soft: rgba(27, 100, 218, 0.1);
   --ok: #128a4a;
   --warn: #b25000;
+  --tag: #191f28;            /* a price tag on a chart (평단): white text on near-black, like Toss */
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Pretendard Sub", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   /* chart series: indexes and portfolio parts (categorical order, never by rank of value) */
@@ -46,14 +47,14 @@
   :root:not([data-theme="light"]) {
     --bg: #121214; --band: #1c1c20; --ink: #f2f3f5; --sub: #c3c9d0; --muted: #8b95a1; --line: #2a2a30;
     --up: #ff5c62; --down: #5b9bff; --up-soft: rgba(255, 92, 98, 0.16); --down-soft: rgba(91, 155, 255, 0.16);
-    --ok: #3ccf7c; --warn: #ffb340; color-scheme: dark;
+    --ok: #3ccf7c; --warn: #ffb340; color-scheme: dark; --tag: #3a3f47;
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s-other: #6b7684; --s-cash: #3a3f46;
   }
 }
 :root[data-theme="dark"] {
   --bg: #121214; --band: #1c1c20; --ink: #f2f3f5; --sub: #c3c9d0; --muted: #8b95a1; --line: #2a2a30;
   --up: #ff5c62; --down: #5b9bff; --up-soft: rgba(255, 92, 98, 0.16); --down-soft: rgba(91, 155, 255, 0.16);
-  --ok: #3ccf7c; --warn: #ffb340; color-scheme: dark;
+  --ok: #3ccf7c; --warn: #ffb340; color-scheme: dark; --tag: #3a3f47;
   --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s-other: #6b7684; --s-cash: #3a3f46;
 }
 * { box-sizing: border-box; }
@@ -227,7 +228,7 @@ a.row:focus-visible, a.ain-r:focus-visible, .back:focus-visible { outline: 2px s
 .achart .ref { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 7 5; }
 .achart .ref2 { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 4; }
 .achart .rl { font-size: 16px; font-weight: 800; fill: #fff; }
-.achart .rlb rect { fill: #191f28; stroke: none; }   /* Toss-style tag: white on near-black */
+.achart .rlb rect { fill: var(--tag); stroke: none; }   /* Toss-style tag: white on near-black (a dark grey on the dark theme, so the tag stands off the page) */
 .achart .rl2 { font-size: 15px; font-weight: 500; fill: var(--sub); paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
 .achart .cax { font-size: 15px; fill: var(--muted); }
 .asrc { margin: 0; padding: 8px 20px 0; font-size: 15px; color: var(--muted); }
@@ -462,7 +463,10 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const live = {};
   const funded = () => !!(CV && CV.funded > 0);
   const coinPx = (c) => (live[c] > 0 ? live[c] : CV && CV.last && CV.last[c] > 0 ? CV.last[c] : 0);
-  const cryptoLive = () => (funded() ? CV.usd + (CV.hold || []).reduce((t, h) => t + h.qty * coinPx(h.c), 0) + (CV.toks || []).reduce((t, x) => t + (x.value || 0), 0) : 0);   // dollars, coins at live prices, tokens as last saved
+  // a perpetual future: its margin plus the move since entry (fees and funding were paid from the dollars), coins at the live price
+  const perpVal = (p) => (p.margin || 0) + p.side * p.qty * ((!p.tok && live[p.c] > 0 ? live[p.c] : p.px || p.entry) - p.entry);
+  const cryptoLive = () => (funded() ? CV.usd + (CV.hold || []).reduce((t, h) => t + h.qty * coinPx(h.c), 0) + (CV.toks || []).reduce((t, x) => t + (x.value || 0), 0)
+    + (CV.perps || []).reduce((t, p) => t + perpVal(p), 0) : 0);   // dollars, coins at live prices, tokens as last saved, perpetual futures
   function cryptoAt(ms) {                 // the crypto account's value at a time (0 before its money arrived)
     if (!funded()) return 0;
     const pick = (list) => { let v = null; for (const [t, e] of list || []) { if (t <= ms) v = e; else break; } return v; };
@@ -491,6 +495,12 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const coinTotal = () => cryptoLive() + inTransit();
   const totalNow = () => stockNow() + derivNow() + coinTotal();
   const otherAt = (e) => cryptoAt(rowMs(e)) + derivAt(e.date);   // the parts other than the stock book at a row's time
+  function derivAtT(t) {                 // futures, options and ELS during the last day: the value saved at each run up to that time
+    const pts = (S && S.deriv && S.deriv.intra) || [];
+    let v = null;
+    for (const [tt, e] of pts) { if (tt <= t) v = e; else break; }
+    return v != null ? v : pts.length ? pts[0][1] : derivAt(S.asOf.date);
+  }
   const md = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일`;
   const rowLabel = (e) => (e.prov ? `${dLabel(e.date)} ${e.time} 기준` : dLabel(e.date));
   const periodName = () => (period === 'custom' && range ? (range.from === range.to ? md(range.from) : `${md(range.from)}~${md(range.to)}`) : { day: '최근 거래일', week: '1주', month: '1개월', all: '시작 후' }[period]);
@@ -513,7 +523,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const prevClose = eqs.length > 1 ? eqs[eqs.length - 2].eq : S.capital;
     const nowPt = (pts) => { if (hasCoin() && (period !== 'custom' || !range || range.to >= eqs[eqs.length - 1].date)) pts.push({ label: '지금', v: totalNow() }); return pts; };
     if (period === 'day') {
-      const pts = (a.intraday || []).map((x) => ({ label: `${dLabel(S.asOf.date)} ${x.t}`, v: x.eq + (cryptoAt(etMs(S.asOf.date, x.t)) + derivAt(S.asOf.date)) }));
+      const pts = (a.intraday || []).map((x) => ({ label: `${dLabel(S.asOf.date)} ${x.t}`, v: x.eq + (cryptoAt(etMs(S.asOf.date, x.t)) + derivAtT(x.t)) }));
       const lastRow = eqs[eqs.length - 1];
       if (pts.length >= 2 && !S.asOf.prov && lastRow.date === S.asOf.date) pts.push({ label: `${dLabel(lastRow.date)} 종가`, v: lastRow.eq + otherAt(lastRow) });
       if (pts.length >= 2) return { pts: nowPt(pts), base: prevClose + (eqs.length > 1 ? otherAt(eqs[eqs.length - 2]) : 0), name: S.asOf.prov ? '오늘' : '최근 거래일' };
@@ -549,7 +559,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         const daily = C.daily || [], prevRow = daily.length > 1 ? daily[daily.length - 2] : null;
         const base = { acct: eqs.length > 1 ? eqs[eqs.length - 2].eq + otherAt(eqs[eqs.length - 2]) : S.capital };
         keys.forEach((k) => { base[k] = pick(C.prev, k) || pick(prevRow, k); });
-        const pts = rows.map((r) => { const o = { label: `${dLabel(S.asOf.date)} ${r.t}`, acct: r.eq + (cryptoAt(etMs(S.asOf.date, r.t)) + derivAt(S.asOf.date)) }; keys.forEach((k) => { o[k] = pick(byT.get(r.t), k); }); return o; });
+        const pts = rows.map((r) => { const o = { label: `${dLabel(S.asOf.date)} ${r.t}`, acct: r.eq + (cryptoAt(etMs(S.asOf.date, r.t)) + derivAtT(r.t)) }; keys.forEach((k) => { o[k] = pick(byT.get(r.t), k); }); return o; });
         return { pts, base, name: S.asOf.prov ? '오늘' : '최근 거래일', baseLabel: '전일 종가' };
       }
     }
@@ -1592,6 +1602,8 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     let h = `<div class="hero"><div class="hero-label">총 수익 (${dLabel(S.liveStart)} 시작)</div>
       <div class="hero-value num ${cls(total)}">${sgnUsd(total)}</div>
       <div class="hero-change num"><span class="${cls(total)}">${pct(total / S.capital)}</span><span class="when">S&amp;P 500 같은 기간 ${pct(st.bench || 0)}</span></div></div>`;
+    const rb = S.rebase;
+    if (rb && rb.date) h += `<p class="note"><i aria-hidden="true"></i><span>${md(rb.date)} ${esc(rb.t || '')}(뉴욕 시간)에 종목은 그대로 두고 계좌를 ${usd(rb.value, 0)}로 다시 맞췄습니다. 차액(${sgnUsd(rb.delta)})은 주식 계좌 현금으로 넣었습니다. 총 수익과 그래프는 이때부터 계산하고, 아래 항목별 손익은 이전 초기화부터 누적한 값입니다.</span></p>`;
     h += kv([
       ['실현 손익(주식·채권)', sgnUsd(realized), cls(realized)],
       ['평가 손익(주식·채권)', sgnUsd(unreal), cls(unreal)],
@@ -1896,10 +1908,29 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const v = await loadRD();
     if (v && JSON.stringify(v) !== JSON.stringify(RD)) { RD = v; if (S) render(); }
   }
+  // a re-base: the owner set the whole account back to a round figure and kept every position (the difference went in as
+  // stock-account cash). The account's story starts again there: earlier days, and today's points before it, are left off
+  // the charts, and the start and the day's change are measured from the re-based figure, so the added cash is never a gain
+  function rebaseView(st) {
+    const rb = st && st.rebase, a = st && st.account;
+    if (!rb || !rb.date || !a || !Array.isArray(a.equity)) return st;
+    const rows = a.equity.filter((e) => e.date >= rb.date);
+    if (!rows.length) return st;
+    a.equity = rows;
+    st.liveStart = rb.date;
+    if (rb.value) st.capital = rb.value;
+    if (st.asOf && st.asOf.date === rb.date) {
+      if (Array.isArray(a.intraday)) a.intraday = a.intraday.filter((x) => x.t > rb.t);
+      const C = st.compare, p = C && (C.intraday || []).filter((r) => r.t <= rb.t).pop();
+      if (p) C.prev = Object.assign({}, C.prev || {}, p);
+    }
+    if (a.stats && rb.bench > 0 && rows[rows.length - 1].bench > 0) a.stats.bench = rows[rows.length - 1].bench / rb.bench - 1;
+    return st;
+  }
   async function refresh() {
     try {
       const st = await load();
-      if (!S || st.built !== S.built) { S = st; applyLive(); render(); } else setLive();
+      if (!S || st.built !== S.built) { S = rebaseView(st); applyLive(); render(); } else setLive();
     } catch (e) { /* keep the last good state */ }
   }
   async function refreshCrypto() {
@@ -1909,7 +1940,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   async function main() {
     showView();
-    try { const [st, cv, rd] = await Promise.all([load(), loadCrypto(), loadRD()]); CV = cv; RD = rd; S = st; lastV = viewKey(); render(); startWS(); coinBasis(); livePoll(); setInterval(livePoll, 2500); }
+    try { const [st, cv, rd] = await Promise.all([load(), loadCrypto(), loadRD()]); CV = cv; RD = rd; S = rebaseView(st); lastV = viewKey(); render(); startWS(); coinBasis(); livePoll(); setInterval(livePoll, 2500); }
     catch (err) { $('loading').textContent = '불러오지 못했습니다: ' + (err.message || err) + ' 잠시 뒤 새로 고침해 주세요.'; }
     setInterval(() => { if (document.visibilityState === 'visible') refreshRD(); }, 600000);
     setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 60000);
