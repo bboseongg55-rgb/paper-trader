@@ -226,8 +226,8 @@ a.row:focus-visible, a.ain-r:focus-visible, .back:focus-visible { outline: 2px s
 .periods .ct svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .achart .ref { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 7 5; }
 .achart .ref2 { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 4; }
-.achart .rl { font-size: 16px; font-weight: 800; fill: #fff; stroke: rgba(0, 0, 0, 0.75); stroke-width: 3px; paint-order: stroke; stroke-linejoin: round; }
-.achart .rlb rect { display: none; }
+.achart .rl { font-size: 16px; font-weight: 800; fill: #fff; }
+.achart .rlb rect { fill: #191f28; stroke: none; }   /* Toss-style tag: white on near-black */
 .achart .rl2 { font-size: 15px; font-weight: 500; fill: var(--sub); paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
 .achart .cax { font-size: 15px; fill: var(--muted); }
 .asrc { margin: 0; padding: 8px 20px 0; font-size: 15px; color: var(--muted); }
@@ -1047,6 +1047,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       if (!p._b) p._b = { price: p.price, value: p.value, pnl: p.pnl };
       const q = p.kind !== 'bond' && LQ[cnSym(p.sym)];
       if (!q || !(q.px > 0)) continue;
+      if (p._b.price > 0 && Math.abs(q.px / p._b.price - 1) > 0.25) continue;   // a live tick 25% off the book price is a bad quote, not a move
       const sg = p.dir === -1 ? -1 : 1, d = (q.px - p._b.price) * p.qty * sg;
       p.price = q.px; p.value = r2(p._b.value + d); p.pnl = r2(p._b.pnl + d); if (p.entry > 0) p.pct = sg * (q.px / p.entry - 1); dc += d;
     }

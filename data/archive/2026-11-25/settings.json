@@ -1,0 +1,9 @@
+{
+ "capital": 1000000,
+ "liveStart": "2026-11-20",
+ "btStart": "2025-01-02",
+ "seedLast": "2026-11-13",
+ "bookCapital": 350000,
+ "quietDay": "2026-11-20",
+ "resetAt": "reset-2026-11-22"
+}
