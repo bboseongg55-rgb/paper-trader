@@ -1,25 +1,25 @@
 {
- "built": "2026-11-25T15:05:30.483Z",
+ "built": "2026-11-25T15:10:28.106Z",
  "asOf": {
   "date": "2026-11-25",
-  "time": "10:05",
+  "time": "10:10",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-25",
-   "eq": 349704.88,
-   "cash": 115624.17,
-   "hedge": 9698.8,
+   "eq": 349712.53,
+   "cash": 115624.16,
+   "hedge": 9718.67,
    "n": 14,
    "dd": 0.0009,
-   "bench": 356170.08,
-   "time": "10:05",
+   "bench": 355410.68,
+   "time": "10:10",
    "prov": true
   },
-  "ret": -0.0008431999999999329,
-  "bench": 0.0176288,
+  "ret": -0.0008213428571427484,
+  "bench": 0.01545908571428578,
   "trades": 5,
   "fees": 1.66,
   "open": [
@@ -27,49 +27,49 @@
     "sym": "LH",
     "qty": 8,
     "entry": 374.18,
-    "price": 370.08,
+    "price": 370.18,
     "stop": 360.94,
-    "pnl": -32.83
+    "pnl": -32.03
    },
    {
     "sym": "TAK",
     "qty": 253,
     "entry": 22.12,
-    "price": 22.9,
+    "price": 22.89,
     "stop": 22,
-    "pnl": 196.81
+    "pnl": 194.28
    },
    {
     "sym": "MPC",
     "qty": 43,
     "entry": 358.09,
-    "price": 347.22,
+    "price": 345.04,
     "stop": 328.15,
-    "pnl": -467.31
+    "pnl": -561.05
    },
    {
     "sym": "HAL",
     "qty": 203,
     "entry": 30.46,
-    "price": 31.24,
+    "price": 31.14,
     "stop": 32.37,
-    "pnl": -158.74
+    "pnl": -138.44
    },
    {
     "sym": "CVS",
     "qty": 44,
     "entry": 79.68,
-    "price": 81.17,
+    "price": 81.2,
     "stop": 88.45,
-    "pnl": -65.73
+    "pnl": -67.05
    },
    {
     "sym": "KR10Y",
     "qty": 501,
     "entry": 102.81,
-    "price": 102.63,
+    "price": 102.56,
     "stop": 100.55,
-    "pnl": -93.03
+    "pnl": -125.47
    },
    {
     "sym": "CN10Y",
@@ -83,49 +83,49 @@
     "sym": "JP10Y",
     "qty": 673,
     "entry": 77.93,
-    "price": 79.24,
+    "price": 79.3,
     "stop": 77.1,
-    "pnl": 880.96
+    "pnl": 922.46
    },
    {
     "sym": "US2Y",
     "qty": 469,
     "entry": 111.92,
-    "price": 112,
+    "price": 112.02,
     "stop": 111.46,
-    "pnl": 39.21
+    "pnl": 47.15
    },
    {
     "sym": "SN",
     "qty": 11,
     "entry": 230.25,
-    "price": 223.31,
+    "price": 224.74,
     "stop": 210.42,
-    "pnl": -76.34
+    "pnl": -60.61
    },
    {
     "sym": "A",
     "qty": 17,
     "entry": 183.92,
-    "price": 179.51,
+    "price": 180.31,
     "stop": 171.36,
-    "pnl": -75.03
+    "pnl": -61.43
    },
    {
     "sym": "REGN",
     "qty": 2,
     "entry": 986.71,
-    "price": 973.95,
+    "price": 973.16,
     "stop": 884.38,
-    "pnl": -25.51
+    "pnl": -27.09
    },
    {
     "sym": "CLS",
     "qty": 9,
     "entry": 197.47,
-    "price": 174.53,
+    "price": 172.36,
     "stop": 240.11,
-    "pnl": 206.42
+    "pnl": 225.95
    },
    {
     "sym": "VALE",
@@ -209,6 +209,18 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
+   "sym": "BDX",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "ADP",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "IBN",
    "pb": "bo",
    "taken": false,
@@ -233,32 +245,20 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "ALL",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "PSX",
    "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "VLO",
-   "pb": "pb",
+   "sym": "ALL",
+   "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
    "sym": "SONY",
    "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "MDT",
-   "pb": "pb",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   }
