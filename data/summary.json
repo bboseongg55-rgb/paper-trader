@@ -1,25 +1,25 @@
 {
- "built": "2026-11-25T19:15:29.977Z",
+ "built": "2026-11-25T19:20:27.720Z",
  "asOf": {
   "date": "2026-11-25",
-  "time": "14:15",
+  "time": "14:20",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-25",
-   "eq": 353565.46,
+   "eq": 353524.28,
    "cash": 60896.2,
-   "hedge": 9524.93,
+   "hedge": 9534.89,
    "n": 17,
-   "dd": 0.0027,
-   "bench": 362813.26,
-   "time": "14:15",
+   "dd": 0.0028,
+   "bench": 362432.56,
+   "time": "14:20",
    "prov": true
   },
-  "ret": 0.010187028571428725,
-  "bench": 0.036609314285714234,
+  "ret": 0.01006937142857156,
+  "bench": 0.03552160000000004,
   "trades": 5,
   "fees": 1.66,
   "open": [
@@ -27,41 +27,41 @@
     "sym": "LH",
     "qty": 8,
     "entry": 374.18,
-    "price": 371.36,
+    "price": 370.89,
     "stop": 360.94,
-    "pnl": -22.59
+    "pnl": -26.35
    },
    {
     "sym": "TAK",
     "qty": 253,
     "entry": 22.12,
-    "price": 23.04,
+    "price": 23.03,
     "stop": 22,
-    "pnl": 232.23
+    "pnl": 229.7
    },
    {
     "sym": "MPC",
     "qty": 43,
     "entry": 358.09,
-    "price": 348.37,
+    "price": 348.49,
     "stop": 328.15,
-    "pnl": -417.86
+    "pnl": -412.7
    },
    {
     "sym": "HAL",
     "qty": 203,
     "entry": 30.46,
-    "price": 31.67,
+    "price": 31.72,
     "stop": 32.37,
-    "pnl": -246.03
+    "pnl": -256.18
    },
    {
     "sym": "CVS",
     "qty": 44,
     "entry": 79.68,
-    "price": 81.59,
+    "price": 81.56,
     "stop": 88.45,
-    "pnl": -84.21
+    "pnl": -82.89
    },
    {
     "sym": "KR10Y",
@@ -69,7 +69,7 @@
     "entry": 102.81,
     "price": 102.86,
     "stop": 100.55,
-    "pnl": 24.11
+    "pnl": 23.73
    },
    {
     "sym": "CN10Y",
@@ -83,81 +83,81 @@
     "sym": "JP10Y",
     "qty": 673,
     "entry": 77.93,
-    "price": 79.04,
+    "price": 79.05,
     "stop": 77.1,
-    "pnl": 744.41
+    "pnl": 751.1
    },
    {
     "sym": "US2Y",
     "qty": 469,
     "entry": 111.92,
-    "price": 111.95,
+    "price": 111.96,
     "stop": 111.46,
-    "pnl": 16.41
+    "pnl": 18.39
    },
    {
     "sym": "SN",
     "qty": 11,
     "entry": 230.25,
-    "price": 234.03,
+    "price": 233.48,
     "stop": 210.42,
-    "pnl": 41.58
+    "pnl": 35.53
    },
    {
     "sym": "A",
     "qty": 17,
     "entry": 183.92,
-    "price": 180.56,
+    "price": 180.02,
     "stop": 171.36,
-    "pnl": -57.18
+    "pnl": -66.36
    },
    {
     "sym": "REGN",
     "qty": 2,
     "entry": 986.71,
-    "price": 981.17,
+    "price": 980.85,
     "stop": 884.38,
-    "pnl": -11.07
+    "pnl": -11.71
    },
    {
     "sym": "CLS",
     "qty": 9,
     "entry": 197.47,
-    "price": 191.7,
+    "price": 191.61,
     "stop": 240.11,
-    "pnl": 51.89
+    "pnl": 52.7
    },
    {
     "sym": "VALE",
     "qty": 483,
     "entry": 9.34,
-    "price": 9.82,
+    "price": 9.81,
     "stop": 10.14,
-    "pnl": -231.69
+    "pnl": -226.86
    },
    {
     "sym": "SNY",
     "qty": 430,
     "entry": 54.39,
-    "price": 54.25,
+    "price": 54.24,
     "stop": 53.54,
-    "pnl": -62.07
+    "pnl": -66.37
    },
    {
     "sym": "ACN",
     "qty": 90,
     "entry": 244.51,
-    "price": 243.64,
+    "price": 243.71,
     "stop": 240.46,
-    "pnl": -78.68
+    "pnl": -72.38
    },
    {
     "sym": "U",
     "qty": 275,
     "entry": 50.21,
-    "price": 49.87,
+    "price": 49.72,
     "stop": 48.87,
-    "pnl": -93.54
+    "pnl": -134.79
    }
   ],
   "lastTrades": [
@@ -227,7 +227,7 @@
  },
  "signals": [
   {
-   "sym": "ADP",
+   "sym": "AJG",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
@@ -239,13 +239,7 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "AJG",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "VLTO",
+   "sym": "ADP",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
@@ -282,6 +276,12 @@
   },
   {
    "sym": "MRSH",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "SONY",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
