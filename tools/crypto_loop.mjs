@@ -121,6 +121,8 @@ while (Date.now() < END) {
       }
     }
     if (st) st.tilt = (alloc && alloc.cio && alloc.cio.tilt && alloc.cio.tilt.h24) || null;
+    // the stock and derivatives books' direction in each underlying, so a token is never held against them
+    C.setExt({ dirs: (readJSON('data/dirs.json', null) || {}).dirs || {} });
     if (st && alloc && alloc.cio && Number.isFinite(alloc.cio.rp)) { st.stake = st.stake || { at: Date.now(), rates: {}, earned: {} }; st.stake.rates.USD = alloc.cio.rp; }
     if (st && Date.now() - lastRates >= 6 * 3600e3) { lastRates = Date.now(); await stakeRates(st); }
     if (st && !seeded) { await seedToks(st); seeded = true; }

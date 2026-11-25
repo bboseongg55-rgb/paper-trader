@@ -430,7 +430,7 @@
         else if (left <= c.exitDte) why = `만기 ${left}일 전 정리`;
       } else if (o.side === 'hedge') {
         if (left <= CFG.hedge.exitDte) why = `만기 ${left}일 전 정리`;
-        else if (cio.opt && !O.hedge) why = 'AI 배분: 위험 회피 국면이 끝나 보호를 풂';
+        else if (cio.opt && !O.hedge) why = O.hedgeOff || 'AI 배분: 위험 회피 국면이 끝나 보호를 풂';
       } else if (o.side === 'csp' || o.side === 'cc') {
         if (owe <= got * (1 - CFG.wheel.take)) why = `이익 실현(받은 프리미엄의 ${Math.round(CFG.wheel.take * 100)}%)`;
         else if (O.off) why = o.side === 'csp' ? 'AI 배분: 위험 회피 국면이라 주식을 떠안지 않도록 되삼' : 'AI 배분: 위험 회피 국면이라 콜을 되사고 주식을 정리';

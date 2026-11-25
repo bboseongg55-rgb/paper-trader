@@ -96,21 +96,47 @@ if (book && evo && labMs == null && Lab.hourly) {
 // what the account's own trades say about each method in each market phase (the S&P 500 at entry: rising above its
 // 50-day average, between the averages, or at or below its 200-day average). The rules' 2-year record is the prior;
 // each live trade counts three times. The allocator turns it into risk multipliers for the phase it sees now
-function learnByPhase() {
-  const ks = Object.keys(MS['.SPX'] || {}).sort(), px = ks.map((k) => +MS['.SPX'][k]), ph = {};
-  for (let i = 0; i < ks.length; i++) {
-    if (i < 199) continue;
+// every closed trade of the coin account (its own list keeps only the last 500): the learning reads them all
+function coinClosed() {
+  const f = 'data/crypto/closed_all.json', all = readJSON(f, []), cs = readJSON('data/crypto/state.json', null);
+  const seen = new Set(all.map((x) => `${x.t}|${x.s}|${x.c}`));
+  let added = 0;
+  for (const x of (cs && cs.closed) || []) {
+    const k = `${x.t}|${x.s}|${x.c}`;
+    if (!seen.has(k) && isFinite(x.R)) { seen.add(k); all.push({ t: x.t, s: x.s, c: x.c, pnl: x.pnl, R: x.R, side: x.side }); added++; }
+  }
+  if (added) { all.sort((a, b) => a.t - b.t); fs.writeFileSync(f, JSON.stringify(all)); }
+  return all;
+}
+// a market's phase each day: at or below its 200-day average 'down', at or below its 50-day 'mixed', else 'up'
+function phases(series) {
+  const ks = Object.keys(series || {}).sort(), px = ks.map((k) => +series[k]), ph = {};
+  for (let i = 199; i < ks.length; i++) {
     let a50 = 0, a200 = 0; for (let j = i - 199; j <= i; j++) { a200 += px[j]; if (j > i - 50) a50 += px[j]; }
     ph[ks[i]] = px[i] <= a200 / 200 ? 'down' : px[i] <= a50 / 50 ? 'mixed' : 'up';
   }
-  const phaseOf = (d) => { if (ph[d]) return ph[d]; let best = null; for (const k of ks) { if (k > d) break; if (ph[k]) best = ph[k]; } return best; };
-  const out = {}, add = (tr, w, src) => { const p = phaseOf(tr.entryDate), k = tr.pb; if (!p || !k || !isFinite(tr.R)) return; const c = (((out[p] = out[p] || {})[k] = out[p][k] || { n: 0, live: 0, w: 0, sumR: 0, pnl: 0 })); c.n++; if (src === 'live') c.live++; c.w += w; c.sumR += w * tr.R; c.pnl += tr.pnl || 0; };
+  const of = (d) => { if (ph[d]) return ph[d]; let best = null; for (const k of ks) { if (k > d) break; if (ph[k]) best = ph[k]; } return best; };
+  return { of, last: ks.length ? of(ks[ks.length - 1]) : null };
+}
+function learnByPhase() {
+  const SPXp = phases(MS['.SPX']), BTCp = phases(MS['BTC.CM='] || MS['@BTC.1']), phaseOf = SPXp.of;
+  const dayBefore = (ms, tz) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(ms - 864e5));
+  const out = {}, add = (tr, w, src, ph0) => { const p = ph0 || phaseOf(tr.entryDate), k = tr.pb; if (!p || !k || !isFinite(tr.R)) return; const c = (((out[p] = out[p] || {})[k] = out[p][k] || { n: 0, live: 0, w: 0, sumR: 0, pnl: 0 })); c.n++; if (src === 'live') c.live++; c.w += w; c.sumR += w * tr.R; c.pnl += tr.pnl || 0; };
   const i0 = D.dates.findIndex((d) => d >= (settings.btStart || '2025-01-02'));
   const bt = E.simulate(D, { from: Math.max(0, i0), to: T - 1, capital, params: book.state.P, adaptive: true, log: false, force: { lev: 1.5, regimeLevel: 0, shortAny: 1 } });
   for (const tr of bt.trades || []) add(tr, 1, 'bt');
   for (const tr of (book.hist && book.hist.trades) || []) add(tr, 3, 'live');
   for (const tr of readJSON('data/trades_archive.json', [])) add(tr, 3, 'live');   // live trades from before the account reset
+  // the coin account's trades too (the owner, 2026-11-25: every scalp buy and sell is a sample): coins by bitcoin's phase
+  // the day before, tokenized stocks by the S&P 500's; scalp, trend and tokens each as a method of their own
+  const CK = { scalp: 'c_scalp', trend: 'c_trend', tok: 'c_tok' };
+  for (const x of coinClosed()) {
+    const k = CK[x.s]; if (!k) continue;
+    const ph0 = k === 'c_tok' ? SPXp.of(dayBefore(x.t, 'America/New_York')) : BTCp.of(dayBefore(x.t, 'UTC'));
+    add({ pb: k, R: x.R, pnl: x.pnl }, 3, 'live', ph0);
+  }
   for (const p in out) for (const k in out[p]) { const c = out[p][k]; c.avgR = Math.round((c.sumR / c.w) * 1000) / 1000; c.pnl = Math.round(c.pnl); delete c.sumR; }
+  out.now = { spx: SPXp.last, btc: BTCp.last };
   return out;
 }
 // ── the allocator and the other two parts of the account
@@ -243,7 +269,7 @@ if (lv) {
       fee: t.feeSell ? t.feeSell.total : 0, feeDetail: t.feeSell || null, pnl: t.pnl, pct: t.pct, R: t.R, reason: t.reason, days: t.days });
   }
   for (const p of lv.open) orders.push({ side: 'buy', id: p.id, date: p.entryDate, time: p.et || null, sym: p.sym, name: p.name, pb: p.pb, qty: p.qty, price: p.entry, fee: p.feeBuy || 0, open: true, why: p.why || null, ctx: p.ctx || null });
-  (lv.hedgeFills || []).forEach((h, k) => orders.push({ side: h.side, id: 'h' + k, date: h.date, time: h.time || null, sym: 'SH', name: 'S&P 500 인버스(−1배) 헷지', pb: 'hedge',
+  (lv.hedgeFills || []).forEach((h, k) => orders.push({ side: h.side, id: 'h' + k, date: h.date, time: h.time || null, sym: h.kind === 'bond' ? 'IEF' : 'SH', name: h.kind === 'bond' ? '미국 10년 국채 헷지' : 'S&P 500 인버스(−1배) 헷지', pb: 'hedge', kind: h.kind || 'inv',
     amount: h.amount, fee: h.fee || 0, spx: h.spx, ratio: h.ratio, why: h.why }));
   const key = (o) => `${o.date} ${o.time || '16:00'} ${o.side === 'sell' ? 1 : 0} ${String(o.id).padStart(6, '0')}`;
   orders.sort((a, b) => (key(a) < key(b) ? 1 : -1));
@@ -278,7 +304,7 @@ function teamsView(lv) {
       buysToday: lv.trades.filter((t) => t.entryDate === day).length + lv.open.filter((p) => p.entryDate === day).length },
     exit: { name: E.TEAMS.exit, rules: own('exit'), log: logs('exit'), sellsToday: lv.trades.filter((t) => t.exitDate === day).length,
       watching: lv.open.length, nearest: lv.open.length ? lv.open.map((p) => ({ sym: p.sym, gap: p.price > 0 ? p.price / p.stop - 1 : null })).sort((a, b) => a.gap - b.gap)[0] : null },
-    risk: { name: E.TEAMS.risk, rules: own('risk'), log: logs('risk'), gate: res.gate, regime: res.regime, hedge: lv.hedge, risk: lv.risk },
+    risk: { name: E.TEAMS.risk, rules: own('risk'), log: logs('risk'), gate: res.gate, regime: res.regime, hedge: lv.hedge, hedgeNow: lv.hedgeNow || null, risk: lv.risk },
   };
 }
 // a bond's own daily values (last year) go with it to the page, for its chart: a bond built from yields has no quote,
@@ -310,6 +336,21 @@ const state = {
   orders, daily, byPb,
   data: { liveBuilt: live.built || null, sources: readJSON('data/source.json', null) },
 };
+// the account's direction in each underlying (+1 long, −1 short) outside the coin account: stocks held or sold short,
+// index and metal futures as their ETFs, SPY options by the sign of the contracts (puts bought and calls sold count as
+// short). The coin account reads it and never holds a token the other way (the owner: no long and short of one thing)
+{
+  const dirs = {}, add = (k, v) => { if (k && v) dirs[k] = (dirs[k] || 0) + v; };
+  for (const p of (lv && lv.open) || []) if (p.kind !== 'bond') add(p.sym, p.dir === -1 ? -1 : 1);
+  const FUT_ETF = { MES: 'SPY', ES: 'SPY', MNQ: 'QQQ', NQ: 'QQQ', M2K: 'IWM', RTY: 'IWM', MGC: 'GLD', GC: 'GLD', SIL: 'SLV', SI: 'SLV' };
+  const OPT_DIR = { lput: -1, ncall: -1, ccall: -1, hedge: -1, lcall: 1, csp: 1, base: 1, cc: 1, credit: 1 };
+  const dv = state.deriv || {};
+  for (const f of dv.fut || []) add(FUT_ETF[f.key], Math.sign(f.qty || 0));
+  for (const o of dv.opt || []) add(o.und, (OPT_DIR[o.side] || 0) * (o.n || 1));
+  for (const x of dv.stk || []) add(x.sym, 1);
+  for (const k of Object.keys(dirs)) { dirs[k] = Math.sign(dirs[k]); if (!dirs[k]) delete dirs[k]; }
+  fs.writeFileSync('data/dirs.json', JSON.stringify({ at: new Date().toISOString(), dirs }));
+}
 // the derivatives part's value at each run of the day, so the account's one-day chart follows it like the stock book and
 // the coins (one point a run, kept for the last day only)
 if (state.deriv && state.asOf) {

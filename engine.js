@@ -62,6 +62,14 @@
     // hedge: an inverse S&P 500 position (like ProShares SH, −1× the daily move, 0.89% a year in fund costs), set at the
     // close; it moves only when the target differs by more than $1,000 and 20%
     hedgeExp: 0.0089, hedgeMin: 1000, hedgeBand: 0.2,
+    // the hedge's instrument each day (owner, 2026-11-25: simple and flexible, bonds or defensive stocks allowed): US
+    // 10-year Treasuries while they have been rising against stocks (60-day correlation below hedgeBondCorr, total return
+    // above its 50-day average); else, while the defensive sectors lead the S&P 500, new buys lean to them (defUp × the
+    // risk, the rest defDown ×) and the inverse is held at defHedge of its size; else the inverse S&P 500. hedgeFlex 0:
+    // the inverse only. Backtest at the live settings to 2026-11-24 (inverse only → this): from 2025-01 return −1.6% →
+    // +17.8%, worst drawdown 12.7% → 9.9%; from 2025-06 +14.5% → +13.7%, 13.0% → 13.9%; from 2025-09 −6.3% → −7.4%,
+    // 15.5% → 15.9%. The gain is mostly the spring-2025 fall; later windows are about even (a little worse)
+    hedgeFlex: 1, hedgeBond: 'US10Y', hedgeBondCorr: -0.1, defSecs: ['Consumer Staples', 'Utilities', 'Health Care'], defUp: 1.5, defDown: 0.5, defHedge: 0.5,
     selectEvery: 20, selectWindow: 120, selectMinTrades: 5, selectTrialM: 0.25, selectTiers: [1, 0.5, 0.17], selectLoserM: 0.17,
     // bonds: at most 4 at a time, bought at the close while the bond's total-return index is above its 100-day average
     // and up over 63 trading days (ranked by that return over its volatility)
@@ -357,6 +365,35 @@
 
   // ── 2. Simulation ───────────────────────────────────────────────────────────────────────────────────────
   // opts: {from, to, capital, params, adaptive, scores, label}
+  // the hedge's choices, once per data set: the S&P 500's, US 10-year Treasuries' and the defensive sectors' (equal
+  // weight) daily returns, and from the 60 days to each day the hedge kind the team would use that evening
+  const HNAME = { inv: 'S&P 500 인버스', bond: '미국 10년 국채', def: '경기방어주' };
+  function hedgeAux(D) {
+    if (D._hx) return D._hx;
+    const T = D.dates.length, bi = D.S.findIndex((x) => x.s === FIXED.hedgeBond), DEF = new Set(FIXED.defSecs), di = [];
+    D.S.forEach((x, i) => { if (x.kind !== 'bond' && DEF.has(x.sec)) di.push(i); });
+    const rS = new Float64Array(T).fill(NaN), rB = new Float64Array(T).fill(NaN), rD = new Float64Array(T).fill(NaN);
+    for (let t = 1; t < T; t++) {
+      if (isNum(D.spx[t]) && isNum(D.spx[t - 1]) && D.spx[t - 1] > 0) rS[t] = D.spx[t] / D.spx[t - 1] - 1;
+      if (bi >= 0) { const b = D.S[bi].c; if (isNum(b[t]) && isNum(b[t - 1]) && b[t - 1] > 0) rB[t] = b[t] / b[t - 1] - 1; }
+      let sm = 0, n = 0;
+      for (const i of di) { const c = D.S[i].c; if (isNum(c[t]) && isNum(c[t - 1]) && c[t - 1] > 0) { sm += c[t] / c[t - 1] - 1; n++; } }
+      if (n >= 10) rD[t] = sm / n;
+    }
+    const kind = new Array(T).fill('inv'), why = new Array(T).fill('국채·경기방어주 모두 헷지 역할이 약함'), bx = new Float64Array(T), rel = new Float64Array(T);
+    let b0 = 1, r0 = 1;
+    for (let t = 0; t < T; t++) { if (isNum(rB[t])) b0 *= 1 + rB[t]; if (isNum(rD[t]) && isNum(rS[t])) r0 *= (1 + rD[t]) / (1 + rS[t]); bx[t] = b0; rel[t] = r0; }
+    for (let t = 60; t < T; t++) {
+      let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, n = 0;
+      for (let j = t - 59; j <= t; j++) if (isNum(rB[j]) && isNum(rS[j])) { const x = rB[j], y = rS[j]; sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y; n++; }
+      const cor = n >= 40 ? (n * sxy - sx * sy) / Math.sqrt(Math.max(1e-18, (n * sxx - sx * sx) * (n * syy - sy * sy))) : NaN;
+      let mb = 0, mr = 0; for (let j = t - 49; j <= t; j++) { mb += bx[j]; mr += rel[j]; }
+      if (bi >= 0 && isNum(cor) && cor < FIXED.hedgeBondCorr && bx[t] > mb / 50) { kind[t] = 'bond'; why[t] = `국채가 주식과 반대로 움직이며(60일 상관 ${cor.toFixed(2).replace('-', '−')}) 오르는 중`; }
+      else if (di.length >= 10 && rel[t] > mr / 50) { kind[t] = 'def'; why[t] = '경기방어주(필수소비재·유틸리티·헬스케어)가 S&P 500보다 강함'; }
+    }
+    D._hx = { rS, rB, kind, why };
+    return D._hx;
+  }
   function simulate(D, opts) {
     const T = D.dates.length;
     // opts.resume: a book ({date, from0, capital, state, hist}). The run starts the day after the book's last day with
@@ -377,7 +414,9 @@
     const capital = BK ? BK.capital : opts.capital;
     let cash = capital, peak = capital, idSeq = 0;
     const positions = [], trades = [], equity = [], changes = [], reviews = [], holdReviews = [], signals = [], intraday = [];
-    let hedge = null;                               // inverse S&P 500 position held by the risk & hedge team
+    let hedge = null;                               // the risk & hedge team's position: inverse S&P 500 or Treasuries (kind)
+    let hedgeTilt = false, hedgeNow = null;          // defensive mode (new buys lean to defensive sectors), the last decision
+    const hedgeFlex = opts.hedgeFlex != null ? opts.hedgeFlex : FIXED.hedgeFlex, DEFSEC = new Set(FIXED.defSecs);
     const hedgeFills = [], hedgeEpisodes = [];
     const cool = new Map();                         // symbol index → first day it may be bought again
     const scores = Object.assign({ bo: 0, pb: 0, dt: 0, sb: 0 }, (BS ? BS.scores : opts.scores) || {});
@@ -416,6 +455,7 @@
       for (const r of BS.holdReviews) holdReviews.push({ due: at(r.due), tr: r.tr, i: need(r.sym) });
       for (const [s, d] of BS.cool) { const k = symIdx(s); if (k != null) cool.set(k, at(d)); }
       hedge = BS.hedge ? Object.assign({}, BS.hedge, { t0: at(BS.hedge.t0) }) : null;
+      hedgeTilt = !!BS.hedgeTilt; hedgeNow = BS.hedgeNow || null;
       // a split found after the book's last day: the saved prices of a held stock move to the new scale, its shares the other way
       for (const sp of D.splits || []) {
         if (sp.t <= tc) continue;
@@ -575,7 +615,11 @@
       const regimeNow = regimeOk(D, t, 1);
       const prov = !!(D.prov && D.prov.t === t);     // market still open: today's prices are not final yet
       const closedToday = [];
-      if (hedge) { hedge.prev = hedge.value; hedge.value *= (1 - (D.spx[t] / D.spx[t - 1] - 1)) * (1 - FIXED.hedgeExp / 252); }
+      if (hedge) {
+        hedge.prev = hedge.value;
+        if (hedge.kind === 'bond') { const rb = hedgeAux(D).rB[t]; if (isNum(rb)) hedge.value *= 1 + rb; }
+        else hedge.value *= (1 - (D.spx[t] / D.spx[t - 1] - 1)) * (1 - FIXED.hedgeExp / 252);
+      }
       const liab0 = t > 0 ? positions.reduce((a, p) => a + (p.dir === -1 && p.t0 < t ? p.qty * price(D.S[p.i], t - 1) : 0), 0) : 0;
       if (liab0 > 0) {                               // stock-borrow fee on the shorts, per calendar day
         const days = Math.max(1, Math.round((Date.parse(D.dates[t] + 'T12:00:00Z') - Date.parse(D.dates[t - 1] + 'T12:00:00Z')) / 864e5));
@@ -678,7 +722,7 @@
           if (t === to) {
             let eqK = cash;
             for (const p of positions) { const v = px[p.i]; eqK += sgn(p) * p.qty * (isNum(v) ? v : isNum(p.lastPx) ? p.lastPx : price(D.S[p.i], t - 1)); }   // a short is owed back: it lowers the value
-            if (hedge) eqK += isNum(sm.spx) && isNum(spPrev) ? hedge.prev * (1 - (sm.spx / spPrev - 1)) : hedge.value;
+            if (hedge) eqK += hedge.kind !== 'bond' && isNum(sm.spx) && isNum(spPrev) ? hedge.prev * (1 - (sm.spx / spPrev - 1)) : hedge.value;
             intraday.push({ t: tm, eq: round(eqK, 2), spx: isNum(sm.spx) ? sm.spx : null });
           }
         }
@@ -809,8 +853,8 @@
         // guard against over-fitting: every 20 days compare the adapted rules with the starting rules
         if (t - lastValidate >= FIXED.validateEvery && t - base0 >= FIXED.validateWindow && differs(P, B)) {
           lastValidate = t;
-          const a = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: P, adaptive: false, mults: M });
-          const b = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: B, adaptive: false, mults: M });
+          const a = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: P, adaptive: false, mults: M, hedgeFlex });
+          const b = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: B, adaptive: false, mults: M, hedgeFlex });
           const ra = a.stats.ret, rb = b.stats.ret;
           if (ra < rb - FIXED.validateMargin) {
             const chg = [];
@@ -874,7 +918,7 @@
           const k = cd.pb === 'bo' ? P.stopK_bo : P.stopK_pb;
           const stop = fill - k * atr;
           const perShare = fill - stop;
-          const risk = eq * FIXED.riskPct * mult * riskMul(cd.pb);
+          const risk = eq * FIXED.riskPct * mult * riskMul(cd.pb) * (hedgeTilt ? (DEFSEC.has(x.sec) ? FIXED.defUp : FIXED.defDown) : 1);
           let qty = Math.floor(risk / perShare);
           qty = Math.min(qty, Math.floor((P.maxPosW * eq) / fill), Math.floor(bpow(eq) / fill));
           if (heat + qty * perShare > FIXED.heatMax * eq) qty = Math.floor(Math.max(0, FIXED.heatMax * eq - heat) / perShare);
@@ -954,7 +998,9 @@
       }
       if (t === to) signals.push(...todaySignals);
 
-      // ── risk & hedge team: inverse S&P 500 against the stocks held overnight while the market trend is down
+      // ── risk & hedge team: while the market trend is down, one hedge against the stocks held overnight. Its kind is
+      // flexible (owner, 2026-11-25): US 10-year Treasuries while they rise against stocks; while the defensive sectors
+      // lead, new buys lean to them and the inverse is held at half; else the inverse S&P 500 (like SH, −1×)
       if (!only && !prov) {
         const s = D.spx[t], s50 = D.spx50[t], s200 = D.spx200[t];
         let H = 0, why = '';
@@ -962,40 +1008,53 @@
         else if (isNum(s50) && s < s50) { H = P.hedgeK * 0.5; why = 'S&P 500이 50일 평균선 아래'; }
         const eqH = marked(t), ddH = 1 - eqH / Math.max(peak, eqH);
         if (H > 0 && ddH >= FIXED.ddHalf) { H = Math.min(1, H + 0.25); why += `, 계좌 낙폭 ${(ddH * 100).toFixed(1)}%`; }
+        const HX = hedgeAux(D), kind = hedgeFlex ? HX.kind[t] : 'inv', kWhy = hedgeFlex ? HX.why[t] : '', tilt0 = hedgeTilt;
+        hedgeTilt = H > 0 && kind === 'def';
+        hedgeNow = H > 0 ? { date: D.dates[t], kind, ratio: round(H, 2), why: why + (kWhy ? ` · ${kWhy}` : '') } : null;
         const longVal = positions.filter((p) => p.pb === 'bo' || p.pb === 'pb').reduce((sum, p) => sum + p.qty * price(D.S[p.i], t), 0);
-        let target = H * longVal;
+        const posKind = kind === 'bond' ? 'bond' : 'inv';
+        let target = (kind === 'def' ? FIXED.defHedge : 1) * H * longVal;
         if (target < FIXED.hedgeMin) target = 0;
-        const cur = hedge ? hedge.value : 0;
         const tm = (D.times && D.times[t]) || null;
+        // sells part or all of the hedge; all of it ends the episode (scored; the hedge ratio learns from the scores)
+        const sellHedge = (amt, end, sellWhy) => {
+          const gross = amt * (1 - FIXED.slip), hk = hedge.kind || 'inv';
+          const fee = gross > 500 ? Math.ceil(gross * secRate(D.dates[t]) * 100 - 1e-9) / 100 : 0;
+          cash += gross - fee;
+          hedge.value -= amt; hedge.got += gross - fee; hedge.fees += fee; hedge.ratio = H;
+          hedgeFills.push({ side: 'sell', kind: hk, date: D.dates[t], time: tm, amount: round(gross - fee, 2), fee, spx: round(s, 2), ratio: round(H, 2), why: sellWhy });
+          if (!end) return;
+          const pnl = hedge.got - hedge.paid, mv = s / hedge.spx0 - 1;
+          hedgeEpisodes.push({ kind: hk, from: D.dates[hedge.t0], to: D.dates[t], pnl: round(pnl, 2), spx: round(mv, 4) });
+          if (adaptive) {
+            push(ev.hedge, pnl > 0 ? 1 : -1, 6);
+            const chg = [], sum = ev.hedge.reduce((a, b) => a + b, 0);
+            let body = `${D.dates[hedge.t0]}부터 들고 있던 ${HNAME[hk]} 헷지를 정리했습니다(${sellWhy}). 헷지 손익 ${pnl >= 0 ? '+' : '−'}$${Math.abs(round(pnl, 2)).toLocaleString('en-US')}, 그동안 S&P 500 ${pctTxt(mv)}입니다. 최근 헷지 ${ev.hedge.length}번 중 ${ev.hedge.filter((v) => v > 0).length}번이 하락을 막았습니다.`;
+            if (ev.hedge.length >= 4 && sum <= -2 && P.hedgeK > BOUNDS.hedgeK[0]) { setParam('hedgeK', P.hedgeK - 0.1, chg); ev.hedge = []; body += ' 시장이 다시 오르며 비용만 낸 경우가 많아 헷지 비율을 줄입니다.'; }
+            else if (ev.hedge.length >= 4 && sum >= 2 && P.hedgeK < BOUNDS.hedgeK[1]) { setParam('hedgeK', P.hedgeK + 0.1, chg); ev.hedge = []; body += ' 하락을 막은 경우가 많아 헷지 비율을 늘립니다.'; }
+            log(t, 'hedge', `${HNAME[hk]} 헷지 정리`, body, chg);
+          }
+          hedge = null;
+        };
+        // another kind of hedge ends first (sold whole), then this kind is bought
+        if (hedge && H > 0 && (hedge.kind || 'inv') !== posKind) sellHedge(hedge.value, true, `헷지 수단을 ${HNAME[posKind]}(으)로 바꿈`);
+        const cur = hedge ? hedge.value : 0;
         // the hedge may be bought on margin when cash runs short (it lowers the account's risk); the loan pays margin interest
         if (target > cur && target - cur > Math.max(FIXED.hedgeMin, FIXED.hedgeBand * cur)) {
           const amt = target - cur, cost = amt * (1 + FIXED.slip);
           cash -= cost;
           const fresh = !hedge;
-          if (!hedge) hedge = { value: 0, prev: 0, t0: t, paid: 0, got: 0, fees: 0, spx0: s };
-          hedge.value += amt; hedge.paid += cost; hedge.ratio = H;
-          hedgeFills.push({ side: 'buy', date: D.dates[t], time: tm, amount: round(cost, 2), spx: round(s, 2), ratio: round(H, 2), why });
-          if (fresh && adaptive) log(t, 'hedge', 'S&P 500 인버스 헷지 시작', `${why}라, 다음 날로 넘기는 보유 주식 $${Math.round(longVal).toLocaleString('en-US')}의 ${Math.round(H * 100)}%만큼 S&P 500이 내리면 오르는 인버스 상품(SH와 같은 −1배)을 삽니다.`, []);
+          if (!hedge) hedge = { kind: posKind, value: 0, prev: 0, t0: t, paid: 0, got: 0, fees: 0, spx0: s };
+          hedge.value += amt; hedge.paid += cost; hedge.ratio = H; hedge.why = hedgeNow.why;
+          hedgeFills.push({ side: 'buy', kind: posKind, date: D.dates[t], time: tm, amount: round(cost, 2), spx: round(s, 2), ratio: round(H, 2), why: hedgeNow.why });
+          const shr = Math.round((kind === 'def' ? FIXED.defHedge : 1) * H * 100);
+          if (fresh && adaptive) log(t, 'hedge', `${HNAME[posKind]} 헷지 시작`, `${hedgeNow.why}. 다음 날로 넘기는 보유 주식 $${Math.round(longVal).toLocaleString('en-US')}의 ${shr}%만큼 ${posKind === 'bond' ? '미국 10년 국채(IEF와 비슷한 총수익)를 삽니다.' : 'S&P 500이 내리면 오르는 인버스 상품(SH와 같은 −1배)을 삽니다.'}${kind === 'def' ? ' 경기방어주가 강해 인버스는 절반만 들고, 새로 사는 주식은 경기방어주 위주로 고릅니다.' : ''}`, []);
         } else if (cur > 0 && (target === 0 || cur - target > Math.max(FIXED.hedgeMin, FIXED.hedgeBand * cur))) {
-          const amt = cur - target, gross = amt * (1 - FIXED.slip);
-          const fee = gross > 500 ? Math.ceil(gross * secRate(D.dates[t]) * 100 - 1e-9) / 100 : 0;
-          cash += gross - fee;
-          hedge.value -= amt; hedge.got += gross - fee; hedge.fees += fee; hedge.ratio = H;
-          hedgeFills.push({ side: 'sell', date: D.dates[t], time: tm, amount: round(gross - fee, 2), fee, spx: round(s, 2), ratio: round(H, 2), why: target === 0 ? '하락 추세가 끝나 정리' : why });
-          if (target === 0) {
-            const pnl = hedge.got - hedge.paid, mv = s / hedge.spx0 - 1;
-            hedgeEpisodes.push({ from: D.dates[hedge.t0], to: D.dates[t], pnl: round(pnl, 2), spx: round(mv, 4) });
-            if (adaptive) {
-              push(ev.hedge, pnl > 0 ? 1 : -1, 6);
-              const chg = [], sum = ev.hedge.reduce((a, b) => a + b, 0);
-              let body = `${D.dates[hedge.t0]}부터 들고 있던 인버스 헷지를 정리했습니다. 헷지 손익 ${pnl >= 0 ? '+' : '−'}$${Math.abs(round(pnl, 2)).toLocaleString('en-US')}, 그동안 S&P 500 ${pctTxt(mv)}입니다. 최근 헷지 ${ev.hedge.length}번 중 ${ev.hedge.filter((v) => v > 0).length}번이 하락을 막았습니다.`;
-              if (ev.hedge.length >= 4 && sum <= -2 && P.hedgeK > BOUNDS.hedgeK[0]) { setParam('hedgeK', P.hedgeK - 0.1, chg); ev.hedge = []; body += ' 시장이 다시 오르며 비용만 낸 경우가 많아 헷지 비율을 줄입니다.'; }
-              else if (ev.hedge.length >= 4 && sum >= 2 && P.hedgeK < BOUNDS.hedgeK[1]) { setParam('hedgeK', P.hedgeK + 0.1, chg); ev.hedge = []; body += ' 하락을 막은 경우가 많아 헷지 비율을 늘립니다.'; }
-              log(t, 'hedge', 'S&P 500 인버스 헷지 정리', body, chg);
-            }
-            hedge = null;
-          }
+          sellHedge(cur - target, target === 0, target === 0 ? (H > 0 ? '헷지할 보유 주식이 적어 정리' : '하락 추세가 끝나 정리') : hedgeNow ? hedgeNow.why : why);
         }
+        if (adaptive && hedgeTilt !== tilt0) log(t, 'hedge', hedgeTilt ? '경기방어주 위주로 매수' : '경기방어주 위주 매수 끝',
+          hedgeTilt ? `${hedgeNow.why}. 새로 사는 주식을 경기방어주 위주로 고르고(필수소비재·유틸리티·헬스케어는 1회 위험 ${FIXED.defUp}배, 다른 업종은 ${FIXED.defDown}배) 인버스 헷지는 ${Math.round(FIXED.defHedge * 100)}%만 둡니다.`
+            : `${hedgeNow ? `${hedgeNow.why}.` : '하락 추세가 끝났습니다.'} 새로 사는 주식은 다시 업종 구분 없이 고릅니다.`, []);
       }
 
       const eqEnd = marked(t);
@@ -1041,13 +1100,13 @@
         reviews: reviews.filter((r) => r.due > lastT).map((r) => ({ due: off(r.due), tr: r.tr, sym: nm(r.i) })),
         holdReviews: holdReviews.filter((r) => r.due > lastT).map((r) => ({ due: off(r.due), tr: r.tr, sym: nm(r.i) })),
         cool: [...cool].filter(([, d]) => d > lastT).map(([k, d]) => [nm(k), off(d)]),
-        hedge: hedge ? Object.assign({}, hedge, { t0: off(hedge.t0) }) : null,
+        hedge: hedge ? Object.assign({}, hedge, { t0: off(hedge.t0) }) : null, hedgeTilt, hedgeNow,
       };
     }
     // a run that only reads a book back (no new day) shows the book's own last-day curve and signals
     const lastX = BK && BK.last && BK.last.date === D.dates[lastT] && from > to ? BK.last : null;
     return { from: base0, to: lastT, capital, equity, trades, open, changes, params: P, base: B, scores, mults: M, weights: normW(M), marginPaid: round(mInt, 2), rpGot: round(rpInt, 2), lev: P.lev, dtPaused: dtPausedUntil >= lastT, evidence: ev, risk: riskState,
-      signals: lastX ? lastX.signals || [] : signals, intraday: lastX ? lastX.intraday || [] : intraday, watch, snapshot, hedge: hedge ? { value: round(hedge.value, 2), since: D.dates[hedge.t0], paid: round(hedge.paid, 2), got: round(hedge.got, 2), ratio: hedge.ratio, spx0: round(hedge.spx0, 2) } : null, hedgeFills, hedgeEpisodes, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
+      signals: lastX ? lastX.signals || [] : signals, intraday: lastX ? lastX.intraday || [] : intraday, watch, snapshot, hedge: hedge ? { kind: hedge.kind || 'inv', value: round(hedge.value, 2), since: D.dates[hedge.t0], paid: round(hedge.paid, 2), got: round(hedge.got, 2), ratio: hedge.ratio, spx0: round(hedge.spx0, 2), why: hedge.why || null } : null, hedgeFills, hedgeEpisodes, hedgeNow, stats: stats(equity, trades, capital), prov: !!(D.prov && D.prov.t === lastT) };
   }
 
   // ── Robinhood fees for US stocks (fee schedule checked 2026-11-18). No commission. Sells: SEC fee $20.60 per

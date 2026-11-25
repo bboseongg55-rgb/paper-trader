@@ -12,7 +12,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const pct = (v, d = 1) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%' : '-');
   const pp = (v) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%p' : '-');
-  const V = 8;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30; 6: buying calls and puts, naked calls; 7: the long-term downtrend stance; 8: learning from the account's trades by phase)
+  const V = 9;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30; 6: buying calls and puts, naked calls; 7: the long-term downtrend stance; 8: learning from the account's trades by phase; 9: the coin account's trades learn too, one hedge in one place)
   // the owner's settings (2026-11-21): every strategy may trade in every market phase (the regime only scales risk), and
   // the 24-hour part (coins) holds 30% of the account against 70% for stocks, futures and options
   const OPEN = true, COIN_SHARE = 0.3;
@@ -126,13 +126,25 @@
     const wheel = OPEN ? affordable : !base && !off && p.trend !== 'down' && vixIn(15) && affordable;
     const heldShare = acct && isNum(ctx.wheelHeld) ? ctx.wheelHeld / acct : 0;
     // protection is bought only while it is still cheap (VIX under 22): bought after a crash it costs more than it saves
-    const expo = isNum(ctx.exposure) ? ctx.exposure : 0, hedge = OPEN ? expo >= 20000 && (off || p.trend === 'down') : off && expo >= 20000 && isNum(p.vix) && p.vix < 22;
+    // the owner (2026-11-25): hedging simple, in one place. With everything allowed the account's hedge is the stock book's
+    // hedge team alone (Treasuries, defensive stocks or the inverse S&P 500, whichever fits), so no put spread on top
+    const expo = isNum(ctx.exposure) ? ctx.exposure : 0, hedge = OPEN ? false : off && expo >= 20000 && isNum(p.vix) && p.vix < 22;
     const cpn = isNum(ctx.elsCoupon) ? ctx.elsCoupon : null;
     const elsOn = OPEN ? cpn == null || cpn >= 0.07 : isNum(p.vix) && p.vix >= 20 && !(p.trend === 'down' && p.volLv === 'extreme') && p.credit !== 'stress' && (cpn == null || cpn >= 0.07);
     const elsMax = off ? 0.05 : 0.1;
     // 4. the 24-hour market (coins and tokenized stocks): multipliers on its own weights
-    const h24 = { trend: OPEN ? 1 : p.btcTrend === 'up' ? 1.2 : p.btcTrend === 'down' ? 0.7 : 1,   // coin trends trade both ways now, so a falling bitcoin no longer cuts them scalp: p.volLv === 'extreme' ? 0.75 : 1, arb: 1,
+    // (coin trends trade both ways now, so a falling bitcoin no longer cuts them)
+    const h24 = { trend: OPEN ? 1 : p.btcTrend === 'up' ? 1.2 : p.btcTrend === 'down' ? 0.7 : 1, scalp: p.volLv === 'extreme' ? 0.75 : 1, arb: 1,
       tok: off ? 0.5 : key === 'bull' ? 1.25 : 1, tokSmall: p.sc === 'lead' ? 1.3 : 1 };
+    // the coin account's methods learn like the stock ones (owner, 2026-11-25: every scalp trade is a sample): coins in
+    // bitcoin's phase, tokenized stocks in the S&P 500's, the same × e^(avg R × n / (n + 30)) within 0.5–1.6
+    const coinPh = ctx.learn && ctx.learn.now ? ctx.learn.now.btc : null, LC = (coinPh && ctx.learn[coinPh]) || {};
+    for (const [k, h, L, ph] of [['c_scalp', 'scalp', LC, coinPh], ['c_trend', 'trend', LC, coinPh], ['c_tok', 'tok', LR, p.trend]]) {
+      const c = L[k]; if (!c || !(c.n > 0)) continue;
+      const f = Math.round(clamp(Math.exp(c.avgR * (c.n / (c.n + 30))), 0.5, 1.6) * 100) / 100;
+      h24[h] = Math.round(h24[h] * f * 100) / 100;
+      learned.push({ k, n: c.n, live: c.live, avgR: c.avgR, pnl: c.pnl, f, ph });
+    }
     // 5. each part's share of the account
     const h24T = OPEN ? COIN_SHARE : p.volLv === 'extreme' ? 0.05 : off ? 0.07 : key === 'bull' && p.btcTrend === 'up' ? 0.12 : 0.1;
     // derivatives take at most half of the non-coin part, so individual stocks and bonds keep at least the other half
@@ -172,7 +184,8 @@
           : wheelShare != null && !affordable ? `IWM 100주(약 $${Math.round(iwm * 100).toLocaleString('en-US')})가 계좌의 30%를 넘어 쉽니다.`
           : iwm == null ? 'IWM 시세를 아직 받지 못해 다음 판단 때 정합니다.' : `하락 추세가 아니고 VIX가 15~30일 때만 합니다(지금 ${isNum(p.vix) ? p.vix.toFixed(1) : '-'}).` },
       { k: 'hedge', name: '보호 풋 스프레드(하락 대비)', w: hedge ? 1.2 : 0, on: hedge,
-        why: hedge ? `위험 회피 국면이고 보호 비용이 아직 싸서(${vixTxt}) 계좌의 주식 등 $${Math.round(expo).toLocaleString('en-US')}의 절반만큼 SPY 풋 스프레드로 하락을 대비합니다.`
+        why: OPEN ? '하락 대비는 주식 계좌의 헷지 한 곳에서만 합니다(그때 맞는 국채·경기방어주·S&P 500 인버스 중 하나). 옵션 보호 풋 스프레드는 겹치지 않게 쓰지 않습니다.'
+          : hedge ? `위험 회피 국면이고 보호 비용이 아직 싸서(${vixTxt}) 계좌의 주식 등 $${Math.round(expo).toLocaleString('en-US')}의 절반만큼 SPY 풋 스프레드로 하락을 대비합니다.`
           : off && expo < 20000 ? `위험 회피 국면이지만 지킬 주식 보유가 $${Math.round(expo).toLocaleString('en-US')}로 작아(기준 $20,000) 사지 않습니다.`
           : off ? `${vixTxt}: 이미 옵션값이 비싸 지금 사는 보호는 비용이 더 큽니다(VIX 22 미만일 때만 삽니다). 대신 주식 쪽 S&P 500 인버스 헷지와 선물 매도가 하락에 대비합니다.` : '위험 회피 국면에, 옵션값이 쌀 때(VIX 22 미만)만 삽니다.' },
       { k: 'els', name: 'ELS(S&P 500·나스닥 100 스텝다운)', w: elsOn ? 0.9 : 0, on: elsOn,
@@ -226,7 +239,7 @@
     ];
     return {
       v: V, date: p.date, regime: { key, label: LABEL[key], tags, off }, headline, items: it, signals, rules, learn: { phase: p.trend, rows: learned, table: ctx.learn || null },
-      tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { base, credit, callCredit, wheel, hedge, longOpt: OPEN, nakedCall: OPEN, bear, off: OPEN ? false : off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
+      tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { base, credit, callCredit, wheel, hedge, hedgeOff: OPEN ? '하락 대비를 주식 계좌 헷지 한 곳으로 모아 풋 스프레드는 정리' : null, longOpt: OPEN, nakedCall: OPEN, bear, off: OPEN ? false : off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
         els: { on: elsOn, max: elsMax, minCoupon: 0.07, coupon: cpn != null ? r4(cpn) : null }, h24 },
       target, rp: isNum(rp) ? r4(rp / 100) : null,
       pic: Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === 'number' ? r4(v) : v])),

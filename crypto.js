@@ -46,6 +46,18 @@
     // widen: spreads up to offSpread are accepted there, at offSize × the risk (owner's setting, 2026-11-21)
     tok: { hi: 20, lo: 10, atr: 14, ema: 100, stopK: 3, risk: 0.005, maxW: 0.2, maxAll: 0.6, maxSpread: 0.003, lev: 3, gross: 1.5, offSpread: 0.008, offSize: 0.5 },
     scalp: { look: 15, mom: 0.003, tp: 0.005, sl: 0.0035, maxMin: 20, risk: 0.0025, maxW: 0.2 },
+    // scalp rules tried side by side on the same prices as shadows (no money; fills at the bid/ask with the exchange fee
+    // and slippage): the live scalp uses the best of the last 7 days once it has 30 trades and earns at least +0.05R a
+    // trade after costs; when none does, no new live scalps (owner's request 2026-11-25: every scalp trade is a sample
+    // and the AI improves the rule). The old rule (brk) starts with the live record: 451 trades, −0.20R, 2026-11-18~25
+    scalpV: {
+      brk: { name: '15분 고점 돌파 매수(기존)', both: false, mode: 'brk', mom: 0.003, tp: 0.005, sl: 0.0035, maxMin: 20 },
+      brk2: { name: '위아래 돌파·넓은 목표', both: true, mode: 'brk', mom: 0.004, tp: 0.012, sl: 0.008, maxMin: 60 },
+      trd: { name: '추세 방향 돌파', both: true, mode: 'brk', trend: true, mom: 0.004, tp: 0.012, sl: 0.008, maxMin: 60 },
+      fade: { name: '급등락 되돌림', both: true, mode: 'fade', mom: 0.006, tp: 0.008, sl: 0.008, maxMin: 30 },
+      night: { name: '위아래 돌파·미국 장 밖', both: true, mode: 'brk', offUS: true, mom: 0.004, tp: 0.012, sl: 0.008, maxMin: 60 },
+    },
+    scalpPick: { days: 7, minN: 30, minR: 0.05, everyMs: 3600e3, keep: 4000 },
     brakes: { day: 0.03, half: 0.15, stop: 0.25 },
     reweightMs: 24 * 3600e3, reviewMs: 7 * 24 * 3600e3, trialW: 0.25, tiers: [1, 0.5], loserW: 0.17, minTrades: 5,
     keepFills: 300, keepMin: 2 * 1440, keepHour: 90 * 24, keepBarsH: 300, keepBarsM: 120,
@@ -60,6 +72,10 @@
   const isNum = (v) => typeof v === 'number' && isFinite(v);
   const med = (xs) => { const a = xs.filter(isNum).sort((x, y) => x - y); return a.length ? (a.length % 2 ? a[a.length >> 1] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2) : NaN; };
   const utcDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+  // the rest of the account's direction in each underlying (+1 long, −1 short) from the stock and derivatives books
+  // (tools/run.mjs → data/dirs.json): a token is never held against it (the owner: no long and short of the same thing)
+  let EXT = { dirs: {} };
+  function setExt(x) { EXT = Object.assign({ dirs: {} }, x || {}); }
 
   // the middle price of each coin: the median of the exchanges' mid prices
   function mids(q) {
@@ -103,7 +119,7 @@
     }
     if (st.tok) for (const k of Object.keys(st.tok.pos || {})) { const x = st.tok.q[k]; if (x && x.bid > 0) tokSell(st, k, st.tok.pos[k].side < 0 ? x.ask : x.bid, now, '계좌 초기화 정리'); }
     const fresh = init(0, q, now);
-    for (const k of ['fills', 'closed', 'stats', 'bars', 'transfers', 'w', 'stake']) if (st[k] != null) fresh[k] = st[k];
+    for (const k of ['fills', 'closed', 'stats', 'bars', 'transfers', 'w', 'stake', 'sv']) if (st[k] != null) fresh[k] = st[k];
     if (st.tok) { fresh.tok.bars = st.tok.bars || {}; fresh.tok.q = st.tok.q || {}; }
     fresh.resetId = id;
     (fresh.resets = st.resets || []).push({ id, t: now, eqBefore: r2(eq0) });
@@ -267,10 +283,71 @@
       S.earned.USD = (S.earned.USD || 0) + got; st.stats.stake.pnl += got;
     }
   }
+  // ── scalp rules as shadows
+  const SV = (st) => (st.sv = st.sv || { pos: {}, done: [], live: 'brk', at: 0, seeded: false });
+  // a scalp rule's signal on the last closed minute bar: +1 buy, −1 short, 0 nothing
+  function scalpSig(V, done, hb, now) {
+    const L = CFG.scalp.look;
+    if (done.length < L + 6) return 0;
+    const last = done[done.length - 1], prev = done.slice(-L - 1, -1), c5 = done[done.length - 6];
+    const hi = Math.max(...prev.map((b) => b.h)), lo = Math.min(...prev.map((b) => b.l)), mv = last.c / c5.c - 1;
+    let s = 0;
+    if (V.mode === 'brk') s = last.c > hi && mv > V.mom ? 1 : V.both && last.c < lo && mv < -V.mom ? -1 : 0;
+    else if (V.mode === 'fade') s = last.c > hi && mv > V.mom ? -1 : last.c < lo && mv < -V.mom ? 1 : 0;
+    if (s && V.offUS && usOpen(now)) s = 0;
+    if (s && V.trend) {
+      const hd = (hb || []).slice(0, -1);
+      if (hd.length <= CFG.trend.ema) return 0;
+      const e = ema(hd.map((b) => b.c), CFG.trend.ema), lc = hd[hd.length - 1].c;
+      if ((s > 0 && !(lc > e)) || (s < 0 && !(lc < e))) s = 0;
+    }
+    return s;
+  }
+  // every rule's paper trades on this coin: exits on every poll, entries on a closed minute bar
+  function scalpShadows(st, c, B, mb, hb, mClosed, now) {
+    const S = SV(st), f = VENUES[CFG.exec].taker;
+    for (const k of Object.keys(CFG.scalpV)) {
+      const V = CFG.scalpV[k], P = (S.pos[k] = S.pos[k] || {}), p = P[c];
+      if (!p) continue;
+      const px = p.side > 0 ? B.bid * (1 - CFG.slip) : B.ask * (1 + CFG.slip), g = p.side * (px / p.entry - 1);
+      if (g >= V.tp || g <= -V.sl || now - p.t0 >= V.maxMin * 60e3) { S.done.push({ t: now, v: k, c, side: p.side, R: Math.round(((g - 2 * f) / V.sl) * 100) / 100 }); delete P[c]; }
+    }
+    if (mClosed && mb.length > CFG.scalp.look + 7) {
+      const done = mb.slice(0, -1);
+      for (const k of Object.keys(CFG.scalpV)) {
+        const P = (S.pos[k] = S.pos[k] || {});
+        if (P[c]) continue;
+        const sg = scalpSig(CFG.scalpV[k], done, hb, now);
+        if (sg) P[c] = { side: sg, entry: sg > 0 ? B.ask * (1 + CFG.slip) : B.bid * (1 - CFG.slip), t0: now };
+      }
+    }
+    if (S.done.length > CFG.scalpPick.keep) S.done.splice(0, S.done.length - CFG.scalpPick.keep);
+  }
+  function scalpScores(st, now) {
+    const S = SV(st), out = {};
+    for (const k of Object.keys(CFG.scalpV)) out[k] = { n: 0, R: 0, sum: 0 };
+    for (const x of S.done) if (out[x.v] && now - x.t <= CFG.scalpPick.days * 864e5) { out[x.v].n++; out[x.v].sum += x.R; }
+    for (const k in out) { out[k].R = out[k].n ? Math.round((out[k].sum / out[k].n) * 1000) / 1000 : 0; delete out[k].sum; }
+    return out;
+  }
+  // once an hour: the live scalp follows the best rule of the last 7 days (none good enough: no new live scalps)
+  function scalpPick(st, now) {
+    const S = SV(st), K = CFG.scalpPick;
+    if (!S.seeded) { for (const x of st.closed || []) if (x.s === 'scalp') S.done.push({ t: x.t, v: 'brk', c: x.c, side: 1, R: x.R, live: 1 }); S.done.sort((a, b) => a.t - b.t); S.seeded = true; }
+    if (now - (S.at || 0) < K.everyMs) return;
+    S.at = now;
+    const sc = scalpScores(st, now), ok = Object.keys(sc).filter((k) => sc[k].n >= K.minN && sc[k].R >= K.minR).sort((a, b) => sc[b].R - sc[a].R), best = ok[0] || null;
+    if (best === S.live) return;
+    const was = S.live && sc[S.live] ? `${CFG.scalpV[S.live].name} ${sc[S.live].n}건 평균 ${sc[S.live].R.toFixed(2)}R` : '없음';
+    st.log.push({ t: now, kind: 'weight', text: best ? `초단타 규칙을 '${CFG.scalpV[best].name}'(으)로 바꿉니다: 최근 ${K.days}일 그림자 ${sc[best].n}건, 수수료를 뺀 평균 ${sc[best].R.toFixed(2)}R (전: ${was})`
+      : `초단타 새 매매를 멈춥니다: 최근 ${K.days}일 수수료를 뺀 평균이 +${K.minR}R 이상이고 ${K.minN}건 넘게 쌓인 규칙이 없습니다 (전: ${was}). 규칙 ${Object.keys(CFG.scalpV).length}개를 그림자로 계속 시험합니다` });
+    S.live = best;
+  }
   function step(st, q, now) {
     const m = mids(q);
     for (const c of COINS) if (isNum(m[c])) st.last[c] = m[c];
     stake(st, now, m);
+    scalpPick(st, now);                 // which scalp rule trades live (checked hourly, before this poll's signals)
     arb(st, q, now);
     const ex = q.books[CFG.exec];
     let eq = equity(st, m);
@@ -289,9 +366,11 @@
       // scalp: exits on every poll
       const sp = st.pos.scalp[c];
       if (sp) {
-        if (B.bid >= sp.entry * (1 + CFG.scalp.tp)) sell(st, 'scalp', c, B.bid, now, '목표가');
-        else if (B.bid <= sp.entry * (1 - CFG.scalp.sl)) sell(st, 'scalp', c, B.bid, now, '손절');
-        else if (now - sp.t0 >= CFG.scalp.maxMin * 60e3) sell(st, 'scalp', c, B.bid, now, '시간 청산');
+        const tp = sp.tp || CFG.scalp.tp, sl = sp.sl || CFG.scalp.sl, mx = sp.maxMin || CFG.scalp.maxMin, short = sp.perp && sp.side < 0;
+        const g = short ? 1 - B.ask / sp.entry : B.bid / sp.entry - 1;
+        if (g >= tp) exitPos(st, 'scalp', c, B, now, '목표가');
+        else if (g <= -sl) exitPos(st, 'scalp', c, B, now, '손절');
+        else if (now - sp.t0 >= mx * 60e3) exitPos(st, 'scalp', c, B, now, '시간 청산');
       }
       // trend: funding, the margin guard and the stop on every poll
       const tp = st.pos.trend[c];
@@ -321,6 +400,8 @@
           // a new 20-hour high above the 100-hour average → long; a new 20-hour low below it → short (perpetual, up to
           // perp.lev × margin); size by risk to the stop, at most maxW × lev of the account in notional
           const side = last.c > e ? 1 : -1, px = side > 0 ? B.ask : B.bid;
+          const sp2 = st.pos.scalp[c], spDir = sp2 ? (sp2.perp ? sp2.side : 1) : 0;
+          if (spDir && spDir !== side) exitPos(st, 'scalp', c, B, now, '추세 매매와 반대 방향이라 정리(같은 코인 양방향 금지)');
           const risk = eq * CFG.trend.risk * st.w.trend * tiltOf(st, 'trend') * half * (side > 0 ? 1 : CFG.trend.shortW), per = CFG.trend.stopK * a;
           const gross = Object.values(st.pos.trend).reduce((g, q2) => g + (q2 && q2.perp ? q2.qty * (st.last[q2.c] || q2.entry) : 0), 0);
           let qty = Math.min(risk / per, (CFG.trend.maxW * CFG.perp.lev * eq) / px, (st.trade.usd * CFG.perp.lev) / (px * 1.02), Math.max(0, CFG.perp.gross * eq - gross) / px);
@@ -331,14 +412,21 @@
           if (qty * px >= 20) perpOpen(st, 'trend', c, side, qty, px, now, why, { stop, stop0: stop, hiC: last.c, loC: last.c, risk: qty * per });
         }
       }
-      // scalp: signals on a closed minute bar
-      if (mClosed && mb.length > CFG.scalp.look + 2 && !st.pos.scalp[c] && !stopNew) {
-        const done = mb.slice(0, -1), last = done[done.length - 1], prev = done.slice(-CFG.scalp.look - 1, -1), c5 = done[done.length - 6];
-        if (c5 && last.c > Math.max(...prev.map((b) => b.h)) && last.c / c5.c - 1 > CFG.scalp.mom) {
-          const risk = eq * CFG.scalp.risk * st.w.scalp * tiltOf(st, 'scalp') * half, per = B.ask * CFG.scalp.sl;
-          let qty = Math.min(risk / per, (CFG.scalp.maxW * eq) / B.ask, st.trade.usd / (B.ask * 1.01));
+      // scalp rules as shadows (a fault there never stops the account)
+      try { scalpShadows(st, c, B, mb, hb, mClosed, now); } catch (e) { /* shadows only */ }
+      // scalp: the rule the shadows picked (none: no new scalps), on a closed minute bar; never against the trend
+      // position in the same coin. Buys are spot, shorts perpetual (up to perp.lev × margin)
+      const LV = st.sv && st.sv.live ? CFG.scalpV[st.sv.live] : null;
+      if (LV && mClosed && mb.length > CFG.scalp.look + 7 && !st.pos.scalp[c] && !stopNew) {
+        const sg = scalpSig(LV, mb.slice(0, -1), hb, now), tp0 = st.pos.trend[c], tDir = tp0 ? (tp0.perp ? tp0.side : 1) : 0;
+        if (sg && !(tDir && tDir !== sg)) {
+          const px = sg > 0 ? B.ask : B.bid, per = px * LV.sl;
+          const risk = eq * CFG.scalp.risk * st.w.scalp * tiltOf(st, 'scalp') * half;
+          let qty = Math.min(risk / per, (CFG.scalp.maxW * eq) / px, sg > 0 ? st.trade.usd / (px * 1.01) : (st.trade.usd * CFG.perp.lev) / (px * 1.02));
           qty = f8(qty);
-          if (qty * B.ask >= 20) buy(st, 'scalp', c, qty, B.ask, now, `15분 고점 돌파·5분 +${(CFG.scalp.mom * 100).toFixed(1)}% 이상`, { risk: qty * per });
+          const why = `${LV.name}: ${sg > 0 ? '매수' : '공매도'}, 목표 ${(LV.tp * 100).toFixed(1)}%·손절 ${(LV.sl * 100).toFixed(2)}%·최대 ${LV.maxMin}분`;
+          const ex = { risk: qty * per, rule: st.sv.live, tp: LV.tp, sl: LV.sl, maxMin: LV.maxMin };
+          if (qty * px >= 20) { if (sg > 0) buy(st, 'scalp', c, qty, px, now, why, ex); else perpOpen(st, 'scalp', c, -1, qty, px, now, why, ex); }
         }
       }
     }
@@ -384,7 +472,8 @@
       T.q[k] = { bid: x.bid, ask: x.ask, mid, t: now };
       const hb = (T.bars[k] = T.bars[k] || []);
       const closed = bar(hb, Math.floor(now / 3600e3) * 3600e3, mid, CFG.keepBarsH);
-      const p = T.pos[k];
+      const p = T.pos[k], ad = EXT.dirs[k.replace(/x$/, '')] || 0;
+      if (p && ad && p.side !== ad) { tokSell(st, k, p.side < 0 ? x.ask : x.bid, now, '주식·파생 계좌와 반대 방향이라 정리(같은 종목 양방향 금지)'); continue; }
       if (p && p.perp) {
         const yrs = Math.max(0, now - (p.fAt || p.t0)) / (365 * 864e5);
         if (yrs > 0 && yrs < 2 / 365) { const cost = p.qty * mid * CFG.perp.fund * yrs; st.trade.usd -= cost; p.fund = (p.fund || 0) + cost; st.stats.tok.fees += cost; }
@@ -409,7 +498,7 @@
       } else {
         const off = !usOpen(now), sprMax = off ? K.offSpread : K.maxSpread;
         const longSig = last.c > Math.max(...prev.map((b) => b.h)) && last.c > e, shortSig = last.c < Math.min(...prev.map((b) => b.l)) && last.c < e;
-        if (!stopNew && spr <= sprMax && a > 0 && (longSig || shortSig)) {
+        if (!stopNew && spr <= sprMax && a > 0 && (longSig || shortSig) && !(ad && ad !== (longSig ? 1 : -1))) {
           const side = longSig ? 1 : -1, px = side > 0 ? x.ask : x.bid;
           const gross = Object.values(T.pos).reduce((g, q2) => g + (q2 && q2.perp ? q2.qty * ((T.q[q2.c] && T.q[q2.c].mid) || q2.entry) : 0), 0)
             + Object.keys(T.hold).reduce((s2, j) => s2 + (T.hold[j] || 0) * ((T.q[j] && T.q[j].mid) || 0), 0);
@@ -460,7 +549,9 @@
       v: 1, at: st.at, start: st.start, funded: r2(st.funded), eq: st.eq, usd: r2(usd), hold, last: st.last,
       venues: Object.fromEntries(Object.entries(st.venues).map(([k, a]) => [k, { name: VENUES[k].name, taker: VENUES[k].taker, usd: r2(a.usd), coin: Object.fromEntries(COINS.map((c) => [c, r8(a.coin[c] || 0)])) }])),
       trade: { venue: VENUES[CFG.exec].name, usd: r2(st.trade.usd), coin: Object.fromEntries(COINS.map((c) => [c, r8(st.trade.coin[c] || 0)])) },
-      perps: Object.values((st.tok && st.tok.pos) || {}).filter((p) => p && p.perp).map((p) => { const qq = st.tok.q[p.c] || {}, m = qq.mid || p.entry; return { c: p.c, tok: true, side: p.side, qty: r8(p.qty), entry: r2(p.entry), stop: r2(p.stop), lev: p.lev, margin: r2(p.margin), px: r2(m), pnl: r2(p.side * p.qty * (m - p.entry) - p.fee - (p.fund || 0)), t0: p.t0, why: p.why }; }).concat(Object.values(st.pos.trend || {}).filter((p) => p && p.perp).map((p) => ({ c: p.c, side: p.side, qty: r8(p.qty), entry: r2(p.entry), stop: r2(p.stop), lev: p.lev, margin: r2(p.margin), px: r2(st.last[p.c] || p.entry), pnl: r2(p.side * p.qty * ((st.last[p.c] || p.entry) - p.entry) - p.fee - (p.fund || 0)), t0: p.t0, why: p.why }))),
+      perps: Object.values((st.tok && st.tok.pos) || {}).filter((p) => p && p.perp).map((p) => { const qq = st.tok.q[p.c] || {}, m = qq.mid || p.entry; return { c: p.c, tok: true, side: p.side, qty: r8(p.qty), entry: r2(p.entry), stop: r2(p.stop), lev: p.lev, margin: r2(p.margin), px: r2(m), pnl: r2(p.side * p.qty * (m - p.entry) - p.fee - (p.fund || 0)), t0: p.t0, why: p.why }; }).concat(Object.values(st.pos.trend || {}).filter((p) => p && p.perp).map((p) => ({ c: p.c, side: p.side, qty: r8(p.qty), entry: r2(p.entry), stop: r2(p.stop), lev: p.lev, margin: r2(p.margin), px: r2(st.last[p.c] || p.entry), pnl: r2(p.side * p.qty * ((st.last[p.c] || p.entry) - p.entry) - p.fee - (p.fund || 0)), t0: p.t0, why: p.why })))
+        .concat(Object.values(st.pos.scalp || {}).filter((p) => p && p.perp).map((p) => ({ c: p.c, s: 'scalp', side: p.side, qty: r8(p.qty), entry: r2(p.entry), stop: r2(p.entry * (1 + p.side * -(p.sl || CFG.scalp.sl))), lev: p.lev, margin: r2(p.margin), px: r2(st.last[p.c] || p.entry), pnl: r2(p.side * p.qty * ((st.last[p.c] || p.entry) - p.entry) - p.fee - (p.fund || 0)), t0: p.t0, why: p.why }))),
+      sv: (() => { const S = st.sv, now = st.at || Date.now(); if (!S) return null; const sc = scalpScores(st, now); return { live: S.live || null, pick: CFG.scalpPick, rules: Object.keys(CFG.scalpV).map((k) => ({ k, name: CFG.scalpV[k].name, n: sc[k].n, R: sc[k].R, tp: CFG.scalpV[k].tp, sl: CFG.scalpV[k].sl, maxMin: CFG.scalpV[k].maxMin })) }; })(),
       pos: st.pos, w: st.w, tilt: st.tilt || null, brake: st.brake, spreads: st.spreads, mkt,
       toks: Object.keys((st.tok && st.tok.hold) || {}).map((k) => { const T = st.tok, qq = T.q[k] || {}, p = T.pos[k] || null; return { s: k, name: TOKS[k] || k, qty: r8(T.hold[k]), bid: qq.bid || null, ask: qq.ask || null, value: r2(T.hold[k] * (qq.mid || 0)), entry: p ? r2(p.entry) : null, stop: p ? r2(p.stop) : null, t0: p ? p.t0 : null, pnl: p ? r2(T.hold[k] * ((qq.bid || 0) - p.entry) - p.fee) : null, why: p ? p.why : null }; }),
       tokQ: Object.fromEntries(Object.entries((st.tok && st.tok.q) || {}).map(([k, v]) => [k, { bid: v.bid, ask: v.ask }])),
@@ -490,7 +581,7 @@
     list.sort((a, b) => a.t - b.t);
     if (list.length > CFG.keepBarsH) list.splice(0, list.length - CFG.keepBarsH);
   }
-  const api = { COINS, TOKS, TOK_FEE, VENUES, CFG, WD_FEE, init, fund, reset, freeUsd, step, view, mids, equity, seed, seedTok };
+  const api = { COINS, TOKS, TOK_FEE, VENUES, CFG, WD_FEE, init, fund, reset, freeUsd, step, view, mids, equity, seed, seedTok, setExt, scalpSig, scalpScores };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PaperCrypto = api;
 })(typeof self !== 'undefined' ? self : this);
