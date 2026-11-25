@@ -90,7 +90,7 @@
     // (the 2-year record as a prior, live trades counted three times) moves its risk: × e^(avg R × n / (n + 30)), kept
     // within 0.5–1.6, so a handful of trades barely moves it and a long record in this phase moves it most
     const LR = (ctx.learn && ctx.learn[p.trend]) || {}, learned = [];
-    for (const k of ['bo', 'pb', 'dt', 'bd', 'sb']) {
+    for (const k of ['bo', 'pb', 'dt', 'bd', 'sb', 'ch', 'cs']) {
       const c = LR[k]; if (!c || !(c.n > 0)) continue;
       const f = Math.round(clamp(Math.exp(c.avgR * (c.n / (c.n + 30))), 0.5, 1.6) * 100) / 100;
       C[k] = Math.round((isNum(C[k]) ? C[k] : 1) * f * 100) / 100;

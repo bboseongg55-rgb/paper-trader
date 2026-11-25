@@ -69,6 +69,19 @@
     // the inverse only. Backtest at the live settings to 2026-11-24 (inverse only → this): from 2025-01 return −1.6% →
     // +17.8%, worst drawdown 12.7% → 9.9%; from 2025-06 +14.5% → +13.7%, 13.0% → 13.9%; from 2025-09 −6.3% → −7.4%,
     // 15.5% → 15.9%. The gain is mostly the spring-2025 fall; later windows are about even (a little worse)
+    // chart reading (chartAux, owner 2026-11-25: buy and sell by the chart): pivots 3 days each side, levels from the
+    // last 120 days within max(tolK × the daily swing, 0.4%) touched 2+ times (last touch within 60 days), the close at
+    // most extK swings past the level; buys need RSI(14) 50–75, MACD above its signal and the close above the 50-day
+    // average (shorts the mirror, RSI 25–50); stop half a swing beyond the far side of the level, 1–3 swings from the
+    // fill; target the next level (no trade when it is nearer than minRoom × R) or tgtR × R; out after timeStop days
+    // below +0.5R. exit 1 would also sell any held long when a support level breaks (and buy back shorts on a resistance
+    // break). Backtest at the live settings to 2026-11-24 (no chart → chart buys and shorts): from 2025-01 +17.8% →
+    // +24.4% (worst drawdown 9.9% → 10.4%), from 2025-06 +13.7% → +13.8% (13.9% → 10.1%), from 2025-09 −7.4% → +8.3%
+    // (15.9% → 12.8%); but the chart trades themselves lost (buys −0.32R, −1.14R, −0.74R a trade; shorts −0.40R, +0.03R,
+    // −0.66R; 11–31 trades each), so the totals moved with the rest of the book, not with them: they start at a quarter of
+    // the risk and the method tournament and the phase learning decide from there. exit 1 cut the return to −0.0%
+    // (2025-01~) and buying only the retest of a broken level did no better, so both stay off
+    chart: { on: 1, k: 3, look: 120, tolK: 1.0, minTouch: 2, recent: 60, extK: 1.0, rsiL: [50, 75], rsiS: [25, 50], stopPad: 0.5, stopMin: 1, stopMax: 3, tgtR: 3, minRoom: 1.5, timeStop: 15, exit: 0 },
     hedgeFlex: 1, hedgeBond: 'US10Y', hedgeBondCorr: -0.1, defSecs: ['Consumer Staples', 'Utilities', 'Health Care'], defUp: 1.5, defDown: 0.5, defHedge: 0.5,
     selectEvery: 20, selectWindow: 120, selectMinTrades: 5, selectTrialM: 0.25, selectTiers: [1, 0.5, 0.17], selectLoserM: 0.17,
     // bonds: at most 4 at a time, bought at the close while the bond's total-return index is above its 100-day average
@@ -85,7 +98,7 @@
     // fee on its value per calendar day (large caps are easy to borrow: about 0.5% a year, 확인필요)
     shortMax: 5, shortMargin: 0.5, borrowRate: 0.005,
   };
-  const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', sb: '하락 돌파 공매도' };
+  const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', sb: '하락 돌파 공매도', ch: '차트 저항 돌파', cs: '차트 지지 이탈 공매도' };
   // the four teams and the rules each one owns
   const TEAMS = { select: '종목선정팀', entry: '매수팀', exit: '매도팀', risk: '리스크·헷지팀' };
   const TEAM_OF = { rsMin: 'select', pbRsMin: 'select', dtRsMin: 'select', boLookback: 'select', pbRsi: 'entry', dtMinUp: 'entry',
@@ -394,6 +407,79 @@
     D._hx = { rS, rB, kind, why };
     return D._hx;
   }
+  // ── chart reading on daily closes: the trading skill's horizontal zones (patterns.py) on closes, since the price data
+  // has no highs, lows or volume. Per stock and day: L a buy (resistance broken upward, confirmed), S a short (support
+  // broken downward, confirmed), X a support broken (a held long is sold), Y a resistance broken (a short bought back)
+  function chartAux(D) {
+    if (D._ch) return D._ch;
+    const T = D.dates.length, K = FIXED.chart, k = K.k, out = { L: [], S: [], X: [], Y: [] };
+    const emaA = (src, n) => { const o = new Float64Array(T).fill(NaN), a = 2 / (n + 1); let e = NaN; for (let t = 0; t < T; t++) { const v = src[t]; if (isNum(v)) e = isNum(e) ? e + a * (v - e) : v; o[t] = e; } return o; };
+    for (const x of D.S) {
+      const L = new Map(), S = new Map(), X = new Map(), Y = new Map();
+      out.L.push(L); out.S.push(S); out.X.push(X); out.Y.push(Y);
+      if (x.kind === 'bond' || !x.vol || !x.sma50) continue;
+      const c = x.c, f = new Float64Array(T); let lastV = NaN;
+      for (let t = 0; t < T; t++) { if (isNum(c[t])) lastV = c[t]; f[t] = lastV; }
+      const rsi = new Float64Array(T).fill(NaN); let ag = 0, al = 0, n0 = 0;          // RSI(14), Wilder's smoothing
+      for (let t = 1; t < T; t++) {
+        if (!isNum(f[t]) || !isNum(f[t - 1])) continue;
+        const d = f[t] - f[t - 1], g = Math.max(d, 0), l = Math.max(-d, 0);
+        if (n0 < 14) { ag += g / 14; al += l / 14; n0++; if (n0 < 14) continue; } else { ag = (ag * 13 + g) / 14; al = (al * 13 + l) / 14; }
+        rsi[t] = al > 0 ? 100 - 100 / (1 + ag / al) : 100;
+      }
+      const e12 = emaA(f, 12), e26 = emaA(f, 26), mac = new Float64Array(T);
+      for (let t = 0; t < T; t++) mac[t] = e12[t] - e26[t];
+      const sgl = emaA(mac, 9);
+      const PH = [], PL = [];                                    // pivots: above (below) the k closes before, at least (most) the k after
+      for (let i = k; i < T - k; i++) {
+        const v = c[i]; if (!isNum(v)) continue;
+        let hi = true, lo = true;
+        for (let j = i - k; j < i; j++) { if (!isNum(c[j]) || !(v > c[j])) hi = false; if (!isNum(c[j]) || !(v < c[j])) lo = false; }
+        for (let j = i + 1; j <= i + k; j++) { if (!isNum(c[j]) || !(v >= c[j])) hi = false; if (!isNum(c[j]) || !(v <= c[j])) lo = false; }
+        if (hi) PH.push(i); if (lo) PL.push(i);
+      }
+      // levels from the pivots between t − look and t − k (a pivot is known k days after it), clustered by price the
+      // skill's way: a new cluster once a price is more than tol above the cluster's lowest
+      const zones = (P, a, b, tol) => {
+        const pts = P.slice(a, b).sort((u, w) => c[u] - c[w]), zs = [];
+        let cl = [];
+        const done = () => {
+          if (cl.length >= K.minTouch) { let sm = 0, mn = Infinity, mx = -Infinity; for (const i of cl) { sm += c[i]; mn = Math.min(mn, c[i]); mx = Math.max(mx, c[i]); } const at = cl.slice().sort((u, w) => u - w); zs.push({ lvl: sm / cl.length, top: mx, bot: mn, n: cl.length, last: at[at.length - 1], at }); }
+          cl = [];
+        };
+        for (const i of pts) { if (cl.length && c[i] - c[cl[0]] > tol) done(); cl.push(i); }
+        done();
+        return zs;
+      };
+      let ha = 0, hb = 0, la = 0, lb = 0;
+      for (let t = 130; t < T; t++) {
+        while (ha < PH.length && PH[ha] < t - K.look) ha++; while (hb < PH.length && PH[hb] <= t - k) hb++;
+        while (la < PL.length && PL[la] < t - K.look) la++; while (lb < PL.length && PL[lb] <= t - k) lb++;
+        const p0 = f[t - 1], p1 = c[t], v = x.vol[t];
+        if (!isNum(p1) || !isNum(p0) || !isNum(v) || v <= 0 || p1 === p0) continue;
+        const atr = v * p1, tol = Math.max(K.tolK * atr, 0.004 * p1), dates = (z) => z.at.map((i) => D.dates[i]);
+        if (p1 > p0) {
+          const zs = zones(PH, ha, hb, tol), z = zs.filter((q) => t - q.last <= K.recent && q.top >= p0 && q.top < p1).sort((u, w) => w.top - u.top)[0];
+          if (!z) continue;
+          Y.set(t, { lvl: z.lvl, n: z.n });
+          const r = rsi[t];
+          if (p1 - z.top > K.extK * atr || !(r >= K.rsiL[0] && r <= K.rsiL[1]) || !(mac[t] > sgl[t]) || !(p1 > x.sma50[t])) continue;
+          const up = zs.filter((q) => q.lvl > p1).sort((u, w) => u.lvl - w.lvl)[0];
+          L.set(t, { lvl: z.lvl, top: z.top, bot: z.bot, n: z.n, at: dates(z), tgt: up ? up.lvl : null, rsi: r });
+        } else {
+          const zs = zones(PL, la, lb, tol), z = zs.filter((q) => t - q.last <= K.recent && q.bot <= p0 && q.bot > p1).sort((u, w) => u.bot - w.bot)[0];
+          if (!z) continue;
+          X.set(t, { lvl: z.lvl, n: z.n });
+          const r = rsi[t];
+          if (z.bot - p1 > K.extK * atr || !(r >= K.rsiS[0] && r <= K.rsiS[1]) || !(mac[t] < sgl[t]) || !(p1 < x.sma50[t])) continue;
+          const dn = zs.filter((q) => q.lvl < p1).sort((u, w) => w.lvl - u.lvl)[0];
+          S.set(t, { lvl: z.lvl, top: z.top, bot: z.bot, n: z.n, at: dates(z), tgt: dn ? dn.lvl : null, rsi: r });
+        }
+      }
+    }
+    D._ch = out;
+    return out;
+  }
   function simulate(D, opts) {
     const T = D.dates.length;
     // opts.resume: a book ({date, from0, capital, state, hist}). The run starts the day after the book's last day with
@@ -417,11 +503,13 @@
     let hedge = null;                               // the risk & hedge team's position: inverse S&P 500 or Treasuries (kind)
     let hedgeTilt = false, hedgeNow = null;          // defensive mode (new buys lean to defensive sectors), the last decision
     const hedgeFlex = opts.hedgeFlex != null ? opts.hedgeFlex : FIXED.hedgeFlex, DEFSEC = new Set(FIXED.defSecs);
+    const chartOn = opts.chart != null ? opts.chart : FIXED.chart.on, chartExit = opts.chartExit != null ? opts.chartExit : FIXED.chart.exit;
+    const CH = chartOn || chartExit ? chartAux(D) : null, CK = FIXED.chart, LONGS = ['bo', 'pb', 'ch'];
     const hedgeFills = [], hedgeEpisodes = [];
     const cool = new Map();                         // symbol index → first day it may be bought again
-    const scores = Object.assign({ bo: 0, pb: 0, dt: 0, sb: 0 }, (BS ? BS.scores : opts.scores) || {});
+    const scores = Object.assign({ bo: 0, pb: 0, dt: 0, sb: 0, ch: 0, cs: 0 }, (BS ? BS.scores : opts.scores) || {});
     // share of the normal 1-trade risk each playbook may use, set by the strategy tournament
-    let M = Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM, bd: FIXED.selectTrialM }, (BS ? BS.M : opts.mults) || {});   // shorts (sb): a fixed quarter, outside the tournament
+    let M = Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM, bd: FIXED.selectTrialM, ch: FIXED.selectTrialM }, (BS ? BS.M : opts.mults) || {});   // shorts (sb): a fixed quarter, outside the tournament
     // the allocator's tilt for each method on each day (data/alloc.json), the same in every replay of that day
     let tiltNow = null;
     // shorts (sb) are outside the tournament: a sixth of the normal risk, as for a method that lost money (the 2-year
@@ -532,7 +620,7 @@
         const isGap = tr.R <= -1.5;
         const isMkt = tr.pb !== 'bd' && tr.R <= -0.8 && tr.idx <= -0.03;
         if (tr.pb === 'bo') push(ev.fake, isFake, 12); else if (tr.pb === 'pb') push(ev.pb, tr.R < 0, 12);
-        else { push(ev.dtq, dtQuick, 10); push(ev.dtf, dtFade, 10); }
+        else if (tr.pb !== 'ch' && tr.pb !== 'cs') { push(ev.dtq, dtQuick, 10); push(ev.dtf, dtFade, 10); }
         push(ev.gap, isGap, 20);
         if (isMkt) ev.mkt.push(t);
         const diag = [], chg = [], evid = [];
@@ -747,7 +835,9 @@
           p.mfeR = Math.max(p.mfeR, (p.fill - px) / p.R1);
           let why = null;
           if (px >= p.stop) why = p.stop < p.stop0 - 1e-9 ? (px <= p.fill ? '공매도 추적 손절(이익 보호)' : '공매도 추적 손절') : '공매도 손절';
-          else if (t - p.t0 >= P.timeStop_bo && p.mfeR < 0.5) why = '공매도 시간 손절';
+          else if (p.tgt != null && px <= p.tgt) why = '공매도 목표가(다음 지지선) 도달';
+          else if (t - p.t0 >= (p.pb === 'cs' ? CK.timeStop : P.timeStop_bo) && p.mfeR < 0.5) why = '공매도 시간 손절';
+          else if (chartExit && t > p.t0 && CH.Y[p.i].has(t)) why = `차트 되사기: 저항선 $${round(CH.Y[p.i].get(t).lvl, 2)} 돌파`;
           else if (regimeOk(D, t, 1) && px > x.sma50[t]) why = '공매도 청산(시장 200일선 회복·50일선 위)';
           if (why) { closedToday.push(closeTrade(p, t, px, why)); continue; }
           const k = p.mfeR >= FIXED.holdFromR ? P.trailK + P.holdK : P.trailK;
@@ -762,8 +852,12 @@
         else if (p.pb === 'pb' && px > x.sma5[t] && t > p.t0) reason = '반등 청산';
         else if (p.pb === 'pb' && t - p.t0 >= P.timeStop_pb) reason = '시간 청산';
         else if (p.pb === 'bo' && t - p.t0 >= P.timeStop_bo && p.mfeR < 0.5) reason = '시간 손절';
+        else if (p.pb === 'ch' && p.tgt != null && px >= p.tgt) reason = '목표가(다음 저항선) 도달';
+        else if (p.pb === 'ch' && t - p.t0 >= CK.timeStop && p.mfeR < 0.5) reason = '시간 손절';
+        else if (chartExit && p.pb !== 'bd' && t > p.t0 && CH.X[p.i].has(t)) reason = `차트 매도: 지지선 $${round(CH.X[p.i].get(t).lvl, 2)} 이탈`;
         if (reason) { closedToday.push(closeTrade(p, t, px, reason)); continue; }
         if (p.pb === 'bd') p.stop = Math.max(p.stop, p.maxC - P.stopK_bd * p.atr);
+        if (p.pb === 'ch' && p.mfeR >= 1) p.stop = Math.max(p.stop, p.maxC - P.trailK * p.atr);   // the chart buy trails once it is +1R
         if (p.pb === 'bo') {   // trailing stop moves up only; wider once the trade has made +3R, to ride the trend
           const base = regimeNow ? P.trailK : Math.min(P.trailK, 2.0);
           const k = p.mfeR >= FIXED.holdFromR ? base + P.holdK : base;
@@ -837,8 +931,8 @@
             }
           }
           const res = {};
-          for (const k of ['bo', 'pb', 'dt', 'bd']) {
-            const r = simulate(D, { from: Math.max(210, t - FIXED.selectWindow + 1), to: t, capital: 100000, params: P, adaptive: false, only: k });
+          for (const k of (chartOn ? ['bo', 'pb', 'dt', 'bd', 'ch'] : ['bo', 'pb', 'dt', 'bd'])) {
+            const r = simulate(D, { from: Math.max(210, t - FIXED.selectWindow + 1), to: t, capital: 100000, params: P, adaptive: false, only: k, hedgeFlex, chart: chartOn, chartExit });
             res[k] = { ret: r.stats.ret, mdd: r.stats.mdd, n: r.stats.n };
           }
           const next = pickMults(res);
@@ -846,15 +940,15 @@
             const lvl = (m) => (m >= 0.99 ? '정상 위험' : m >= 0.45 ? '절반 위험' : m === FIXED.selectTrialM ? '1/4 위험(시험)' : '1/6 위험');
             const chg = Object.keys(M).filter((k) => Math.abs(next[k] - M[k]) >= 0.005).map((k) => ({ key: 'm_' + k, label: `${PB_NAME[k]} 1회 위험`, from: Math.round(M[k] * 100) + '%', to: Math.round(next[k] * 100) + '%' }));
             const line = (k) => (res[k].n < FIXED.selectMinTrades ? `${PB_NAME[k]} 표본 부족(${res[k].n}건)` : `${PB_NAME[k]} ${pctTxt(res[k].ret)}(최대 낙폭 ${(res[k].mdd * 100).toFixed(1)}%, ${res[k].n}건)`);
-            log(t, 'budget', '전략 선택: 위험 예산 재배분', `최근 ${FIXED.selectWindow}거래일 동안 방법별로 따로 돌려 본 결과는 ${['bo', 'pb', 'dt', 'bd'].map(line).join(', ')}입니다. 수익을 최대 낙폭으로 나눈 값으로 순위를 매겨 ${['bo', 'pb', 'dt', 'bd'].map((k) => `${PB_NAME[k]}은 ${lvl(next[k])}`).join(', ')}으로 매매합니다.`, chg);
+            log(t, 'budget', '전략 선택: 위험 예산 재배분', `최근 ${FIXED.selectWindow}거래일 동안 방법별로 따로 돌려 본 결과는 ${Object.keys(res).map(line).join(', ')}입니다. 수익을 최대 낙폭으로 나눈 값으로 순위를 매겨 ${['bo', 'pb', 'dt', 'bd'].map((k) => `${PB_NAME[k]}은 ${lvl(next[k])}`).join(', ')}으로 매매합니다.`, chg);
             M = next;
           }
         }
         // guard against over-fitting: every 20 days compare the adapted rules with the starting rules
         if (t - lastValidate >= FIXED.validateEvery && t - base0 >= FIXED.validateWindow && differs(P, B)) {
           lastValidate = t;
-          const a = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: P, adaptive: false, mults: M, hedgeFlex });
-          const b = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: B, adaptive: false, mults: M, hedgeFlex });
+          const a = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: P, adaptive: false, mults: M, hedgeFlex, chart: chartOn, chartExit });
+          const b = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: B, adaptive: false, mults: M, hedgeFlex, chart: chartOn, chartExit });
           const ra = a.stats.ret, rb = b.stats.ret;
           if (ra < rb - FIXED.validateMargin) {
             const chg = [];
@@ -898,8 +992,10 @@
           const c = x.c[t];
           if (!isNum(c) || !isNum(x.sma200[t]) || !isNum(x.vol[t]) || x.vol[t] <= 0) continue;
           const trend = c > x.sma50[t] && x.sma50[t] > x.sma200[t];
-          if (trend && x.dom[t] >= P.boLookback && x.rs[t] >= P.rsMin) { if (!only || only === 'bo') cands.push({ i, pb: 'bo', score: x.rs[t] + 0.5 }); }
-          else if (c > x.sma200[t] && x.sma50[t] > x.sma200[t] && x.rs[t] >= P.pbRsMin && x.rsi2[t] < P.pbRsi) { if (!only || only === 'pb') cands.push({ i, pb: 'pb', score: x.rs[t] }); }
+          const isBo = trend && x.dom[t] >= P.boLookback && x.rs[t] >= P.rsMin, isPb = !isBo && c > x.sma200[t] && x.sma50[t] > x.sma200[t] && x.rs[t] >= P.pbRsMin && x.rsi2[t] < P.pbRsi;
+          if (isBo) { if (!only || only === 'bo') cands.push({ i, pb: 'bo', score: x.rs[t] + 0.5 }); }
+          else if (isPb) { if (!only || only === 'pb') cands.push({ i, pb: 'pb', score: x.rs[t] }); }
+          else if (chartOn && (!only || only === 'ch')) { const g = CH.L[i].get(t); if (g && isNum(x.rs[t])) cands.push({ i, pb: 'ch', score: x.rs[t] + 0.25, ch: g }); }
         }
         cands.sort((a, b) => b.score - a.score);
         let opened = 0;
@@ -911,13 +1007,15 @@
           todaySignals.push(sig);
           if (prov) { sig.why = '장 마감 무렵 다시 판단'; continue; }
           if (opened >= FIXED.maxNewPerDay) { sig.why = `하루 신규 ${FIXED.maxNewPerDay}종목 한도`; continue; }
-          if (positions.filter((p) => p.pb === 'bo' || p.pb === 'pb').length >= FIXED.maxPositions) { sig.why = `보유 ${FIXED.maxPositions}종목 한도`; continue; }
+          if (positions.filter((p) => LONGS.includes(p.pb)).length >= FIXED.maxPositions) { sig.why = `보유 ${FIXED.maxPositions}종목 한도`; continue; }
           if (positions.filter((p) => D.S[p.i].sec === x.sec).length >= FIXED.sectorMax) { sig.why = `같은 업종 ${FIXED.sectorMax}종목 한도`; continue; }
           const atr = x.vol[t] * c;
           const fill = c * (1 + FIXED.slip);
           const k = cd.pb === 'bo' ? P.stopK_bo : P.stopK_pb;
-          const stop = fill - k * atr;
+          const stop = cd.pb === 'ch' ? Math.min(fill - CK.stopMin * atr, Math.max(fill - CK.stopMax * atr, cd.ch.bot - CK.stopPad * atr)) : fill - k * atr;
           const perShare = fill - stop;
+          if (cd.pb === 'ch' && cd.ch.tgt != null && cd.ch.tgt - fill < CK.minRoom * perShare) { sig.why = `머리 위 다음 저항선(${round(cd.ch.tgt, 2)})이 ${CK.minRoom}R 안쪽이라 쉼`; continue; }
+          const tgt = cd.pb === 'ch' ? (cd.ch.tgt != null ? cd.ch.tgt : fill + CK.tgtR * perShare) : null;
           const risk = eq * FIXED.riskPct * mult * riskMul(cd.pb) * (hedgeTilt ? (DEFSEC.has(x.sec) ? FIXED.defUp : FIXED.defDown) : 1);
           let qty = Math.floor(risk / perShare);
           qty = Math.min(qty, Math.floor((P.maxPosW * eq) / fill), Math.floor(bpow(eq) / fill));
@@ -927,8 +1025,9 @@
           cash -= qty * fill + feeIn;
           heat += qty * perShare;
           const why = cd.pb === 'bo' ? `${highTxt(x.dom[t])} 돌파(기준 ${P.boLookback}일) · 상대강도 상위 ${Math.max(1, 100 - x.rs[t])}% · 50일선이 200일선 위인 상승 추세`
+            : cd.pb === 'ch' ? `차트: ${cd.ch.n}번 막힌 저항선 $${round(cd.ch.lvl, 2)}(${cd.ch.at.map((d) => +d.slice(5, 7) + '/' + +d.slice(8, 10)).join('·')})을 종가로 돌파 · RSI(14) ${cd.ch.rsi.toFixed(0)} · MACD가 신호선 위 · 50일선 위 · 목표 ${cd.ch.tgt != null ? `다음 저항선 $${round(tgt, 2)}` : `$${round(tgt, 2)}(${CK.tgtR}R)`}`
             : `상승 추세(200일선 위) 속 짧은 하락: 2일 RSI ${x.rsi2[t].toFixed(1)}(기준 ${P.pbRsi} 미만) · 상대강도 상위 ${Math.max(1, 100 - x.rs[t])}%`;
-          positions.push({ id: ++idSeq, i: cd.i, pb: cd.pb, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn, why, ctx: ctxAt(t) });
+          positions.push(Object.assign({ id: ++idSeq, i: cd.i, pb: cd.pb, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn, why, ctx: ctxAt(t) }, cd.pb === 'ch' ? { tgt, lvl: cd.ch.lvl } : {}));
           sig.taken = true; sig.qty = qty; sig.stop = round(stop, 2);
           opened++;
         }
@@ -962,6 +1061,41 @@
           heat += qty * perShare; nOpen++;
           const why = `${x.dol[t] >= 250 ? '52주' : x.dol[t] + '일'} 최저가 이탈(기준 ${P.boLookback}일) · 상대강도 하위 ${Math.max(1, x.rs[t])}% · 50일선이 200일선 아래인 하락 추세 · S&P 500이 200일선 아래`;
           positions.push({ id: ++idSeq, i: cd.i, pb: 'sb', dir: -1, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, minC: c, mfeR: 0, miss: 0, feeIn, borrow: 0, lastPx: c, why, ctx: ctxAt(t) });
+          sig.taken = true; sig.qty = qty; sig.stop = round(stop, 2);
+        }
+      }
+      // chart short: a support level broken on the close, confirmed (RSI(14) 25–50, MACD under its signal, under the 50-day)
+      if (chartOn && !blocked.length && !prov && (!only || only === 'cs') && riskMul('cs') > 0) {
+        const held = new Set(positions.map((p) => p.i)), cands = [];
+        for (let i = 0; i < (D.bond0 != null ? D.bond0 : D.S.length); i++) {
+          const x = D.S[i];
+          if (!x.e[t] || x.syn || held.has(i) || (cool.get(i) || 0) > t || !isNum(x.vol[t]) || x.vol[t] <= 0 || !isNum(x.rs[t])) continue;
+          const g = CH.S[i].get(t);
+          if (g) cands.push({ i, score: 100 - x.rs[t], ch: g });
+        }
+        cands.sort((a, b) => b.score - a.score);
+        const eq = marked(t);
+        let heat = positions.reduce((s2, p) => s2 + Math.max(0, (p.fill - p.stop) * sgn(p)) * p.qty, 0), nOpen = 0;
+        for (const cd of cands) {
+          const x = D.S[cd.i], c = x.c[t], g = cd.ch;
+          const sig = { sym: x.s, name: x.n, pb: 'cs', rs: x.rs[t], price: round(c, 2), taken: false, why: '' };
+          todaySignals.push(sig);
+          if (nOpen >= FIXED.maxNewPerDay) { sig.why = `하루 신규 ${FIXED.maxNewPerDay}종목 한도`; continue; }
+          if (positions.filter((p) => p.dir === -1).length >= FIXED.shortMax) { sig.why = `공매도 ${FIXED.shortMax}종목 한도`; continue; }
+          if (positions.filter((p) => D.S[p.i].sec === x.sec).length >= FIXED.sectorMax) { sig.why = `같은 업종 ${FIXED.sectorMax}종목 한도`; continue; }
+          const atr = x.vol[t] * c, fill = c * (1 - FIXED.slip);
+          const stop = Math.max(fill + CK.stopMin * atr, Math.min(fill + CK.stopMax * atr, g.top + CK.stopPad * atr)), perShare = stop - fill;
+          if (g.tgt != null && fill - g.tgt < CK.minRoom * perShare) { sig.why = `아래 다음 지지선(${round(g.tgt, 2)})이 ${CK.minRoom}R 안쪽이라 쉼`; continue; }
+          const tgt = g.tgt != null ? g.tgt : fill - CK.tgtR * perShare;
+          let qty = Math.floor((eq * FIXED.riskPct * mult * riskMul('cs')) / perShare);
+          qty = Math.min(qty, Math.floor((P.maxPosW * eq) / fill), Math.floor(bpow(eq) / (FIXED.shortMargin * fill)));
+          if (heat + qty * perShare > FIXED.heatMax * eq) qty = Math.floor(Math.max(0, FIXED.heatMax * eq - heat) / perShare);
+          if (qty < 1 || qty * fill < FIXED.minValue * eq) { sig.why = '증거금 또는 위험 한도 부족'; continue; }
+          const feeIn = sellFee(qty, fill, D.dates[t]).total;
+          cash += qty * fill - feeIn;
+          heat += qty * perShare; nOpen++;
+          const why = `차트: ${g.n}번 받쳐 준 지지선 $${round(g.lvl, 2)}(${g.at.map((d) => +d.slice(5, 7) + '/' + +d.slice(8, 10)).join('·')})을 종가로 이탈 · RSI(14) ${g.rsi.toFixed(0)} · MACD가 신호선 아래 · 50일선 아래 · 목표 ${g.tgt != null ? `다음 지지선 $${round(tgt, 2)}` : `$${round(tgt, 2)}(${CK.tgtR}R)`}`;
+          positions.push({ id: ++idSeq, i: cd.i, pb: 'cs', dir: -1, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, minC: c, mfeR: 0, miss: 0, feeIn, borrow: 0, lastPx: c, why, ctx: ctxAt(t), tgt, lvl: g.lvl });
           sig.taken = true; sig.qty = qty; sig.stop = round(stop, 2);
         }
       }
@@ -1011,7 +1145,7 @@
         const HX = hedgeAux(D), kind = hedgeFlex ? HX.kind[t] : 'inv', kWhy = hedgeFlex ? HX.why[t] : '', tilt0 = hedgeTilt;
         hedgeTilt = H > 0 && kind === 'def';
         hedgeNow = H > 0 ? { date: D.dates[t], kind, ratio: round(H, 2), why: why + (kWhy ? ` · ${kWhy}` : '') } : null;
-        const longVal = positions.filter((p) => p.pb === 'bo' || p.pb === 'pb').reduce((sum, p) => sum + p.qty * price(D.S[p.i], t), 0);
+        const longVal = positions.filter((p) => LONGS.includes(p.pb)).reduce((sum, p) => sum + p.qty * price(D.S[p.i], t), 0);
         const posKind = kind === 'bond' ? 'bond' : 'inv';
         let target = (kind === 'def' ? FIXED.defHedge : 1) * H * longVal;
         if (target < FIXED.hedgeMin) target = 0;
@@ -1085,7 +1219,8 @@
         value: round(sgn(p) * px * p.qty, 2), pnl: round(sgn(p) * (px - p.fill) * p.qty - (p.feeIn || 0) - (p.borrow || 0), 2), pct: round(sgn(p) * (px / p.fill - 1), 4), stop: round(p.stop, 2), stop0: round(p.stop0, 2), feeBuy: p.feeIn || 0,
         R: round(sgn(p) * (px - p.fill) / p.R1, 2), days: lastT - p.t0, riskToStop: round(Math.max(0, sgn(p) * (px - p.stop)) * p.qty, 2), et: p.et || null,
         dir: p.dir === -1 ? -1 : undefined, borrow: p.dir === -1 ? cent(p.borrow || 0) : undefined,
-        kind: x.kind || 'stock', syn: x.syn ? true : undefined, yld: x.yld && isNum(x.yld[lastT]) ? round(x.yld[lastT], 3) : null, why: p.why || null, ctx: p.ctx || null };
+        kind: x.kind || 'stock', syn: x.syn ? true : undefined, yld: x.yld && isNum(x.yld[lastT]) ? round(x.yld[lastT], 3) : null, why: p.why || null, ctx: p.ctx || null,
+        tgt: p.tgt != null ? round(p.tgt, 2) : undefined, lvl: p.lvl != null ? round(p.lvl, 2) : undefined };
     });
     // opts.snapshot: everything needed to continue after this day (a book's state), days kept relative to this day
     let snapshot = null;
