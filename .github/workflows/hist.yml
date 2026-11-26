@@ -10,24 +10,30 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: hist
+  group: hist-${{ github.event.inputs.what || 'all' }}
   cancel-in-progress: false
 jobs:
   hist:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # the long fetch saves as it goes and stops itself after LONG_MIN minutes; if a step still runs over, what it has
+      # written is committed anyway and the next run continues from there
       - name: Fetch history
+        timeout-minutes: 58
+        continue-on-error: true
         run: |
           if [ "$WHAT" = "long" ] || [ "$WHAT" = "both" ]; then node tools/fetch_long.mjs; fi
           if [ "$WHAT" != "long" ]; then node tools/fetch_hist.mjs; fi
         env:
           WHAT: ${{ github.event.inputs.what || 'all' }}
+          LONG_MIN: 42
       - name: Save
+        if: always()
         run: |
           git config user.name "paper-trader-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

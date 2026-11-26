@@ -17,12 +17,21 @@ const require = createRequire(import.meta.url);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const put = (name, obj) => { const b = zlib.gzipSync(JSON.stringify(obj)); fs.writeFileSync(`data/hist/${name}.json.gz`, b); console.log('wrote', name, (b.length / 1e6).toFixed(2) + 'MB'); };
+const old = (name) => { try { return JSON.parse(zlib.gunzipSync(fs.readFileSync(`data/hist/${name}.json.gz`))); } catch { return null; } };
+// a run has LONG_MIN minutes (the workflow step allows a little more); the stocks stop early, keep what they have and
+// the next run picks up where this one stopped
+const T0 = Date.now(), BUDGET = (+process.env.LONG_MIN || 40) * 60e3, left = () => BUDGET - (Date.now() - T0);
+// when Yahoo says "too many requests" every worker waits together, and the wait grows while it keeps saying so
+let coolUntil = 0, cool = 15e3, n429 = 0;
 async function get(url, opt = {}) {
   for (let i = 0; i < 6; i++) {
+    const w = coolUntil - Date.now(); if (w > 0) await sleep(w);
     try {
       const r = await fetch(url, Object.assign({ headers: { 'User-Agent': UA, Accept: '*/*' } }, opt));
       if (r.status === 404) return null;
-      if (r.status === 429 || r.status >= 500) { await sleep(1500 * (i + 1)); continue; }
+      if (r.status === 429) { n429++; coolUntil = Math.max(coolUntil, Date.now() + cool); cool = Math.min(cool * 1.5, 120e3); i--; if (left() < 60e3) return null; continue; }
+      if (r.status >= 500) { await sleep(1500 * (i + 1)); continue; }
+      cool = Math.max(15e3, cool * 0.9);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return opt.text ? await r.text() : await r.json();
     } catch (e) { if (i === 5) { console.log('failed', url.slice(0, 120), String(e.message || e).slice(0, 80)); return null; } await sleep(1000 * (i + 1)); }
@@ -45,7 +54,32 @@ async function yahoo(sym, from, to) {
 const norm = (s) => String(s).trim().toUpperCase().replace(/[./]/g, '-');
 fs.mkdirSync('data/hist', { recursive: true });
 
-// 1. S&P 500 membership by date (the dataset's newest CSV, found through GitHub's public API)
+// 1. the index, the VIX, the bond funds, the futures and the coins' spot price (small: first, so a slow Yahoo day
+// still gets the futures and coin checks their record; what fails keeps an earlier run's copy)
+{
+  const list = ['^GSPC', '^VIX', 'VCIT', 'VCSH', 'IGIB', 'EMB', 'BNDX', 'IGOV',
+    'ES=F', 'NQ=F', 'YM=F', 'RTY=F', 'ZT=F', 'ZF=F', 'ZN=F', 'ZB=F', 'CL=F', 'GC=F', 'SI=F', 'HG=F', 'BTC=F', 'ETH=F', 'BTC-USD', 'ETH-USD'];
+  const out = old('yf_misc') || {};
+  for (const s of list) { const r = await yahoo(s, '2007-01-01', ymd(Date.now() + 864e5)); if (r) out[s] = Object.fromEntries(r.dates.map((d, i) => [d, r.c[i]])); console.log('misc', s, r ? r.dates.length : 'none'); await sleep(400); }
+  put('yf_misc', out);
+}
+// 2. real funding on Hyperliquid's perpetuals (hourly rate per hour held)
+{
+  const out = {};
+  for (const c of ['BTC', 'ETH', 'SOL']) {
+    const rows = []; let t = Date.parse('2023-05-12T00:00:00Z');
+    for (let k = 0; k < 200 && t < Date.now(); k++) {
+      const j = await get('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': UA }, body: JSON.stringify({ type: 'fundingHistory', coin: c, startTime: t }) });
+      if (!Array.isArray(j) || !j.length) break;
+      for (const r of j) rows.push([r.time, +(+r.fundingRate).toPrecision(5)]);
+      const nt = j[j.length - 1].time + 1; if (nt <= t) break; t = nt;
+      await sleep(300);
+    }
+    out[c] = rows.length ? rows : ((old('hl_funding') || {})[c] || []); console.log('funding', c, rows.length, rows.length && ymd(rows[0][0]), rows.length && ymd(rows[rows.length - 1][0]));
+  }
+  put('hl_funding', out);
+}
+// 3. S&P 500 membership by date (the dataset's newest CSV, found through GitHub's public API)
 let members = null;
 {
   const ls = await get('https://api.github.com/repos/fja05680/sp500/contents');
@@ -64,56 +98,46 @@ let members = null;
     console.log('members rows', out.length, out[0] && out[0][0], out.length && out[out.length - 1][0]);
   } else console.log('S&P 500 membership not found');
 }
-// 2. stocks: the book's own list and every S&P 500 member since 2009
+// 4. stocks: the book's own list and every S&P 500 member since 2009. Saved as they come in (a run that runs out of
+// time keeps what it has); the next run fetches only what is still missing
 {
+  const FROM = '2009-01-01', TO = '2024-03-01';
   const seed = JSON.parse(fs.readFileSync('data/seed.json', 'utf8'));
   const own = seed.syms.map((x) => norm(x.s));
   const past = new Set(); for (const [, t] of members || []) for (const s of t.split(',')) past.add(s);
   const syms = [...new Set(own.concat([...past]))].sort();
-  console.log('stocks to fetch', syms.length);
-  const out = {}; let n = 0, miss = 0;
-  const work = syms.slice();
-  await Promise.all([0, 1, 2, 3].map(async () => {
-    while (work.length) {
-      const s = work.shift();
-      const r = await yahoo(s, '2009-01-01', '2024-03-01');
-      if (r) out[s] = r; else miss++;
-      if (++n % 100 === 0) console.log('stocks', n, '/', syms.length, 'missing', miss);
-      await sleep(250);
-    }
-  }));
-  // one calendar for all, each stock as its first day's index and its closes
-  const cal = [...new Set(Object.values(out).flatMap((r) => r.dates))].sort();
-  const at = new Map(cal.map((d, i) => [d, i])), pack = {};
-  for (const [s, r] of Object.entries(out)) {
-    const i0 = at.get(r.dates[0]), arr = new Array(cal.length - i0).fill(null);
-    r.dates.forEach((d, k) => { arr[at.get(d) - i0] = r.c[k]; });
-    pack[s] = [i0, arr];
+  // what an earlier run already has: unpack it to {dates, c} per stock
+  const prev = old('yf_stocks'), out = {}, tries = {};
+  if (prev && prev.from === FROM && prev.to === TO && prev.s) {
+    for (const [s, [i0, arr]] of Object.entries(prev.s)) { const dates = [], c = []; arr.forEach((v, k) => { if (v > 0) { dates.push(prev.dates[i0 + k]); c.push(v); } }); if (dates.length) out[s] = { dates, c }; }
+    Object.assign(tries, prev.tries || {});
   }
-  put('yf_stocks', { from: '2009-01-01', to: '2024-03-01', dates: cal, s: pack, missing: miss, own: own.length });
-}
-// 3. the index, the VIX, the bond funds, the futures and the coins' spot price
-{
-  const list = ['^GSPC', '^VIX', 'VCIT', 'VCSH', 'IGIB', 'EMB', 'BNDX', 'IGOV',
-    'ES=F', 'NQ=F', 'YM=F', 'RTY=F', 'ZT=F', 'ZF=F', 'ZN=F', 'ZB=F', 'CL=F', 'GC=F', 'SI=F', 'HG=F', 'BTC=F', 'ETH=F', 'BTC-USD', 'ETH-USD'];
-  const out = {};
-  for (const s of list) { const r = await yahoo(s, '2007-01-01', ymd(Date.now() + 864e5)); if (r) out[s] = Object.fromEntries(r.dates.map((d, i) => [d, r.c[i]])); console.log('misc', s, r ? r.dates.length : 'none'); await sleep(400); }
-  put('yf_misc', out);
-}
-// 4. real funding on Hyperliquid's perpetuals (hourly rate per hour held)
-{
-  const out = {};
-  for (const c of ['BTC', 'ETH', 'SOL']) {
-    const rows = []; let t = Date.parse('2023-05-12T00:00:00Z');
-    for (let k = 0; k < 200 && t < Date.now(); k++) {
-      const j = await get('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': UA }, body: JSON.stringify({ type: 'fundingHistory', coin: c, startTime: t }) });
-      if (!Array.isArray(j) || !j.length) break;
-      for (const r of j) rows.push([r.time, +(+r.fundingRate).toPrecision(5)]);
-      const nt = j[j.length - 1].time + 1; if (nt <= t) break; t = nt;
+  // a stock Yahoo has said nothing about twice is not asked for again
+  const work = syms.filter((s) => !out[s] && (tries[s] || 0) < 2);
+  console.log('stocks', syms.length, 'have', Object.keys(out).length, 'to fetch', work.length);
+  const save = (final) => {
+    const cal = [...new Set(Object.values(out).flatMap((r) => r.dates))].sort();
+    const at = new Map(cal.map((d, i) => [d, i])), pack = {};
+    for (const [s, r] of Object.entries(out)) {
+      const i0 = at.get(r.dates[0]), arr = new Array(cal.length - i0).fill(null);
+      r.dates.forEach((d, k) => { arr[at.get(d) - i0] = r.c[k]; });
+      pack[s] = [i0, arr];
+    }
+    const pending = syms.filter((s) => !out[s] && (tries[s] || 0) < 2).length;
+    put('yf_stocks', { from: FROM, to: TO, dates: cal, s: pack, want: syms.length, pending, missing: syms.filter((s) => !out[s] && (tries[s] || 0) >= 2).length, tries, own: own.length });
+    if (final) console.log('stocks have', Object.keys(out).length, 'pending', pending, 'Yahoo 429s', n429);
+  };
+  let n = 0, lastSave = Date.now();
+  await Promise.all([0, 1, 2].map(async () => {
+    while (work.length && left() > 4 * 60e3) {
+      const s = work.shift();
+      const r = await yahoo(s, FROM, TO);
+      if (r) out[s] = r; else if (left() > 60e3) tries[s] = (tries[s] || 0) + 1;
+      if (++n % 100 === 0) console.log('stocks', n, 'of', syms.length, 'left', work.length, '429s', n429);
+      if (Date.now() - lastSave > 5 * 60e3) { lastSave = Date.now(); save(false); }
       await sleep(300);
     }
-    out[c] = rows; console.log('funding', c, rows.length, rows.length && ymd(rows[0][0]), rows.length && ymd(rows[rows.length - 1][0]));
-  }
-  put('hl_funding', out);
+  }));
+  save(true);
 }
 fs.writeFileSync('data/hist/meta_long.json', JSON.stringify({ built: new Date().toISOString() }, null, 2) + '\n');

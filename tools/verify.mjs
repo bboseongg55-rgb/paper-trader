@@ -49,7 +49,11 @@ const untested = (k, book, name, family, why) => ({ k, book, name, family, data:
 // which long record the checks used: a new one (tools/fetch_long.mjs) means checking again
 export function longKey() { const m = readJSON('data/hist/meta_long.json', null), c = readJSON('data/hist/meta.json', null); return m || c ? `${(m && m.built) || ''}|${(c && c.built) || ''}` : null; }
 export function longParts() {
-  try { return { Y: gz('data/hist/yf_stocks.json.gz'), M: gz('data/hist/sp500_members.json.gz'), X: gz('data/hist/yf_misc.json.gz'), F: gz('data/hist/fred_rates.json.gz') }; } catch { return null; }
+  const g = (f) => { try { return gz(f); } catch { return null; } };
+  const Y = g('data/hist/yf_stocks.json.gz'), M = g('data/hist/sp500_members.json.gz'), X = g('data/hist/yf_misc.json.gz'), F = g('data/hist/fred_rates.json.gz');
+  // the stocks only once the fetch got through its whole list (a part of it would be the list cut at some letter)
+  const stocks = !!(Y && Y.s && M && M.rows && !(Y.pending > 0));
+  return stocks || X ? { Y: stocks ? Y : null, M, X: X || {}, F, stocks } : null;
 }
 const ynorm = (s) => String(s).toUpperCase().replace(/[./]/g, '-');
 export function longSeed(seed, P) {
@@ -285,10 +289,13 @@ export function run(o) {
   let D = o.D, MS = o.MS, to = o.to, span = 'book';
   if (P) {
     MS = longMS(o.MS, P);
-    const LB = longBonds(o.bondsHist, P);
-    D = E.prepare(longSeed(o.seed, P), o.L, {}, { instruments: (dates) => o.Bonds.build(LB, o.L.days, dates), rp: rpOf(MS) });
-    to = o.lastFinal ? D.dates.lastIndexOf(o.lastFinal) : D.dates.length - 1; if (to < 0) to = D.dates.length - 1;
-    span = 'long';
+    span = 'futures';   // the futures and coins on the long record, the stocks still on the book's two years
+    if (P.stocks) {
+      const LB = longBonds(o.bondsHist, P);
+      D = E.prepare(longSeed(o.seed, P), o.L, {}, { instruments: (dates) => o.Bonds.build(LB, o.L.days, dates), rp: rpOf(MS) });
+      to = o.lastFinal ? D.dates.lastIndexOf(o.lastFinal) : D.dates.length - 1; if (to < 0) to = D.dates.length - 1;
+      span = 'long';
+    }
   }
   const items = [];
   items.push(...stockChecks(E, D, to));

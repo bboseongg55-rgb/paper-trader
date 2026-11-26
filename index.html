@@ -821,6 +821,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   // exposure by asset class: face value bought and sold against the account's size, and what a normal day can move
   // in the futures (their recent daily volatility); a single net figure across classes would mean nothing
+  const PAIR_DUR = { ZT: 1.9, ZN: 6.3 };   // the durations deriv.js sizes the 2y/10y pair with (CFG.curve D2, D10)
   function riskHTML() {
     const a = S.account, dv = S.deriv, total = totalNow() || 1;
     const G = {
@@ -829,37 +830,51 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       cm: { nm: '원자재·금', up: '값이 오르면 이익', dn: '값이 내리면 이익', L: 0, S: 0, r: 0 },
       cr: { nm: '코인', up: '코인값이 오르면 이익', dn: '코인값이 내리면 이익', L: 0, S: 0, r: 0 },
     };
-    const add = (g, v, r) => { const x = G[g]; if (v >= 0) x.L += v; else x.S -= v; x.r += r || 0; };
+    // gross counts face value as it is; the bars (w) can weigh it, as for the rate futures below
+    let grossRaw = 0;
+    const add = (g, v, r, w, pair) => { const x = G[g], u = v * (w == null ? 1 : w); grossRaw += Math.abs(v); if (u >= 0) x.L += u; else x.S -= u; x.r += r || 0; if (!pair) x.solo = 1; };
     for (const p of a.open) add(p.kind === 'bond' ? 'rt' : 'eq', p.value);
     if (dv) for (const x of dv.stk || []) add('eq', x.value);
     if (a.hedge) { if (a.hedge.kind === 'bond') add('rt', a.hedge.value); else add('eq', -a.hedge.value); }
     let futRisk = 0;
     if (dv) {
-      for (const f of dv.fut) { const sg = (dv.signals || {})[f.key], r = sg && sg.vol ? f.notional * sg.vol : 0; futRisk += r; add({ rt: 'rt', cm: 'cm', cr: 'cr' }[f.g] || 'eq', (f.qty > 0 ? 1 : -1) * f.notional, r); }
+      for (const f of dv.fut) {
+        const g = { rt: 'rt', cm: 'cm', cr: 'cr' }[f.g] || 'eq', sgn = f.qty > 0 ? 1 : -1;
+        // the two halves of a pair offset each other, so neither adds its own daily swing: the 2y/10y pair is weighed
+        // in 10-year terms (by the same durations the engine sized it with), so a level-neutral pair nets near zero
+        if (f.book === 'curve') { add('rt', sgn * f.notional, 0, (PAIR_DUR[f.key] || PAIR_DUR.ZN) / PAIR_DUR.ZN, 1); G.rt.pair = 1; continue; }
+        if (f.book === 'basis') { add(g, sgn * f.notional, 0, 1, 1); G[g].pair = 2; continue; }
+        const sg = (dv.signals || {})[f.key], r = sg && sg.vol ? f.notional * sg.vol : 0; futRisk += r; add(g, sgn * f.notional, r);
+      }
       for (const e of dv.els) add('eq', e.value);
     }
     if (funded()) {
-      for (const x of CV.hold || []) add('cr', x.qty * coinPx(x.c));
+      for (const x of CV.hold || []) { const bq = x.c === 'BTC' && CV.basis ? Math.min(x.qty, CV.basis.qty || 0) : 0; if (bq > 0) add('cr', bq * coinPx(x.c), 0, 1, 1); if (x.qty - bq > 1e-9) add('cr', (x.qty - bq) * coinPx(x.c)); }
       for (const t of CV.toks || []) add(t.s === 'GLDx' ? 'cm' : 'eq', t.value || 0);
     }
-    const rows = Object.values(G).filter((x) => x.L || x.S), gross = rows.reduce((t, x) => t + x.L + x.S, 0);
-    const big = Math.max(1, ...rows.map((x) => Math.abs(x.L - x.S)));
+    const rows = Object.values(G).filter((x) => x.L || x.S), gross = grossRaw;
+    // bars against the account's size, so a small net reads small (not against the largest row)
+    const big = Math.max(total, ...rows.map((x) => Math.abs(x.L - x.S)));
     const margin = dv ? dv.margin : 0, optLoss = dv ? dv.opt.reduce((t, o) => t + (o.maxLoss || 0), 0) : 0;
     const pc = (v) => { const x = Math.abs(v) / total * 100; return fmt(x, x < 1 ? 1 : 0) + '%'; };
+    const cv = dv && dv.curve;
     let h = `<div class="band"></div><h2>위험 노출</h2>` + kv([
       ['총 노출(명목)', `${usd(gross, 0)} <small class="muted">${fmt(gross / total, 2)}배</small>`],
       ['선물 하루 위험(1σ)', futRisk ? `${usd(futRisk, 0)} <small class="muted">${fmt(futRisk / total * 100, 2)}%</small>` : '—'],
       ['선물 증거금', `${usd(margin, 0)} <small class="muted">${pc(margin)}</small>`],
-      ['옵션 최대 손실', usd(optLoss, 0)],
+      cv && cv.risk ? ['금리차 거래 손절 시', `−${usd(cv.risk, 0)} <small class="muted">${fmt(cv.risk / total * 100, 2)}%</small>`] : ['옵션 최대 손실', usd(optLoss, 0)],
     ]);
+    // a pair's own line: what it bets on instead of a direction
+    const pairNote = (x) => x.pair === 1 && cv ? `2년·10년 한 쌍(10년물 환산): 금리 수준에는 거의 중립, 금리차가 ${cv.side < 0 ? '줄면' : '벌어지면'} 이익 · 1bp당 약 ${usd(cv.K, 0)}`
+      : x.pair === 2 ? '비트코인 현물 매수·선물 매도 한 쌍: 값 변동은 서로 상쇄되고 만기까지 프리미엄이 수익' : '';
     if (rows.length) h += '<ul class="expo">' + rows.map((x) => {
-      const net = x.L - x.S, w = Math.abs(net) / big * 50;
-      const sub = [net > 0 ? x.up : net < 0 ? x.dn : '', x.L && x.S ? `매수 ${usd(x.L, 0)} · 매도 ${usd(x.S, 0)}` : '', x.r ? `선물 하루 위험 약 ${usd(x.r, 0)}` : ''].filter(Boolean).join(' · ');
+      const net = x.L - x.S, w = Math.abs(net) / big * 50, dir = !x.pair || x.solo;
+      const sub = [pairNote(x), net > 0 && dir ? x.up : net < 0 && dir ? x.dn : '', x.L && x.S ? `매수 ${usd(x.L, 0)} · 매도 ${usd(x.S, 0)}` : '', x.r ? `선물 하루 위험 약 ${usd(x.r, 0)}` : ''].filter(Boolean).join(' · ');
       return `<li><span class="nm">${x.nm}</span><span class="v">${net < 0 ? '매도 ' : '매수 '}${usd(Math.abs(net), 0)} · ${pc(net)}</span>`
         + `<span class="bar" role="img" aria-label="${x.nm} 순${net < 0 ? '매도' : '매수'} 계좌의 ${pc(net)}"><b style="${net >= 0 ? `left:50%;width:${w.toFixed(1)}%` : `right:50%;width:${w.toFixed(1)}%`}"></b></span>`
         + (sub ? `<span class="sb">${sub}</span>` : '') + '</li>';
     }).join('') + '</ul>';
-    h += `<p class="sumline" style="padding-top:12px">막대는 가운데 선에서 오른쪽이 순매수, 왼쪽이 순매도입니다. 명목 금액은 값이 1% 움직이면 손익이 그 1%만큼 생기는 크기이고, 하루 위험(1σ)은 최근 변동성으로 잰 하루 손익의 보통 폭(약 3일 중 2일은 이 안)입니다. 국채 선물은 명목이 커도 값이 적게 움직여 하루 위험은 작습니다.</p>`;
+    h += `<p class="sumline" style="padding-top:12px">막대는 가운데 선에서 오른쪽이 순매수, 왼쪽이 순매도입니다. 명목 금액은 값이 1% 움직이면 손익이 그 1%만큼 생기는 크기이고, 하루 위험(1σ)은 최근 변동성으로 잰 하루 손익의 보통 폭(약 3일 중 2일은 이 안)입니다. 국채 선물은 명목이 커도 값이 적게 움직여 하루 위험은 작습니다. 한 쌍으로 잡은 거래(금리차, 비트코인 현·선물)는 두 쪽 값 변동이 서로 상쇄되므로 하루 위험에 넣지 않고, 금리차 거래는 손절 시 손실로 따로 보여 드립니다.</p>`;
     return h;
   }
   function verifyItemHTML(x) {
@@ -1273,13 +1288,15 @@ details.teamlog[open] > summary::after { content: " 접기"; }
 
   function futA(f) {
     const dp = FUTDP[f.key] != null ? FUTDP[f.key] : 2, q = LQ['f:' + f.key];
-    return { pl: f.pnl, plr: f.entry > 0 && f.px > 0 ? Math.sign(f.qty) * (f.px / f.entry - 1) : null, id: 'f:' + f.key, grp: '선물', val: f.margin, short: f.name.replace(/\(.*\)| ?마이크로 선물| 선물$/g, '').trim(), title: f.name.replace(/ 선물$/, ''), tag: sideTag(f.qty), sub: `${f.key} · ${f.contract || ''} · ${Math.abs(f.qty)}계약`,
+    // return on the contracts' face value, so it agrees with the P&L beside it (which includes the fees paid)
+    const how = f.book === 'curve' ? '장단기 금리차 거래(2년·10년 국채 선물 한 쌍)' : f.book === 'basis' ? '비트코인 현·선물 차익(코인 계좌의 비트코인과 한 쌍)' : '선물 추세추종';
+    return { pl: f.pnl, plr: f.notional > 0 && isFinite(f.pnl) ? f.pnl / f.notional : f.entry > 0 && f.px > 0 ? Math.sign(f.qty) * (f.px / f.entry - 1) : null, id: 'f:' + f.key, grp: '선물', val: f.margin, short: f.name.replace(/\(.*\)| ?마이크로 선물| 선물$/g, '').trim(), title: f.name.replace(/ 선물$/, ''), tag: sideTag(f.qty), sub: `${f.key} · ${f.contract || ''} · ${Math.abs(f.qty)}계약`,
       rb: sgnUsd(f.pnl), rbC: cls(f.pnl), rs: `증거금 ${usd(f.margin, 0)}`, rsC: 'muted', why: f.why,
       name: f.name, px: f.px, liveAt: q ? q.t : null, unit: '', dp, pnl: f.pnl, entry: f.entry, entryL: '평단', lines: f.stop ? [{ v: f.stop, l: '추적 손절' }] : [],
       src: { k: 'cnbc', sym: futSym(f) }, note: 'CNBC 1분봉 · 약 1분 지연',
       rows: [['계약', `${esc(f.contract || '')}${f.exp ? ` (만기 ${esc(f.exp)})` : ''}`], ['평단(진입가)', fmt(f.entry, dp)], ['현재가', fmt(f.px, dp)], ['수량', `${sideTag(f.qty)} ${Math.abs(f.qty)}계약`],
         ['손익', `<span class="${cls(f.pnl)}">${sgnUsd(f.pnl)}</span>`], ['명목 금액', usd(f.notional, 0)], ['증거금', usd(f.margin, 0) + ' (확인필요)'], ['추적 손절', f.stop ? fmt(f.stop, dp) : '—'],
-        ['진입', f.date ? dLabel(f.date) : '—'], ['방법', '선물 추세추종']] };
+        ['진입', f.date ? dLabel(f.date) : '—'], ['방법', how]] };
   }
   function optA(o) {
     const u = o.und || 'SPY', q = LQ[u], prem = Math.abs(o.cost), K = optKind(o), short = o.side !== 'hedge' && o.side !== 'lcall' && o.side !== 'lput';
