@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: 'all | fred'
+        description: 'all | fred | long | both'
         required: false
         default: 'all'
 permissions:
@@ -15,14 +15,16 @@ concurrency:
 jobs:
   hist:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Fetch history
-        run: node tools/fetch_hist.mjs
+        run: |
+          if [ "$WHAT" = "long" ] || [ "$WHAT" = "both" ]; then node tools/fetch_long.mjs; fi
+          if [ "$WHAT" != "long" ]; then node tools/fetch_hist.mjs; fi
         env:
           WHAT: ${{ github.event.inputs.what || 'all' }}
       - name: Save

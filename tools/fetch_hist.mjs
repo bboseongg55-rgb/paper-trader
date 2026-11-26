@@ -8,7 +8,8 @@ import zlib from 'node:zlib';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const C = require('../crypto.js');
-const DAYS_1M = +(process.env.DAYS_1M || 45), FROM_1H = Date.parse(process.env.FROM_1H || '2024-01-01T00:00:00Z');
+// since 2017 for the hourly candles (Solana from its listing in 2021), 90 days of minutes (owner 2026-11-26: longer history)
+const DAYS_1M = +(process.env.DAYS_1M || 90), FROM_1H = Date.parse(process.env.FROM_1H || '2017-01-01T00:00:00Z');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function getJ(url) {
   for (let i = 0; i < 6; i++) {
@@ -35,7 +36,7 @@ fs.mkdirSync('data/hist', { recursive: true });
 const now = Math.floor(Date.now() / 60e3) * 60e3, WHAT = process.env.WHAT || 'all';
 {
   const fred = {};
-  for (const id of ['DGS3MO', 'DGS2', 'DGS5', 'DGS10', 'DGS30', 'DFF']) {
+  for (const id of ['DGS1MO', 'DGS3MO', 'DGS2', 'DGS5', 'DGS10', 'DGS30', 'DFF']) {
     try {
       const r = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=1990-01-01`, { headers: { 'User-Agent': 'paper-trader-hist' } });
       const rows = (await r.text()).trim().split('\n').slice(1).map((l) => l.split(',')).filter((x) => x[1] && x[1] !== '.' && isFinite(+x[1]));
