@@ -106,6 +106,10 @@ while (Date.now() < END) {
   if (Object.keys(q.books).length >= 3) {
     // the allocator: money in (already paid by the main book), money out (when the dollars are free), and the tilts
     const alloc = readJSON('data/alloc.json', null);
+    // the verified strategies (data/verify.json; none until it exists), the stock and derivatives books' direction in each
+    // underlying (a token is never held against them), and the bitcoin the basis trade holds against its CME futures
+    const ver = readJSON('data/verify.json', null);
+    C.setExt({ dirs: (readJSON('data/dirs.json', null) || {}).dirs || {}, allow: (ver && ver.allow && ver.allow.crypto) || [], basis: (alloc && alloc.basis) || null });
     // the owner's account reset comes before any transfer: close everything, keep the records, wait for new money
     if (st && alloc && alloc.reset && alloc.reset.id && st.resetId !== alloc.reset.id) {
       st = C.reset(st, q, q.at, alloc.reset.id); if (alloc.reset.crypto > 0) C.fund(st, alloc.reset.crypto, q, q.at, alloc.reset.id + '-crypto');
@@ -121,8 +125,6 @@ while (Date.now() < END) {
       }
     }
     if (st) st.tilt = (alloc && alloc.cio && alloc.cio.tilt && alloc.cio.tilt.h24) || null;
-    // the stock and derivatives books' direction in each underlying, so a token is never held against them
-    C.setExt({ dirs: (readJSON('data/dirs.json', null) || {}).dirs || {} });
     if (st && alloc && alloc.cio && Number.isFinite(alloc.cio.rp)) { st.stake = st.stake || { at: Date.now(), rates: {}, earned: {} }; st.stake.rates.USD = alloc.cio.rp; }
     if (st && Date.now() - lastRates >= 6 * 3600e3) { lastRates = Date.now(); await stakeRates(st); }
     if (st && !seeded) { await seedToks(st); seeded = true; }

@@ -12,7 +12,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const pct = (v, d = 1) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%' : '-');
   const pp = (v) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%p' : '-');
-  const V = 10;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30; 6: buying calls and puts, naked calls; 7: the long-term downtrend stance; 8: learning from the account's trades by phase; 9: the coin account's trades learn too, one hedge in one place; 10: shorts take profit quickly, longs ride it)
+  const V = 11;                     // the rules' version: a new version decides again at the next run (11: only verified strategies, no ranking; 2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30; 6: buying calls and puts, naked calls; 7: the long-term downtrend stance; 8: learning from the account's trades by phase; 9: the coin account's trades learn too, one hedge in one place; 10: shorts take profit quickly, longs ride it)
   // the owner's settings (2026-11-21): every strategy may trade in every market phase (the regime only scales risk), and
   // the 24-hour part (coins) holds 30% of the account against 70% for stocks, futures and options
   const OPEN = true, COIN_SHARE = 0.3;
@@ -237,16 +237,48 @@
       'S&P 500 기반층: 등가격 풋의 내재 변동성 > 실현 변동성 예측(지수 일간 수익률의 지수가중 평균, λ 0.94)일 때만 팝니다. 최악 손실 = (행사가 폭 − 받은 값) × 계약 수 ≤ 계좌의 12%(처음 3개월 6%), 명목 금액 ≤ 계좌의 1.5배',
       '배분은 매일 저녁 한 번 정하고, 각 매매는 이 한도 안에서 자기 규칙(손절·추세 확인)으로 사고팝니다',
     ];
-    return {
+    const out = {
       v: V, date: p.date, regime: { key, label: LABEL[key], tags, off }, headline, items: it, signals, rules, learn: { phase: p.trend, rows: learned, table: ctx.learn || null },
       tilt: { core: C, fut: { budget: futBudget, tilt: { eq: T2(eq), sc: T2(sc), rt: T2(rt), cm: T2(cm), cr: T2(cr) } }, opt: { base, credit, callCredit, wheel, hedge, hedgeOff: OPEN ? '하락 대비를 주식 계좌 헷지 한 곳으로 모아 풋 스프레드는 정리' : null, longOpt: OPEN, nakedCall: OPEN, bear, off: OPEN ? false : off, ratio: p.volLv === 'extreme' ? 0.75 : 0.5 },
         els: { on: elsOn, max: elsMax, minCoupon: 0.07, coupon: cpn != null ? r4(cpn) : null }, h24 },
       target, rp: isNum(rp) ? r4(rp / 100) : null,
       pic: Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === 'number' ? r4(v) : v])),
     };
+    return ctx.verify && ctx.verify.allow ? verified(out, ctx.verify, p) : out;
+  }
+  // the verified account (owner 2026-11-26: "운용방향 순위는 잡아치우고, 검증된 것만 매매"): no ranking and no market-
+  // phase tilts. Each strategy is on at its standard risk if tools/verify.mjs passed it, off if not; the shares are fixed
+  // (stocks and bonds 55%, derivatives 15% for the futures margins, coins 30% as the owner set). The market picture and
+  // its signals stay on the page as information only
+  const VNAME = { stock: '주식·채권', deriv: '선물·금리', crypto: '코인', all: '계좌 전체' };
+  function verified(out, ver, p) {
+    const A = ver.allow, fmtR = (x) => (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2) + 'R';
+    const items = (ver.items || []).filter((x) => !(x.book === 'crypto' && /^c_scalp:/.test(x.k) && !x.pass && (ver.items || []).some((y) => y.k !== x.k && /^c_scalp:/.test(y.k) && y.pass)))
+      .map((x) => ({ k: x.k, book: x.book, part: VNAME[x.book] || x.book, name: x.name, family: x.family, on: !!x.pass, w: x.pass ? 1 : 0, rank: null, lean: x.pass ? '매매' : '쉼', untested: !!x.untested, reason: x.pass ? '통과' : x.why,
+        stat: x.all ? { n: x.all.n, avgR: x.all.avgR, pnl: x.all.pnl, win: x.all.win, h1: { n: x.h1.n, avgR: x.h1.avgR, pnl: x.h1.pnl }, h2: { n: x.h2.n, avgR: x.h2.avgR, pnl: x.h2.pnl }, split: x.split } : null, data: x.data || null,
+        why: x.pass ? (x.all ? `검증 통과: ${x.all.n}건 평균 ${fmtR(x.all.avgR)}, 손익 $${Math.round(x.all.pnl).toLocaleString('en-US')} (전반 ${fmtR(x.h1.avgR)} · 후반 ${fmtR(x.h2.avgR)})` : `검증 통과: ${x.why}`)
+          : `매매 안 함: ${x.why}${x.all ? ` (${x.all.n}건 평균 ${fmtR(x.all.avgR)}, 손익 $${Math.round(x.all.pnl).toLocaleString('en-US')})` : ''}` }));
+    const on = items.filter((x) => x.on);
+    const C1 = Object.fromEntries(['bo', 'pb', 'dt', 'bd', 'sb', 'ch', 'cs', 'mo'].map((k) => [k, A.stock.includes(k) ? 1 : 0]));
+    const h24 = { trend: 1, scalp: 1, arb: 1, tok: 1, tokSmall: 1, mr: 1, mm: 1 };
+    const opt = { base: false, credit: false, callCredit: false, wheel: false, hedge: false, longOpt: false, nakedCall: false, ratio: false, bear: false, off: false, hedgeOff: '옵션은 검증 전이라 쓰지 않습니다' };
+    return Object.assign(out, {
+      mode: 'verified', verifyDay: ver.day || null, rule: ver.rule, cfg: ver.cfg,
+      headline: `검증을 통과한 ${on.length}가지만 매매 · 나머지 ${items.length - on.length}가지는 증명될 때까지 쉼`,
+      items, learn: { phase: p.trend, rows: [], table: out.learn && out.learn.table },
+      tilt: { core: C1, fut: { budget: (out.tilt.fut && out.tilt.fut.budget) || 0.06, tilt: {} }, opt, els: { on: false, max: 0, minCoupon: 0.07, coupon: out.tilt.els && out.tilt.els.coupon }, h24 },
+      target: { core: 0.55, deriv: 0.15, h24: COIN_SHARE },
+      rules: [
+        `검증 기준: ${ver.rule}. 혼자 통과해도 검증된 다른 방법과 함께 돌렸을 때 빼는 편이 전반·후반 모두 나으면 뺍니다. 헷지·레버리지·완만한 손실 브레이크도 같은 방식으로 넣을지 정합니다`,
+        '통과한 방법은 정해진 기본 규칙 그대로, 정해진 위험으로 매매합니다. 방법끼리 순위를 매기거나 시황에 따라 비중을 바꾸지 않습니다',
+        '매일 밤 그날까지의 전체 자료로 다시 검증합니다. 통과하지 못하게 되면 새 매매를 멈추고, 새로 통과하면 그날부터 매매합니다',
+        '배분: 주식·채권 55%, 선물·금리 15%(증거금), 코인 30%(소유자 지정 7:3). 쓰지 않는 현금은 RP 이자를 받습니다',
+        '비상 손절: 주식 계좌가 고점보다 15% 내려가면 최대 10거래일 신규 매수를 멈춥니다',
+      ],
+    });
   }
 
-  const api = { V, RULES, picture, decide };
+  const api = { V, RULES, picture, decide, verified };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CIO = api;
 })(typeof self !== 'undefined' ? self : this);

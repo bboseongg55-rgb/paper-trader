@@ -41,6 +41,18 @@
     // leaves on a shortExitH-hour high. A long that has made +longFromR R leaves on a longExitH-hour low (not 10), and from
     // +longHoldFromR R its stop trails longTrailK ATR below the high (not 3)
     asymC: { shortTakeR: 1.5, shortTrailK: 1.5, shortExitH: 5, longFromR: 1, longExitH: 20, longHoldFromR: 2, longTrailK: 4 },
+    // mean reversion, hourly (owner 2026-11-26: the quant families, computed): while the coin ranges (Kaufman efficiency
+    // ratio of the last 24 hours below erMax: net move over path length), a close zIn standard deviations from its
+    // 20-hour mean is bought (below) or sold short (above, perpetual); out at the mean, at zStop deviations, or after
+    // maxH hours; never against the trend or scalp position in the same coin
+    mr: { look: 20, erLook: 24, erMax: 0.3, zIn: 2, zStop: 3.5, maxH: 12, risk: 0.004, maxW: 0.1 },
+    // market making on the trading venue (Binance.US spot: 0% maker, 0.02% taker on every pair since 2026-04): a bid and
+    // an ask around a reservation price that leans against the inventory (Avellaneda–Stoikov: r = mid × (1 − skew ×
+    // q/qMax × half)), the half-spread k × the last hour's 1-minute volatility over the 15-second poll (at least minHalf);
+    // long-only inventory (spot) up to maxLots lots of lotW × the account; a quote fills only when the market trades
+    // through it by the next poll (conservative: no queue, no partial fills); the inventory is sold with a taker order
+    // once older than maxHoldMin or down stopPct. R per round trip: profit over unitRisk × the lot's cost
+    mm: { lotW: 0.005, maxLots: 4, k: 1.5, minHalf: 0.0003, skew: 1, maxHoldMin: 60, stopPct: 0.01, makerFee: 0, thru: 0.0001, keepFills: 40 },
     // perpetual futures for the trend strategy: longs and shorts, up to `lev` times the margin. Each position keeps its
     // margin (notional ÷ lev) aside; funding and borrowing cost `fund` a year on the notional (확인필요: real funding swings
     // around this and is often paid to shorts); a position is closed before 80% of its margin could be lost. Shorts start
@@ -95,11 +107,22 @@
     v += st.trade.usd; for (const c of COINS) v += (st.trade.coin[c] || 0) * px(c);
     if (st.tok) for (const k in st.tok.hold) { const qq = st.tok.q[k]; if (qq && qq.mid > 0) v += st.tok.hold[k] * qq.mid; }
     if (st.tok) for (const k in st.tok.pos) { const p = st.tok.pos[k], qq = st.tok.q[k]; if (p && p.perp) v += p.margin + p.side * p.qty * (((qq && qq.mid) || p.entry) - p.entry); }
-    for (const s of ['trend', 'scalp']) for (const c in (st.pos && st.pos[s]) || {}) { const p = st.pos[s][c]; if (p && p.perp) v += p.margin + p.side * p.qty * (px(c) - p.entry); }
+    for (const s of ['trend', 'scalp', 'mr']) for (const c in (st.pos && st.pos[s]) || {}) { const p = st.pos[s][c]; if (p && p.perp) v += p.margin + p.side * p.qty * (px(c) - p.entry); }
     return v;
   }
   const tokState = (st) => (st.tok = st.tok || { hold: {}, pos: {}, bars: {}, q: {} });
   function fill(st, f) { st.fills.push(f); if (st.fills.length > CFG.keepFills) st.fills.splice(0, st.fills.length - CFG.keepFills); }
+  function closeRow(st, row) {
+    (st.closed = st.closed || []).push(row);
+    if (st.closed.length > 500) st.closed.splice(0, st.closed.length - 500);
+    if (typeof st.onClose === 'function') st.onClose(row);
+  }
+  // which strategies may open new trades: st.only (a strategy check runs one alone) and st.allow (the verified list from
+  // data/verify.json, owner 2026-11-26: only what a backtest has proved trades); exits always run
+  const allowOf = (st) => (Array.isArray(st.allow) ? st.allow : Array.isArray(EXT.allow) ? EXT.allow : null);
+  const may = (st, s) => { const A = allowOf(st); return (!st.only || st.only === s) && (!A || A.some((x) => x === s || x.startsWith(s + ':'))); };
+  // the scalp rule that trades: the verified one (st.allow 'scalp:<rule>'); with no list (the old way) the shadows pick
+  const scalpLive = (st) => { const A = allowOf(st); if (!A) return st.sv && st.sv.live; const x = A.find((y) => y.startsWith('scalp:')); return x ? x.slice(6) : null; };
 
   // a new account: part of the money spread over the exchanges for arbitrage (half dollars, half coins), the rest in
   // dollars at the trading exchange for the trend and scalp strategies
@@ -107,7 +130,7 @@
     const m = mids(q), venues = {};
     for (const k in VENUES) venues[k] = { usd: 0, coin: Object.fromEntries(COINS.map((c) => [c, 0])) };
     const st = { v: 1, start: now, funded: 0, venues, trade: { usd: 0, coin: Object.fromEntries(COINS.map((c) => [c, 0])) }, pos: { trend: {}, scalp: {} }, bars: { h: {}, m: {} }, fills: [], eqMin: [], eqHour: [], closes: {},
-      w: { trend: CFG.trialW, scalp: CFG.trialW }, lastReweight: now, peak: 0, day: { date: utcDay(now), eq: 0 }, last: {}, spreads: {}, transfers: [], stats: { arb: { n: 0, pnl: 0, fees: 0 }, trend: { n: 0, pnl: 0, fees: 0 }, scalp: { n: 0, pnl: 0, fees: 0 }, tok: { n: 0, pnl: 0, fees: 0 }, moves: { n: 0, fees: 0 } }, log: [],
+      w: { trend: CFG.trialW, scalp: CFG.trialW, mr: CFG.trialW, mm: CFG.trialW }, lastReweight: now, peak: 0, day: { date: utcDay(now), eq: 0 }, last: {}, spreads: {}, transfers: [], stats: { arb: { n: 0, pnl: 0, fees: 0 }, trend: { n: 0, pnl: 0, fees: 0 }, scalp: { n: 0, pnl: 0, fees: 0 }, tok: { n: 0, pnl: 0, fees: 0 }, moves: { n: 0, fees: 0 } }, log: [],
       tok: { hold: {}, pos: {}, bars: {}, q: {} } };
     for (const c of COINS) st.last[c] = m[c];
     if (capital > 0) fund(st, capital, q, now, 'start');
@@ -118,13 +141,14 @@
   // seen are kept, so the allocator's next transfer funds it once
   function reset(st, q, now, id) {
     const m = mids(q), eq0 = equity(st, m);
-    for (const s of ['trend', 'scalp']) for (const c of Object.keys(st.pos[s] || {})) {
+    for (const s of ['trend', 'scalp', 'mr']) for (const c of Object.keys(st.pos[s] || {})) {
       const p = st.pos[s][c], b = (q.books[CFG.exec] || {})[c] || Object.values(q.books).map((v) => v && v[c]).find((x) => x && x.bid > 0); if (!p || !b) continue;
       if (p.perp) perpClose(st, s, c, p.side > 0 ? b.bid : b.ask, now, '계좌 초기화 정리'); else sell(st, s, c, b.bid, now, '계좌 초기화 정리');
     }
     if (st.tok) for (const k of Object.keys(st.tok.pos || {})) { const x = st.tok.q[k]; if (x && x.bid > 0) tokSell(st, k, st.tok.pos[k].side < 0 ? x.ask : x.bid, now, '계좌 초기화 정리'); }
     const fresh = init(0, q, now);
-    for (const k of ['fills', 'closed', 'stats', 'bars', 'transfers', 'w', 'stake', 'sv']) if (st[k] != null) fresh[k] = st[k];
+    fresh.w = { trend: 1, scalp: 1, mr: 1, mm: 1 };
+    for (const k of ['fills', 'closed', 'stats', 'bars', 'transfers', 'stake', 'sv']) if (st[k] != null) fresh[k] = st[k];
     if (st.tok) { fresh.tok.bars = st.tok.bars || {}; fresh.tok.q = st.tok.q || {}; }
     fresh.resetId = id;
     (fresh.resets = st.resets || []).push({ id, t: now, eqBefore: r2(eq0) });
@@ -135,7 +159,7 @@
     const m = mids(q), ks = Object.keys(VENUES);
     st.funded += amount;
     if (amount > 0) {
-      const arb = amount * CFG.arbShare, rest = amount - arb, per = arb / ks.length;
+      const arb = amount * (may(st, 'arb') ? CFG.arbShare : 0), rest = amount - arb, per = arb / ks.length;
       for (const k of ks) {
         st.venues[k].usd += per / 2;
         for (const c of COINS) if (m[c] > 0) st.venues[k].coin[c] += (per / 2 / COINS.length) / m[c];
@@ -244,8 +268,7 @@
     v.usd += p.margin + gross - fee;
     const pnl = gross - fee - p.fee - (p.fund || 0), R = p.risk > 0 ? pnl / p.risk : 0;
     st.stats[s].n++; st.stats[s].pnl += pnl; st.stats[s].fees += fee;
-    (st.closed = st.closed || []).push({ t: now, s, c, pnl: r2(pnl), R: Math.round(R * 100) / 100, side: p.side });
-    if (st.closed.length > 500) st.closed.splice(0, st.closed.length - 500);
+    closeRow(st, { t: now, s, c, pnl: r2(pnl), R: Math.round(R * 100) / 100, side: p.side });
     fill(st, { t: now, s, c, side: p.side > 0 ? 'sell' : 'cover', qty: p.qty, px: r2(fillPx), fee: r2(fee), pnl: r2(pnl), why, held: Math.round((now - p.t0) / 60e3), perp: true });
     delete st.pos[s][c];
   }
@@ -256,8 +279,7 @@
     v.usd += p.qty * fillPx - fee; v.coin[c] -= p.qty;
     const pnl = p.qty * (fillPx - p.entry) - fee - p.fee, R = p.risk > 0 ? pnl / p.risk : 0;
     st.stats[s].n++; st.stats[s].pnl += pnl; st.stats[s].fees += fee;
-    (st.closed = st.closed || []).push({ t: now, s, c, pnl: r2(pnl), R: Math.round(R * 100) / 100 });
-    if (st.closed.length > 500) st.closed.splice(0, st.closed.length - 500);
+    closeRow(st, { t: now, s, c, pnl: r2(pnl), R: Math.round(R * 100) / 100 });
     fill(st, { t: now, s, c, side: 'sell', qty: p.qty, px: r2(fillPx), fee: r2(fee), pnl: r2(pnl), why, held: Math.round((now - p.t0) / 60e3) });
     delete st.pos[s][c];
   }
@@ -348,12 +370,124 @@
       : `초단타 새 매매를 멈춥니다: 최근 ${K.days}일 수수료를 뺀 평균이 +${K.minR}R 이상이고 ${K.minN}건 넘게 쌓인 규칙이 없습니다 (전: ${was}). 규칙 ${Object.keys(CFG.scalpV).length}개를 그림자로 계속 시험합니다` });
     S.live = best;
   }
+  // ── mean reversion, hourly (CFG.mr): exits on every poll (the mean reached, the stop, the clock), entries on a closed
+  // hourly bar while the coin ranges
+  function meanRev(st, c, B, hb, hClosed, now, eq, stopNew, half) {
+    const K = CFG.mr, P = (st.pos.mr = st.pos.mr || {}), p = P[c];
+    if (p) {
+      const px = p.side < 0 ? B.ask : B.bid, sd = p.side < 0 ? -1 : 1;
+      if (sd > 0 ? px >= p.tgt : px <= p.tgt) return exitPos(st, 'mr', c, B, now, '평균 복귀(목표)');
+      if (sd > 0 ? px <= p.stop : px >= p.stop) return exitPos(st, 'mr', c, B, now, `손절(평균에서 ${K.zStop} 표준편차)`);
+      if (now - p.t0 >= K.maxH * 3600e3) return exitPos(st, 'mr', c, B, now, `시간 청산(${K.maxH}시간)`);
+    }
+    if (!hClosed || hb.length < Math.max(K.look, K.erLook) + 3) return;
+    const cl = hb.slice(0, -1).map((b) => b.c), last = cl[cl.length - 1], w = cl.slice(-K.look);
+    const mean = w.reduce((a, b) => a + b, 0) / w.length, sdv = Math.sqrt(w.reduce((a, b) => a + (b - mean) ** 2, 0) / (w.length - 1));
+    if (p) { p.tgt = mean; return; }                       // the target follows the mean, the stop stays
+    if (stopNew || !may(st, 'mr') || !(sdv > 0)) return;
+    const seg = cl.slice(-K.erLook - 1), path = seg.slice(1).reduce((a, v, i) => a + Math.abs(v - seg[i]), 0);
+    const er = path > 0 ? Math.abs(seg[seg.length - 1] - seg[0]) / path : 1, z = (last - mean) / sdv;
+    const side = er < K.erMax ? (z <= -K.zIn ? 1 : z >= K.zIn ? -1 : 0) : 0;
+    if (!side) return;
+    const dirOf = (q2) => (q2 ? (q2.perp ? q2.side : 1) : 0), tD = dirOf(st.pos.trend[c]), sD = dirOf(st.pos.scalp[c]);
+    if ((tD && tD !== side) || (sD && sD !== side)) return;   // never against another position in this coin
+    const px = side > 0 ? B.ask : B.bid, stop = mean - side * K.zStop * sdv, per = Math.abs(px - stop);
+    if (!(per > 0) || (side > 0 ? stop >= px : stop <= px)) return;
+    const risk = eq * K.risk * (st.w.mr != null ? st.w.mr : CFG.trialW) * tiltOf(st, 'mr') * half;
+    const qty = f8(Math.min(risk / per, (K.maxW * eq) / px, side > 0 ? st.trade.usd / (px * 1.01) : (st.trade.usd * CFG.perp.lev) / (px * 1.02)));
+    if (qty * px < 20) return;
+    const why = `평균회귀: 20시간 평균 ${r2(mean)}에서 ${z >= 0 ? '+' : '−'}${Math.abs(z).toFixed(1)} 표준편차, 24시간 효율비 ${er.toFixed(2)}(${K.erMax} 미만: 횡보) → ${side > 0 ? '매수' : '공매도'}, 목표 평균, 손절 ${r2(stop)}`;
+    const ex = { stop, stop0: stop, tgt: mean, risk: qty * per };
+    if (side > 0) buy(st, 'mr', c, qty, px, now, why, ex); else perpOpen(st, 'mr', c, -1, qty, px, now, why, ex);
+  }
+  // ── the bitcoin basis's spot leg: hold what the derivatives part sold in CME futures (EXT.basis.qty bitcoin), bought
+  // or sold at the trading exchange with a taker order when the target changes; never used by the other strategies
+  function basisLeg(st, B, now) {
+    const want = EXT.basis && isNum(EXT.basis.qty) ? Math.max(0, EXT.basis.qty) : null, S = (st.basis = st.basis || { qty: 0, cost: 0, t0: 0 }), v = st.trade;
+    if (want == null || !B || !(B.bid > 0)) return;
+    const diff = f8(want - S.qty), f = VENUES[CFG.exec].taker;
+    if (Math.abs(diff) * B.bid < 10) return;
+    if (diff > 0) {
+      const px = B.ask * (1 + CFG.slip), q = f8(Math.min(diff, Math.max(0, v.usd) / (px * (1 + f))));
+      if (q * px < 10) { if (st.basisWarn !== utcDay(now)) { st.basisWarn = utcDay(now); st.log.push({ t: now, kind: 'warn', text: `베이시스 현물 매수에 쓸 달러가 부족합니다(필요 ${r2(diff * px)}달러)` }); } return; }
+      v.usd -= q * px * (1 + f); v.coin.BTC = (v.coin.BTC || 0) + q; S.cost = (S.cost * S.qty + q * px) / (S.qty + q); if (!S.qty) S.t0 = now; S.qty = f8(S.qty + q);
+      fill(st, { t: now, s: 'basis', c: 'BTC', side: 'buy', qty: r8(q), px: r2(px), fee: r2(q * px * f), why: `비트코인 현·선물 차익: CME 선물 매도분만큼 현물 보유(목표 ${r8(want)} BTC)${EXT.basis.why ? ' · ' + EXT.basis.why : ''}` });
+    } else {
+      const px = B.bid * (1 - CFG.slip), q = f8(Math.min(-diff, S.qty, Math.max(0, v.coin.BTC || 0))), pnl = (px - S.cost) * q - q * px * f;
+      if (!(q > 0)) return;
+      v.usd += q * px * (1 - f); v.coin.BTC -= q; S.qty = f8(S.qty - q); if (S.qty <= 1e-10) { S.qty = 0; S.cost = 0; S.t0 = 0; }
+      st.stats.basis = st.stats.basis || { n: 0, pnl: 0, fees: 0 }; st.stats.basis.n++; st.stats.basis.pnl += pnl; st.stats.basis.fees += q * px * f;
+      fill(st, { t: now, s: 'basis', c: 'BTC', side: 'sell', qty: r8(q), px: r2(px), fee: r2(q * px * f), pnl: r2(pnl), why: `비트코인 현·선물 차익: 선물 매도분이 줄어 현물도 정리(목표 ${r8(want)} BTC). 현물 쪽 손익은 선물 쪽과 맞물립니다` });
+    }
+  }
+  // ── market making (CFG.mm), every poll: the last quotes' fills, the inventory's limits, then new quotes.
+  // A quote counts as filled only when a trade at the trading exchange printed through it (K.thru past the price, so the
+  // place in the queue does not matter) between the quote and this poll, or this poll's book already crosses it. Each
+  // fill is kept in its own short list (st.mmFills), and each coin's day goes to the closed list as one row, so the
+  // hundreds of small fills never crowd out the other strategies' trades or their 7-day scores.
+  function mmUnit(st, eq) { return eq * CFG.mr.risk * (st.w.mm != null ? st.w.mm : CFG.trialW) * tiltOf(st, 'mm'); }
+  function mmRoll(st, c, s, now, eq) {                       // a new UTC day: yesterday's book becomes one closed row
+    const d = utcDay(now), D = s.day;
+    if (D && D.d !== d && D.n > 0) {
+      closeRow(st, { t: now, s: 'mm', c, pnl: r2(D.pnl), R: Math.round((D.pnl / Math.max(1e-9, D.u)) * 100) / 100, n: D.n, day: D.d });
+    }
+    if (!D || D.d !== d) s.day = { d, n: 0, pnl: 0, u: mmUnit(st, eq) };
+    else s.day.u = Math.max(s.day.u || 0, mmUnit(st, eq));
+    return s.day;
+  }
+  function marketMake(st, c, B, mb, now, eq, stopNew, T) {
+    const K = CFG.mm, M = (st.mm = st.mm || {}), s = (M[c] = M[c] || { q: 0, cost: 0, t0: 0, bid: null, ask: null, n: 0, pnl: 0, vol: 0 }), v = st.trade;
+    const mid = (B.bid + B.ask) / 2, fee = K.makerFee, stS = (st.stats.mm = st.stats.mm || { n: 0, pnl: 0, fees: 0 }), D = mmRoll(st, c, s, now, eq);
+    const rec = (f) => { const L = (st.mmFills = st.mmFills || []); L.push(f); if (L.length > K.keepFills) L.splice(0, L.length - K.keepFills); };
+    const sell = (q0, px, f, why) => {                       // inventory sold: the profit goes to the day's row and the totals
+      const q = Math.min(q0, s.q, Math.max(0, v.coin[c] || 0));
+      if (!(q > 0)) { s.q = 0; s.cost = 0; s.t0 = 0; return; }
+      const pnl = (px - s.cost) * q - q * px * f;
+      v.usd += q * px * (1 - f); v.coin[c] = (v.coin[c] || 0) - q;
+      stS.n++; stS.pnl += pnl; stS.fees += q * px * f; s.pnl += pnl; s.n++; s.vol += q * px; D.n++; D.pnl += pnl;
+      rec({ t: now, c, side: 'sell', qty: r8(q), px: r2(px), pnl: r2(pnl), why, held: s.t0 ? Math.round((now - s.t0) / 60e3) : 0 });
+      s.q = f8(s.q - q);
+      if (s.q <= 1e-10) { s.q = 0; s.cost = 0; s.t0 = 0; }
+    };
+    // 1) fills: the lowest and highest trade since the quotes (or this poll's book) went through them
+    const tp = T && T.n > 0 && now - (T.from || 0) < 3600e3 ? T : null;
+    const lo = Math.min(B.ask, tp ? tp.lo : Infinity), hi = Math.max(B.bid, tp ? tp.hi : -Infinity);
+    s.src = tp ? 'trades' : 'book';
+    if (s.bid && lo < s.bid.px * (1 - K.thru) && v.usd >= s.bid.q * s.bid.px * (1 + fee)) {
+      const q = s.bid.q, px = s.bid.px;
+      v.usd -= q * px * (1 + fee); v.coin[c] = (v.coin[c] || 0) + q;
+      s.cost = (s.cost * s.q + px * q) / (s.q + q); if (!s.q) s.t0 = now; s.q = f8(s.q + q); s.n++; s.vol += q * px;
+      rec({ t: now, c, side: 'buy', qty: r8(q), px: r2(px), why: `매수 호가 ${r2(px)} 체결: ${tp ? `그 사이 체결가가 ${r2(tp.lo)}까지` : `호가창 매도 최저가가 ${r2(B.ask)}로`} 내려와 호가를 뚫음` });
+    }
+    if (s.ask && s.q > 0 && hi > s.ask.px * (1 + K.thru)) sell(s.ask.q, s.ask.px, fee, `매도 호가 ${r2(s.ask.px)} 체결: ${tp ? `그 사이 체결가가 ${r2(tp.hi)}까지` : `호가창 매수 최고가가 ${r2(B.bid)}로`} 올라와 호가를 뚫음`);
+    s.bid = s.ask = null;
+    // 2) the inventory's limits: too old, or down stopPct → sold at the bid with a taker order
+    if (s.q > 0) {
+      const old = now - s.t0 >= K.maxHoldMin * 60e3, hurt = B.bid <= s.cost * (1 - K.stopPct);
+      if (old || hurt) sell(s.q, B.bid * (1 - CFG.slip), VENUES[CFG.exec].taker, old ? `재고 정리: ${K.maxHoldMin}분 넘게 보유` : `재고 손절: 평균 단가보다 ${K.stopPct * 100}% 넘게 하락`);
+    }
+    if (stopNew || !may(st, 'mm')) return;
+    // 3) new quotes (Avellaneda–Stoikov in spirit): a half-spread from the last hour's 1-minute volatility over the
+    //    15-second poll, the center leaning against the inventory; a bid only while there is room, cash, and no short
+    //    trend or mean-reversion short in this coin; an ask only to sell inventory
+    const mc = mb.slice(-61).map((b) => b.c);
+    let sig = 0;
+    if (mc.length >= 10) { const lr = mc.slice(1).map((x, i) => Math.log(x / mc[i])), mu = lr.reduce((a, b) => a + b, 0) / lr.length; sig = Math.sqrt(lr.reduce((a, b) => a + (b - mu) ** 2, 0) / Math.max(1, lr.length - 1)); }
+    const half = Math.max(K.minHalf, K.k * sig * Math.sqrt(0.25)), lotQ = f8((eq * K.lotW * ((st.w.mm != null ? st.w.mm : CFG.trialW) / CFG.trialW) * tiltOf(st, 'mm')) / mid);
+    const qMax = K.maxLots * lotQ, r = mid * (1 - K.skew * (qMax > 0 ? Math.min(1, s.q / qMax) : 0) * half);
+    const dirOf = (p) => (p ? (p.perp ? p.side : 1) : 0), against = dirOf(st.pos.trend[c]) < 0 || dirOf((st.pos.mr || {})[c]) < 0;
+    const bidPx = Math.min(r * (1 - half), B.ask * (1 - 1e-6)), askPx = Math.max(r * (1 + half), B.bid * (1 + 1e-6));
+    if (lotQ > 0 && s.q + lotQ <= qMax + 1e-12 && !against && v.usd > lotQ * bidPx * 1.01) s.bid = { px: bidPx, q: lotQ, at: now };
+    if (s.q > 0) s.ask = { px: askPx, q: Math.min(lotQ || s.q, s.q), at: now };
+    s.half = half; s.mid = mid; s.qMax = qMax;
+  }
   function step(st, q, now) {
+    for (const k of ['mr', 'mm']) st.stats[k] = st.stats[k] || { n: 0, pnl: 0, fees: 0 };
     const m = mids(q);
     for (const c of COINS) if (isNum(m[c])) st.last[c] = m[c];
     stake(st, now, m);
-    scalpPick(st, now);                 // which scalp rule trades live (checked hourly, before this poll's signals)
-    arb(st, q, now);
+    if (!allowOf(st)) scalpPick(st, now);   // the old way: the shadows' best rule trades; with the verified list, no ranking
+    if (may(st, 'arb')) arb(st, q, now);
     const ex = q.books[CFG.exec];
     let eq = equity(st, m);
     if (utcDay(now) !== st.day.date) st.day = { date: utcDay(now), eq };
@@ -404,7 +538,7 @@
           p.stop = Math.max(p.stop, p.hiC - (mR >= A.longHoldFromR ? A.longTrailK : CFG.trend.stopK) * a);
           const nL = mR >= A.longFromR ? A.longExitH : CFG.trend.lo, lo = Math.min(...done.slice(-nL - 1, -1).map((b) => b.l));
           if (last.c < lo) exitPos(st, 'trend', c, B, now, `${nL}시간 최저가 이탈${mR >= A.longFromR ? '(이익 난 매수는 길게)' : ''}`);
-        } else if (!stopNew && a > 0 && ((last.c > Math.max(...prev.map((b) => b.h)) && last.c > e) || (last.c < Math.min(...prev.map((b) => b.l)) && last.c < e))) {
+        } else if (!stopNew && may(st, 'trend') && a > 0 && ((last.c > Math.max(...prev.map((b) => b.h)) && last.c > e) || (last.c < Math.min(...prev.map((b) => b.l)) && last.c < e))) {
           // a new 20-hour high above the 100-hour average → long; a new 20-hour low below it → short (perpetual, up to
           // perp.lev × margin); size by risk to the stop, at most maxW × lev of the account in notional
           const side = last.c > e ? 1 : -1, px = side > 0 ? B.ask : B.bid;
@@ -424,8 +558,8 @@
       try { scalpShadows(st, c, B, mb, hb, mClosed, now); } catch (e) { /* shadows only */ }
       // scalp: the rule the shadows picked (none: no new scalps), on a closed minute bar; never against the trend
       // position in the same coin. Buys are spot, shorts perpetual (up to perp.lev × margin)
-      const LV = st.sv && st.sv.live ? CFG.scalpV[st.sv.live] : null;
-      if (LV && mClosed && mb.length > CFG.scalp.look + 7 && !st.pos.scalp[c] && !stopNew) {
+      const LV = scalpLive(st) ? CFG.scalpV[scalpLive(st)] : null;
+      if (LV && may(st, 'scalp') && mClosed && mb.length > CFG.scalp.look + 7 && !st.pos.scalp[c] && !stopNew) {
         const sg = scalpSig(LV, mb.slice(0, -1), hb, now), tp0 = st.pos.trend[c], tDir = tp0 ? (tp0.perp ? tp0.side : 1) : 0;
         if (sg && !(tDir && tDir !== sg)) {
           const px = sg > 0 ? B.ask : B.bid, per = px * LV.sl;
@@ -437,18 +571,25 @@
           if (qty * px >= 20) { if (sg > 0) buy(st, 'scalp', c, qty, px, now, why, ex); else perpOpen(st, 'scalp', c, -1, qty, px, now, why, ex); }
         }
       }
+      // mean reversion and market making (a fault there is logged once a day and never stops the account)
+      for (const [nm, fn] of [['평균회귀', () => meanRev(st, c, B, hb, hClosed, now, eq, stopNew, half)], ['시장 조성', () => marketMake(st, c, B, mb, now, eq, stopNew, q.tape && q.tape[c])]]) {
+        try { fn(); } catch (e) { const d = utcDay(now); if (st.errDay !== d + nm) { st.errDay = d + nm; st.log.push({ t: now, kind: 'warn', text: `${nm} 계산 오류(${c}): ${String(e && e.message).slice(0, 120)}` }); } }
+      }
     }
-    toks(st, q, now, eq, stopNew, half);
+    toks(st, q, now, eq, stopNew || !may(st, 'tok'), half);
+    if (!st.only) basisLeg(st, ex && ex.BTC, now);
     // the AI re-weights trend and scalp by their last 7 days
-    if (now - st.lastReweight >= CFG.reweightMs) {
+    if (allowOf(st) && !st.only) st.w = { trend: 1, scalp: 1, mr: 1, mm: 1 };
+    else if (now - st.lastReweight >= CFG.reweightMs) {
       st.lastReweight = now;
       const recent = (st.closed || []).filter((x) => now - x.t <= CFG.reviewMs);
       const sc = {};
-      for (const s of ['trend', 'scalp']) { const xs = recent.filter((x) => x.s === s); sc[s] = { n: xs.length, R: xs.reduce((a, x) => a + x.R, 0) }; }
+      for (const s of ['trend', 'scalp', 'mr', 'mm']) { const xs = recent.filter((x) => x.s === s); sc[s] = { n: xs.length, R: xs.reduce((a, x) => a + x.R, 0) }; }
       const ranked = Object.keys(sc).filter((s) => sc[s].n >= CFG.minTrades).sort((a, b) => sc[b].R - sc[a].R);
-      const w = { trend: CFG.trialW, scalp: CFG.trialW };
+      const w = { trend: CFG.trialW, scalp: CFG.trialW, mr: CFG.trialW, mm: CFG.trialW };
       ranked.forEach((s, j) => { const tier = CFG.tiers[Math.min(j, CFG.tiers.length - 1)]; w[s] = sc[s].R > 0 ? tier : Math.min(tier, CFG.loserW); });
-      if (w.trend !== st.w.trend || w.scalp !== st.w.scalp) st.log.push({ t: now, kind: 'weight', text: `최근 7일 성과로 위험 배분을 바꿉니다: 추세 ${Math.round(st.w.trend * 100)}% → ${Math.round(w.trend * 100)}%, 초단타 ${Math.round(st.w.scalp * 100)}% → ${Math.round(w.scalp * 100)}% (추세 ${sc.trend.n}건 ${sc.trend.R.toFixed(1)}R, 초단타 ${sc.scalp.n}건 ${sc.scalp.R.toFixed(1)}R)` });
+      const SN = { trend: '추세', scalp: '초단타', mr: '평균회귀', mm: '시장 조성' };
+      if (Object.keys(w).some((k) => w[k] !== (st.w[k] != null ? st.w[k] : CFG.trialW))) st.log.push({ t: now, kind: 'weight', text: `최근 7일 성과로 위험 배분을 바꿉니다: ${Object.keys(w).map((k) => `${SN[k]} ${Math.round((st.w[k] != null ? st.w[k] : CFG.trialW) * 100)}% → ${Math.round(w[k] * 100)}%`).join(', ')} (${Object.keys(sc).map((k) => `${SN[k]} ${sc[k].n}건 ${sc[k].R.toFixed(1).replace('-', '−')}R`).join(', ')})` });
       st.w = w;
     }
     if (st.log.length > 100) st.log.splice(0, st.log.length - 100);
@@ -535,7 +676,7 @@
     else { st.trade.usd += p.qty * px - fee; T.hold[k] = (T.hold[k] || 0) - p.qty; if (T.hold[k] < 1e-9) delete T.hold[k]; pnl = p.qty * (px - p.entry) - fee - p.fee; }
     const R = p.risk > 0 ? pnl / p.risk : 0;
     st.stats.tok.n++; st.stats.tok.pnl += pnl; st.stats.tok.fees += fee;
-    (st.closed = st.closed || []).push({ t: now, s: 'tok', c: k, pnl: r2(pnl), R: Math.round(R * 100) / 100 });
+    closeRow(st, { t: now, s: 'tok', c: k, pnl: r2(pnl), R: Math.round(R * 100) / 100 });
     fill(st, { t: now, s: 'tok', c: k, side: p.perp && p.side < 0 ? 'cover' : 'sell', qty: p.qty, px: r2(px), fee: r2(fee), pnl: r2(pnl), why, held: Math.round((now - p.t0) / 60e3), perp: p.perp || undefined });
     delete T.pos[k];
   }
@@ -558,12 +699,16 @@
     }
     return {
       v: 1, at: st.at, start: st.start, funded: r2(st.funded), eq: st.eq, usd: r2(usd), hold, last: st.last,
+      basis: st.basis && st.basis.qty > 0 ? { qty: r8(st.basis.qty), cost: r2(st.basis.cost), since: st.basis.t0 } : null, mmFills: (st.mmFills || []).slice(-20), allow: allowOf(st),
       venues: Object.fromEntries(Object.entries(st.venues).map(([k, a]) => [k, { name: VENUES[k].name, taker: VENUES[k].taker, usd: r2(a.usd), coin: Object.fromEntries(COINS.map((c) => [c, r8(a.coin[c] || 0)])) }])),
       trade: { venue: VENUES[CFG.exec].name, usd: r2(st.trade.usd), coin: Object.fromEntries(COINS.map((c) => [c, r8(st.trade.coin[c] || 0)])) },
       perps: Object.values((st.tok && st.tok.pos) || {}).filter((p) => p && p.perp).map((p) => { const qq = st.tok.q[p.c] || {}, m = qq.mid || p.entry; return { c: p.c, tok: true, side: p.side, qty: r8(p.qty), entry: r2(p.entry), stop: r2(p.stop), lev: p.lev, margin: r2(p.margin), px: r2(m), pnl: r2(p.side * p.qty * (m - p.entry) - p.fee - (p.fund || 0)), t0: p.t0, why: p.why }; }).concat(Object.values(st.pos.trend || {}).filter((p) => p && p.perp).map((p) => ({ c: p.c, side: p.side, qty: r8(p.qty), entry: r2(p.entry), stop: r2(p.stop), lev: p.lev, margin: r2(p.margin), px: r2(st.last[p.c] || p.entry), pnl: r2(p.side * p.qty * ((st.last[p.c] || p.entry) - p.entry) - p.fee - (p.fund || 0)), t0: p.t0, why: p.why })))
+        .concat(Object.values(st.pos.mr || {}).filter((p) => p && p.perp).map((p) => ({ c: p.c, s: 'mr', side: p.side, qty: r8(p.qty), entry: r2(p.entry), stop: r2(p.stop), lev: p.lev, margin: r2(p.margin), px: r2(st.last[p.c] || p.entry), pnl: r2(p.side * p.qty * ((st.last[p.c] || p.entry) - p.entry) - p.fee - (p.fund || 0)), t0: p.t0, why: p.why })))
         .concat(Object.values(st.pos.scalp || {}).filter((p) => p && p.perp).map((p) => ({ c: p.c, s: 'scalp', side: p.side, qty: r8(p.qty), entry: r2(p.entry), stop: r2(p.entry * (1 + p.side * -(p.sl || CFG.scalp.sl))), lev: p.lev, margin: r2(p.margin), px: r2(st.last[p.c] || p.entry), pnl: r2(p.side * p.qty * ((st.last[p.c] || p.entry) - p.entry) - p.fee - (p.fund || 0)), t0: p.t0, why: p.why }))),
       sv: (() => { const S = st.sv, now = st.at || Date.now(); if (!S) return null; const sc = scalpScores(st, now); return { live: S.live || null, pick: CFG.scalpPick, rules: Object.keys(CFG.scalpV).map((k) => ({ k, name: CFG.scalpV[k].name, n: sc[k].n, R: sc[k].R, tp: CFG.scalpV[k].tp, sl: CFG.scalpV[k].sl, maxMin: CFG.scalpV[k].maxMin })) }; })(),
       pos: st.pos, w: st.w, tilt: st.tilt || null, brake: st.brake, spreads: st.spreads, mkt,
+      mm: st.mm ? { cfg: CFG.mm, coins: Object.fromEntries(Object.entries(st.mm).map(([c, x]) => [c, { q: r8(x.q), cost: r2(x.cost), mid: r2(x.mid || 0), half: x.half ? Math.round(x.half * 1e6) / 1e6 : null, bid: x.bid ? r2(x.bid.px) : null, ask: x.ask ? r2(x.ask.px) : null, n: x.n, pnl: r2(x.pnl), vol: Math.round(x.vol), since: x.t0 || null }])) } : null,
+      cfgMr: CFG.mr,
       toks: Object.keys((st.tok && st.tok.hold) || {}).map((k) => { const T = st.tok, qq = T.q[k] || {}, p = T.pos[k] || null; return { s: k, name: TOKS[k] || k, qty: r8(T.hold[k]), bid: qq.bid || null, ask: qq.ask || null, value: r2(T.hold[k] * (qq.mid || 0)), entry: p ? r2(p.entry) : null, stop: p ? r2(p.stop) : null, t0: p ? p.t0 : null, pnl: p ? r2(T.hold[k] * ((qq.bid || 0) - p.entry) - p.fee) : null, why: p ? p.why : null }; }),
       tokQ: Object.fromEntries(Object.entries((st.tok && st.tok.q) || {}).map(([k, v]) => [k, { bid: v.bid, ask: v.ask }])),
       stake: (() => { const S = st.stake || { rates: {}, earned: {} }, net = {};

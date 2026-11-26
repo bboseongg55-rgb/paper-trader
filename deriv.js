@@ -34,6 +34,14 @@
     optFee: 0.04,
     rpSpread: 0.0025,           // RP rate = US 1-month T-bill yield − 0.25%p (확인필요)
     cta: { fast: 20, slow: 100, l1: 60, l2: 120, vol: 60, stopK: 4, maxPos: 5, marginCap: 0.5, rho: 0.3 },
+    // rates (verified 1990–2026 by tools/verify.mjs, owner 2026-11-26): the 2-year/10-year Treasury curve, DV01-neutral
+    // with ZT and ZN futures. Steepener (2-year bought, 10-year sold) once the 10y−2y spread has risen 15bp or more over
+    // 63 trading days, flattener once it has fallen as much; out when that 63-day change turns the other way or the
+    // spread moves 25bp against the trade (1R = those 25bp: riskPct of the account). D: the futures' modified duration
+    curve: { look: 63, enter: 0.15, stopBp: 25, riskPct: 0.005, D2: 1.9, D10: 6.3 },
+    // the bitcoin basis (verified 2024–2026): CME micro bitcoin futures sold against the same bitcoin bought in the coin
+    // part, kept through the rolls, so the futures' premium over spot is earned with almost no price risk
+    basis: { pct: 0.1 },
     // the owner (2026-11-25): shorts take their profit quickly, longs ride it. In the contract's daily moves: a short is
     // bought back once its open profit is shortTake moves (1.5 × the 4-move stop) and trails shortTrailK moves from its
     // low once it has made shortTrailFrom; a long that has made longHoldFrom trails longTrailK moves from its high
@@ -239,6 +247,14 @@
       const pnl = r2(p.qty * f.mult * (px - p.mark));
       st.cash = r2(st.cash + pnl); p.real = r2((p.real || 0) + pnl); p.mark = px; p.px = px;
       p.best = p.qty > 0 ? Math.max(p.best, px) : Math.min(p.best, px);
+      // the basis leg is not rolled: it is closed, and manageBasis below opens the next month again only while its premium
+      // is above the RP rate (the coin part keeps its bitcoin if it does)
+      if (p.basis && c1 && c1.contract === p.contract && c1.exp && days(d, c1.exp) <= ROLL_DAYS) {
+        const got = closeFut(st, k, px, now, d, `만기(${c1.exp}) ${days(d, c1.exp)}일 전: 베이시스 한 달 주기를 마침`) || 0;
+        st.closed.push({ kind: 'basis', s: 'basis', name: '비트코인 현·선물 차익', from: p.date, to: d, pnl: r2(got), why: '한 달 주기 마감(선물 쪽 손익, 현물 쪽은 코인 계좌)' });
+        st.basis = { qty: 0, date: d, why: '한 달 주기 마감' };
+        continue;
+      }
       if (c1 && c1.contract === p.contract && c1.exp && days(d, c1.exp) <= ROLL_DAYS && c2 && c2.px > 0 && c2.contract !== p.contract) {
         const fee = r2(futFee(f, Math.abs(p.qty)) * 2), slip = r2(Math.abs(p.qty) * f.mult * f.tick * 2);
         st.cash = r2(st.cash - fee - slip); st.fees = r2(st.fees + fee); p.feesPaid = r2((p.feesPaid || 0) + fee + slip);
@@ -260,8 +276,10 @@
     const tilt = (f, dir) => { const g = (fb.tilt || {})[f.g]; return g ? (dir > 0 ? g[0] : g[1]) : 1; };
     // exits: a short's quick profit, the trend turned, or the trailing stop (4 daily moves from the best close; 2 for a
     // short in profit, 5 for a long well in profit)
+    const ctaOn = !Array.isArray(ctx.allow) || ctx.allow.includes('cta');
     for (const k of Object.keys(st.fut)) {
       const p = st.fut[k], f = FUT_BY[k], t = sig[k], q = (ctx.fut || {})[k];
+      if (p.curve || p.basis) continue;
       const dir = Math.sign(p.qty), live = q && q.c1 && q.c1.contract === p.contract ? q.c1.px : q && q.c2 && q.c2.contract === p.contract ? q.c2.px : p.px;
       const kS = t ? futStopK(p, t.sd) : CFG.cta.stopK, gain = futGain(p);
       let why = null;
@@ -269,13 +287,14 @@
       else if (t && (dir > 0 ? t.s <= -1 / 3 : t.s >= 1 / 3)) why = `추세 반전(60일 ${pc(t.r1)}, 120일 ${pc(t.r2)})`;
       else if (t && (dir > 0 ? p.px <= p.best * (1 - kS * t.sd) : p.px >= p.best * (1 + kS * t.sd))) why = `추적 손절(${dir > 0 ? '최고점' : '최저점'} 대비 ${(kS * t.sd * 100).toFixed(1)}%)`;
       else if (tilt(f, dir) === 0) why = `AI 배분: ${GROUP_NAME[f.g]} ${dir > 0 ? '매수' : '매도'} 쉼`;
+      else if (!ctaOn) why = '검증 미통과: 선물 추세 매매를 멈춤';
       if (why && live > 0) closeFut(st, k, live, now, d, why);
     }
     // entries: strongest agreeing trends first while the estimated risk of the futures fits the budget
     const held = Object.keys(st.fut);
     let risk2 = 0;
-    for (const k of held) { const t = sig[k], p = st.fut[k]; if (t) { const r = Math.abs(p.qty) * t.sd * p.px * p.mult; risk2 += r * r; } }
-    const cands = ctx.brake ? [] : FUT.filter((f) => !st.fut[f.key] && sig[f.key] && Math.abs(sig[f.key].s) === 1).map((f) => ({ f, t: sig[f.key], dir: Math.sign(sig[f.key].s) }))
+    for (const k of held) { const t = sig[k], p = st.fut[k]; if (t && !p.curve && !p.basis) { const r = Math.abs(p.qty) * t.sd * p.px * p.mult; risk2 += r * r; } }
+    const cands = ctx.brake || !ctaOn ? [] : FUT.filter((f) => !st.fut[f.key] && sig[f.key] && Math.abs(sig[f.key].s) === 1).map((f) => ({ f, t: sig[f.key], dir: Math.sign(sig[f.key].s) }))
       .filter((c) => tilt(c.f, c.dir) > 0).sort((a, b) => b.t.strength * tilt(b.f, b.dir) - a.t.strength * tilt(a.f, a.dir));
     for (const c of cands) {
       if (Object.keys(st.fut).length >= CFG.cta.maxPos) break;
@@ -294,6 +313,9 @@
       openFut(st, c.f, c.dir * n, use, now, d, `${GROUP_NAME[c.f.g]} ${c.dir > 0 ? '상승' : '하락'} 추세: 60일 ${pc(c.t.r1)}, 120일 ${pc(c.t.r2)}, 20일 평균이 100일 평균 ${c.t.ef > c.t.es ? '위' : '아래'}. 하루 변동 ${(c.t.sd * 100).toFixed(1)}% 기준 ${n}계약(1계약 하루 위험 약 ${usd(one)})`);
       risk2 += add * add;
     }
+    // the rates curve and the bitcoin basis
+    manageCurve(st, ctx, acct);
+    manageBasis(st, ctx, acct);
     // 3. options (managed again in the session with fresh quotes)
     manageOptions(st, ctx, true);
     // 4. the ELS: knock-in, early redemption, maturity, value; new issue when the AI allows it
@@ -316,8 +338,78 @@
     st.cash = r2(st.cash + last - fee - slip); st.fees = r2(st.fees + fee);
     const pnl = r2((p.real || 0) + last - (p.feesPaid || 0) - fee - slip);
     fill(st, { t: now, date: d, kind: 'fut', key: k, name: f.name, side: p.qty > 0 ? 'sell' : 'buy', qty: -p.qty, px, contract: p.contract, fee: r2(fee + slip), pnl, why });
-    st.closed.push({ kind: 'fut', s: 'cta', key: k, name: f.name, qty: p.qty, entry: p.entry, exit: px, from: p.date, to: d, pnl, why });
+    st.closed.push({ kind: 'fut', s: p.curve ? 'curve' : p.basis ? 'basis' : 'cta', key: k, name: f.name, qty: p.qty, entry: p.entry, exit: px, from: p.date, to: d, pnl, why });
     delete st.fut[k];
+    return pnl;
+  }
+
+  // ── rates: the curve trade. The spread and its 63-day change from the daily yields (ctx.hist US2Y, US10Y)
+  function curveSignal(hist, d, C2) {
+    const a = (hist && hist.US2Y) || {}, b = (hist && hist.US10Y) || {};
+    const ds = Object.keys(a).filter((x) => x <= d && b[x] != null).sort();
+    if (ds.length < C2.look + 1) return null;
+    const s = (x) => b[x] - a[x], now = ds[ds.length - 1], then = ds[ds.length - 1 - C2.look];
+    return { date: now, y2: a[now], y10: b[now], s: s(now), ds: s(now) - s(then), then };
+  }
+  function legPx(ctx, key, d) {
+    const q = (ctx.fut || {})[key]; if (!q || !q.c1 || !(q.c1.px > 0)) return null;
+    return q.c1.exp && days(d, q.c1.exp) <= ROLL_DAYS && q.c2 && q.c2.px > 0 ? q.c2 : q.c1;
+  }
+  function manageCurve(st, ctx, acct) {
+    const C2 = CFG.curve, d = ctx.date, now = ctx.now, sg = curveSignal(ctx.hist, d, C2), on = Array.isArray(ctx.allow) && ctx.allow.includes('curve');
+    if (!sg) return;
+    st.curveSig = { date: sg.date, y2: r4(sg.y2), y10: r4(sg.y10), spread: r4(sg.s), chg63: r4(sg.ds), enter: C2.enter };
+    const P = st.curve, bp = (x) => Math.round(x * 100);
+    if (P) {
+      const adverse = P.side * (sg.s - P.s0) * 100;
+      const why = !on ? '검증 미통과: 금리차 매매를 멈춤' : adverse <= -C2.stopBp ? `손절: 금리차가 진입(${bp(P.s0)}bp) 대비 ${Math.abs(Math.round(adverse))}bp 불리하게 움직임`
+        : Math.sign(sg.ds) === -P.side ? `추세 반전: 63거래일 금리차 변화가 ${sg.ds >= 0 ? '+' : '−'}${Math.abs(bp(sg.ds))}bp로 돌아섬` : null;
+      if (why) {
+        let pnl = 0;
+        for (const k of ['ZT', 'ZN']) if (st.fut[k] && st.fut[k].curve) { const u = legPx(ctx, k, d), px = u ? u.px : st.fut[k].px; pnl += closeFut(st, k, px, now, d, `금리차 거래 정리: ${why}`) || 0; }
+        st.closed.push({ kind: 'curve', s: 'curve', side: P.side, name: P.side > 0 ? '2년·10년 금리차 확대(스티프너)' : '2년·10년 금리차 축소(플래트너)', from: P.d0, to: d, pnl: r2(pnl), R: r4(pnl / Math.max(1, P.risk)), why });
+        st.curve = null;
+      }
+      return;
+    }
+    if (!on || ctx.brake || Math.abs(sg.ds) < C2.enter) return;
+    const side = Math.sign(sg.ds), u2 = legPx(ctx, 'ZT', d), u10 = legPx(ctx, 'ZN', d);
+    if (!u2 || !u10 || st.fut.ZT || st.fut.ZN) return;
+    const K = (acct * C2.riskPct) / C2.stopBp, dv2 = u2.px * FUT_BY.ZT.mult * C2.D2 * 1e-4, dv10 = u10.px * FUT_BY.ZN.mult * C2.D10 * 1e-4;
+    const n2 = Math.round(K / dv2), n10 = Math.round(K / dv10);
+    if (n2 < 1 || n10 < 1) return;
+    const margin = n2 * u2.px * FUT_BY.ZT.mult * FUT_BY.ZT.mr + n10 * u10.px * FUT_BY.ZN.mult * FUT_BY.ZN.mr;
+    if (marginUsed(st) + margin > Math.max(0, st.cash - optRisk(st)) * 0.8) return;
+    const nm = side > 0 ? '스티프너(2년 매수·10년 매도)' : '플래트너(2년 매도·10년 매수)';
+    const why = `금리차 거래 ${nm}: 10년−2년 금리차 ${bp(sg.s)}bp, 63거래일 전보다 ${sg.ds >= 0 ? '+' : '−'}${Math.abs(bp(sg.ds))}bp(기준 ${bp(C2.enter)}bp). 금리 1bp당 손익이 같도록 2년 ${n2}계약·10년 ${n10}계약, 금리차가 ${C2.stopBp}bp 불리하면 손절`;
+    openFut(st, FUT_BY.ZT, side * n2, u2, now, d, why); st.fut.ZT.curve = true;
+    openFut(st, FUT_BY.ZN, -side * n10, u10, now, d, why); st.fut.ZN.curve = true;
+    st.curve = { side, s0: sg.s, d0: d, n2, n10, K: r2(K), risk: r2(K * C2.stopBp), why };
+  }
+  // ── the bitcoin basis: the futures leg here, the bitcoin in the coin part (run.mjs passes st.basis on as alloc.basis)
+  function manageBasis(st, ctx, acct) {
+    const d = ctx.date, now = ctx.now, on = Array.isArray(ctx.allow) && ctx.allow.includes('basis'), p = st.fut.MBT;
+    if (p && p.basis && !on) {
+      const u = legPx(ctx, 'MBT', d), pnl = closeFut(st, 'MBT', u ? u.px : p.px, now, d, '검증 미통과: 베이시스 매매를 멈춤');
+      st.closed.push({ kind: 'basis', s: 'basis', name: '비트코인 현·선물 차익', from: p.date, to: d, pnl: r2(pnl || 0), why: '검증 미통과' });
+      st.basis = { qty: 0, date: d, why: '검증 미통과: 현물도 정리' };
+      return;
+    }
+    if (p && p.basis) { st.basis = { qty: r4(-p.qty * FUT_BY.MBT.mult), date: d, contract: p.contract, why: st.basis && st.basis.why }; return; }
+    if (!on || ctx.brake || p) return;
+    const u = legPx(ctx, 'MBT', d), spot = ctx.btc;
+    if (!u || !(spot > 0) || !u.exp) return;
+    const left0 = days(d, u.exp), prem0 = left0 > 0 ? (u.px / spot - 1) * 365 / left0 : null, rp0 = isNum(ctx.rp) ? Math.max(0, ctx.rp / 100 - CFG.rpSpread) : null;
+    st.basisSig = { date: d, contract: u.contract, prem: prem0 != null ? r4(prem0) : null, rp: rp0 != null ? r4(rp0) : null };
+    if (!(prem0 != null && rp0 != null && prem0 > rp0)) { st.basis = { qty: 0, date: d, why: `프리미엄 연 ${prem0 != null ? (prem0 * 100).toFixed(1) : '-'}%가 RP 금리(연 ${rp0 != null ? (rp0 * 100).toFixed(2) : '-'}%)보다 낮아 쉼` }; return; }
+    const n = Math.floor((acct * CFG.basis.pct) / (u.px * FUT_BY.MBT.mult));
+    if (n < 1) return;
+    const margin = n * u.px * FUT_BY.MBT.mult * FUT_BY.MBT.mr;
+    if (marginUsed(st) + margin > Math.max(0, st.cash - optRisk(st)) * 0.8) return;
+    const left = u.exp ? days(d, u.exp) : null, prem = u.exp && left > 0 ? (u.px / spot - 1) * 365 / left : null;
+    const why = `비트코인 현·선물 차익: CME 마이크로 비트코인 선물 ${n}계약(${r4(n * FUT_BY.MBT.mult)} BTC) 매도, 같은 양의 비트코인을 코인 계좌에서 매수. 선물 ${r2(u.px)} / 현물 ${r2(spot)}${prem != null ? `, 연 환산 프리미엄 ${(prem * 100).toFixed(1)}%(RP 연 ${(rp0 * 100).toFixed(2)}%보다 높음)` : ''}. 만기 ${ROLL_DAYS}일 전에 정리하고, 다음 달 프리미엄이 RP보다 높으면 다시 잡습니다`;
+    openFut(st, FUT_BY.MBT, -n, u, now, d, why); st.fut.MBT.basis = true;
+    st.basis = { qty: r4(n * FUT_BY.MBT.mult), date: d, contract: u.contract, why };
   }
 
   // ── options. ctx.chain: {SPY: {spot, at, exps: {YYYY-MM-DD: {puts: [[K, bid, ask, iv, delta]], calls: [...]}}}, IWM: ...}
@@ -695,7 +787,8 @@
     const sdOf = (k) => (st.signals && st.signals[k] && st.signals[k].vol) || null;
     const fut = Object.values(st.fut).map((p) => ({ key: p.key, name: p.name, g: p.g, qty: p.qty, contract: p.contract, exp: p.exp, entry: p.entry, px: p.px,
       stop: p.best && sdOf(p.key) ? r4(p.qty > 0 ? p.best * (1 - futStopK(p, sdOf(p.key)) * sdOf(p.key)) : p.best * (1 + futStopK(p, sdOf(p.key)) * sdOf(p.key))) : null,
-      notional: r2(Math.abs(p.qty) * p.px * p.mult), margin: r2(Math.abs(p.qty) * p.px * p.mult * FUT_BY[p.key].mr), pnl: r2((p.real || 0) + p.qty * p.mult * (p.px - p.mark) - (p.feesPaid || 0)), date: p.date, why: p.why }));
+      notional: r2(Math.abs(p.qty) * p.px * p.mult), margin: r2(Math.abs(p.qty) * p.px * p.mult * FUT_BY[p.key].mr), pnl: r2((p.real || 0) + p.qty * p.mult * (p.px - p.mark) - (p.feesPaid || 0)), date: p.date, why: p.why,
+      book: p.curve ? 'curve' : p.basis ? 'basis' : 'cta' }));
     const maxLossOf = (o) => (o.side === 'credit' || o.side === 'base' ? o.n * 100 * (o.kShort - o.kLong + o.cost) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort + o.cost)
       : o.side === 'csp' ? o.n * 100 * (o.k + o.cost) : o.side === 'cc' || o.side === 'ncall' ? null : o.n * 100 * o.cost);
     const opt = st.opt.map((o) => ({ id: o.id, side: o.side, und: o.und || 'SPY', right: rightOf(o), exp: o.exp, k: o.k, kLong: o.kLong, kShort: o.kShort, n: o.n, cost: o.cost, val: o.val, margin: o.margin,
@@ -706,7 +799,7 @@
       w: e.w || null, val: e.val, value: r2(e.amount * (e.val != null ? e.val : 1)), pCall: e.pCall, pKi: e.pKi, why: e.why }));
     const by = {};
     for (const c of st.closed) { const b = (by[c.s] = by[c.s] || { n: 0, wins: 0, pnl: 0 }); b.n++; if (c.pnl > 0) b.wins++; b.pnl = r2(b.pnl + c.pnl); }
-    return { v: 1, at: st.at, date: st.date, funded: st.funded, cash: st.cash, eq: equity(st), margin: marginUsed(st), optRisk: r2(optRisk(st)), rp: st.rp, fees: st.fees,
+    return { curve: st.curve || null, curveSig: st.curveSig || null, basis: st.basis || null, basisSig: st.basisSig || null, v: 1, at: st.at, date: st.date, funded: st.funded, cash: st.cash, eq: equity(st), margin: marginUsed(st), optRisk: r2(optRisk(st)), rp: st.rp, fees: st.fees,
       fut, opt, els, stk, by, base: st.base || null, risk: RISK ? Object.assign(riskOf(st) || {}, { varMax: CFG.risk.varMax, vegaMax: CFG.risk.vegaMax, deltaMax: CFG.risk.deltaMax, acct: r2(RISK.acct), note: st.riskNote || null }) : null, stress: { move: CFG.stress.move, max: CFG.stress.max, loss: r2(stressLoss(st.opt, (RISK && RISK.spots) || {})), note: st.stressNote || null }, signals: st.signals || {}, fills: st.fills.slice(-120).reverse(), hist: st.hist.slice(-400), log: st.log.slice(-40).reverse(), transfers: st.transfers };
   }
 

@@ -1,5 +1,6 @@
-// One-off account reset (owner's request, 2026-11-22): the paper account starts again with $1,000,000, every position
-// closed at its last price and recorded; the trade records, the learning data and the lab history are kept.
+// One-off account reset (owner's request, 2026-11-22; again 2026-11-26 for the verified-only account): the paper account
+// starts again with $1,000,000, every position closed at its last price and recorded; the trade records, the learning
+// data and the lab history are kept.
 // Usage (once, in the repo):  node tools/reset_account.mjs 1000000 2026-11-20
 // It copies every file it changes to data/archive/<today>/ first, and refuses to run twice for the same id.
 import fs from 'node:fs';
@@ -9,7 +10,8 @@ const Dv = require('../deriv.js');
 const J = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 const W = (f, v) => fs.writeFileSync(f, JSON.stringify(v, null, 1));
 const capital = +process.argv[2] || 1000000, day = process.argv[3] || '2026-11-20', id = `reset-${new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())}`;
-const SH = { core: 0.35, deriv: 0.35, crypto: 0.3 };   // stocks 70 (individual stocks 35, derivatives 35) : coins 30
+// stocks 70 (stocks and bonds 55, futures margins for the rates curve and the bitcoin basis 15) : coins 30
+const SH = { core: 0.55, deriv: 0.15, crypto: 0.3 };
 const alloc = J('data/alloc.json', {});
 if (alloc.reset && alloc.reset.id === id) { console.log('already reset', id); process.exit(1); }
 const arch = `data/archive/${id.slice(6)}`;
@@ -24,7 +26,7 @@ W('data/trades_archive.json', trades);
 if (fs.existsSync('data/book.json')) fs.unlinkSync('data/book.json');   // a copy is in the archive; the next run opens a fresh book
 // 2. settings: the new capital, the book opens on the last final day
 const st0 = J('data/settings.json', {});
-W('data/settings.json', Object.assign(st0, { capital, bookCapital: Math.round(capital * SH.core), liveStart: day, quietDay: day, resetAt: id }));
+W('data/settings.json', Object.assign(st0, { capital, bookCapital: Math.round(capital * SH.core), liveStart: day, quietDay: day, resetAt: id, rebases: [] }));   // an old rebase would bend the new account's chart
 // 3. derivatives: positions closed at their marks (recorded), the account starts empty and gets its share by transfer
 const d0 = J('data/deriv/state.json', null);
 if (d0) {
@@ -40,7 +42,8 @@ if (d0) {
 // 4. the allocator: old transfers to the archive, a fresh decision at the next run, the coin job resets itself
 alloc.transfers = []; delete alloc.day; delete alloc.brake;
 if (alloc.cio) alloc.cio.v = 0;
-alloc.reset = { id, at: new Date(now).toISOString(), capital, crypto: Math.round(capital * SH.crypto), why: '사용자 요청: $1,000,000로 계좌 초기화(매매 기록·학습 데이터 유지)' };
+alloc.reset = { id, at: new Date(now).toISOString(), capital, crypto: Math.round(capital * SH.crypto), why: '사용자 요청: 검증된 전략만으로 $1,000,000에서 새로 시작(매매 기록·학습 데이터 유지)' };
+delete alloc.basis;
 W('data/alloc.json', alloc);
 // 5. the lab: the shadow accounts were copies of the old account; the history and the bench stay
 const ev = J('data/evolution.json', null);

@@ -189,6 +189,46 @@ section.view.on { display: block; }
 .legend .when { color: var(--muted); font-size: 15px; }
 /* portfolio ring */
 .alloc { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 16px; align-items: center; padding: 8px 20px 0; }
+/* holdings ring (owner 2026-11-26: like the Domino app — names only, a tap shows why it was bought or sold short) */
+.hring { display: grid; justify-items: center; padding: 8px 20px 4px; }
+.hring .donut { width: 216px; height: 216px; }
+.hring .donut .c { padding: 0 44px; }
+.hring .donut .c b { font-size: 20px; }
+.hmix { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin: 10px 20px 2px; font-size: 15px; color: var(--sub); font-variant-numeric: tabular-nums; }
+.hmix span { white-space: nowrap; }
+.hl { list-style: none; margin: 8px 0 0; padding: 0; }
+.hl > li { border-top: 1px solid var(--line); }
+.hl > li:first-child { border-top: 0; }
+.hl button.hn { width: 100%; min-height: 56px; display: grid; grid-template-columns: 14px minmax(0, 1fr) 20px; align-items: center; gap: 12px; padding: 10px 20px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.hl button.hn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.hl button.hn[aria-expanded="true"] { background: var(--band); }
+.hl .dot { width: 14px; height: 14px; border-radius: 50%; }
+.hl .nm { font-size: 18px; font-weight: 600; line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere; }
+.hl .chev { width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 2; transition: transform 200ms var(--ease-out); }
+.hl button.hn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.hwhy { padding: 2px 20px 16px 46px; background: var(--band); }
+.hwhy .lab { display: inline-block; font-size: 15px; font-weight: 700; line-height: 24px; padding: 0 9px; border-radius: 6px; background: var(--up-soft); color: var(--up); }
+.hwhy .lab.sh { background: var(--down-soft); color: var(--down); }
+.hwhy p { margin: 8px 0 0; font-size: 17px; line-height: 1.6; color: var(--ink); word-break: keep-all; overflow-wrap: anywhere; }
+.hwhy .meta { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 15px; color: var(--sub); font-variant-numeric: tabular-nums; }
+.hwhy .meta a { color: var(--sub); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .hl .chev { transition: none; } }
+/* the strategy checks */
+.vlist { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.vlist li { display: flex; gap: 10px; align-items: baseline; font-size: 16px; line-height: 1.45; }
+.vlist svg { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--up); stroke-width: 2.5; transform: translateY(2px); }
+.vgrp { margin: 18px 20px 6px; font-size: 16px; font-weight: 700; color: var(--sub); }
+.vits { list-style: none; margin: 0; padding: 0; }
+.vits li { padding: 12px 20px; border-top: 1px solid var(--line); }
+.vits li:first-child { border-top: 0; }
+.vits .vhd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.vits .vhd b { font-size: 17px; font-weight: 700; line-height: 1.4; word-break: keep-all; }
+.vits .vhd .tag { margin-left: 0; }
+.vits .vw { margin: 6px 0 0; font-size: 15px; line-height: 1.55; color: var(--sub); word-break: keep-all; overflow-wrap: anywhere; }
+.vits .vw b { color: var(--ink); font-weight: 700; margin-right: 4px; }
+.vits .vd { display: block; margin-top: 4px; font-size: 14px; color: var(--muted); }
+.vits li.off .vhd b { color: var(--sub); }
+.vrule { margin: 10px 20px 0; padding: 12px 14px; border-radius: 12px; background: var(--band); font-size: 15px; line-height: 1.55; color: var(--sub); word-break: keep-all; }
 .donut { position: relative; width: 168px; height: 168px; }
 .donut svg { display: block; width: 100%; height: 100%; }
 .donut path { cursor: pointer; transition: opacity 150ms var(--ease-out); }
@@ -409,8 +449,8 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const rcls = (v) => (v >= 0.00005 ? 'up' : v <= -0.00005 ? 'down' : '');      // for returns shown by pct()
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const dLabel = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일 (${WD[new Date(d + 'T12:00:00Z').getUTCDay()]})`;
-  const PB = { bo: '돌파', pb: '눌림목', dt: '단타', bd: '채권', hedge: '헷지', ch: '차트', cs: '차트 공매도' };
-  const PB_LONG = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', sb: '하락 돌파 공매도', hedge: '하락 대비 헷지', ch: '차트 저항 돌파', cs: '차트 지지 이탈 공매도', c_scalp: '코인 초단타', c_trend: '코인 추세', c_tok: '토큰 주식' };
+  const PB = { bo: '돌파', pb: '눌림목', dt: '단타', bd: '채권', hedge: '헷지', ch: '차트', cs: '차트 공매도', mo: '모멘텀' };
+  const PB_LONG = { mo: '모멘텀(12-1개월)', c_mr: '코인 평균회귀', c_mm: '코인 시장 조성', bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', sb: '하락 돌파 공매도', hedge: '하락 대비 헷지', ch: '차트 저항 돌파', cs: '차트 지지 이탈 공매도', c_scalp: '코인 초단타', c_trend: '코인 추세', c_tok: '토큰 주식' };
   // the stock book's hedge: the inverse S&P 500 or US Treasuries (kind), chosen each evening (engine.js hedge team)
   const HEDGE = { inv: { sym: 'SH', name: 'S&P 500 인버스(SH)', does: 'S&amp;P 500이 내리면 이익' }, bond: { sym: 'IEF', name: '미국 10년 국채', does: '국채값이 오르면 이익(주식과 반대로 움직일 때)' } };
   const hedgeOf = (h) => HEDGE[(h && h.kind) || 'inv'] || HEDGE.inv;
@@ -741,9 +781,18 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   const PART = { core: '주식·채권', deriv: '선물·옵션·ELS', crypto: '24시간(코인·토큰)' };
   // the account screen's short version: the call and the first three things it does
+  const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>';
+  const vShort = (nm) => String(nm || '').replace(/\(.*?\)/g, '').replace(/:.*$/, '').trim();
   function aiSummaryHTML() {
     const c = S.alloc && S.alloc.cio;
     if (!c) return '';
+    if (c.mode === 'verified') {
+      const on = c.items.filter((x) => x.on);
+      return `<div class="band"></div><h2>운용 방식</h2><div class="aisum"><p class="h">백테스트를 통과한 ${on.length}가지만 매매합니다</p>
+        <ul class="vlist">${on.map((x) => `<li>${CHECK}<span>${esc(vShort(x.name))} <span class="tag">${esc(x.part || '')}</span></span></li>`).join('')}</ul>
+        <p class="lline">순위를 매기지 않고 각자 정해진 위험으로 매매합니다 · 나머지 ${c.items.length - on.length}가지는 증명될 때까지 쉽니다</p>
+        <a href="#team">검증 결과 전체 보기 →</a></div>`;
+    }
     const top = c.items.filter((x) => x.on).slice(0, 3);
     return `<div class="band"></div><h2>AI 운용 방향</h2><div class="aisum"><p class="h">${esc(c.regime.label)}${c.regime.tags.length ? ' · ' + esc(c.regime.tags.slice(0, 2).join(' · ')) : ''}</p>
       <ol>${top.map((x) => `<li><i>${x.rank}</i><span>${esc(x.k === 'rp' ? x.name : x.name.replace(/\(.*\)/, ''))} <span class="tag">${esc(x.k === 'base' ? '기반' : x.lean)}${x.k === 'rp' || x.k === 'stake' || x.k === 'base' ? '' : ' ' + Math.round(x.w * 100) + '%'}</span></span></li>`).join('')}</ol>
@@ -793,9 +842,30 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     h += `<p class="sumline" style="padding-top:12px">막대는 가운데 선에서 오른쪽이 순매수, 왼쪽이 순매도입니다. 명목 금액은 값이 1% 움직이면 손익이 그 1%만큼 생기는 크기이고, 하루 위험(1σ)은 최근 변동성으로 잰 하루 손익의 보통 폭(약 3일 중 2일은 이 안)입니다. 국채 선물은 명목이 커도 값이 적게 움직여 하루 위험은 작습니다.</p>`;
     return h;
   }
+  function verifyItemHTML(x) {
+    const st = x.stat, R = (v) => (v >= 0 ? '+' : '−') + fmt(Math.abs(v), 2) + 'R', $ = (v) => (v >= 0 ? '+' : '−') + usd(Math.abs(v), 0);
+    const line = st ? `${st.n}건 · 평균 ${R(st.avgR)} · 손익 ${$(st.pnl)} · 승률 ${st.win}%<br>전반 ${st.h1.n}건 ${R(st.h1.avgR)} ${$(st.h1.pnl)} / 후반 ${st.h2.n}건 ${R(st.h2.avgR)} ${$(st.h2.pnl)}${st.split ? ` (${st.split} 기준)` : ''}` : '';
+    return `<li class="${x.on ? 'on' : 'off'}"><div class="vhd"><b>${esc(x.name)}</b><span class="tag">${esc(x.part || '')}</span></div>`
+      + `${x.on ? (line ? '' : `<p class="vw">${esc(x.why || '')}</p>`) : `<p class="vw"><b>쉬는 이유</b> ${esc(x.reason || x.why || '')}</p>`}${line ? `<p class="vw">${line}</p>` : ''}${x.data ? `<span class="vd">자료: ${esc(x.data)}</span>` : ''}</li>`;
+  }
   function prioHTML() {
     const c = S.alloc && S.alloc.cio;
     if (!c) return '';
+    if (c.mode === 'verified') {
+      const on = c.items.filter((x) => x.on), off = c.items.filter((x) => !x.on);
+      let h = `<h2>검증 결과</h2><div class="mac"><p class="mac-head">${esc(c.headline)}</p><span class="mac-sub">${md(c.verifyDay || c.date)} 종가까지의 전체 자료 · 매일 밤 다시 검증합니다</span></div>`;
+      h += `<p class="vrule">통과 기준: ${esc(c.rule || '')}</p>`;
+      h += `<h3 class="vgrp">매매 중 ${on.length}가지</h3><ul class="vits">${on.map(verifyItemHTML).join('')}</ul>`;
+      h += `<h3 class="vgrp">쉼 ${off.length}가지(증명될 때까지 매매 안 함)</h3><ul class="vits">${off.map(verifyItemHTML).join('')}</ul>`;
+      const t = totalNow() || 1, now = { core: stockNow() / t, deriv: derivNow() / t, h24: coinTotal() / t };
+      h += `<h3 class="sub-h">자산 배분 (지금 / 목표)</h3><ul class="abar">` + [['core', '주식·채권 (현금·RP 포함)'], ['deriv', '선물·금리 (증거금·현금)'], ['h24', '코인 (현물·현금)']].map(([k, nm]) => {
+        const v = Math.max(0, Math.min(1, now[k])), g = Math.max(0, Math.min(1, c.target[k]));
+        return `<li><div class="t"><b>${nm}</b><span>${fmt(v * 100, 0)}% / ${fmt(g * 100, 0)}%</span></div><div class="track" role="img" aria-label="${nm} 지금 ${fmt(v * 100, 0)}%, 목표 ${fmt(g * 100, 0)}%"><div class="fill" style="width:${(v * 100).toFixed(1)}%"></div><div class="goal" style="left:calc(${(g * 100).toFixed(1)}% - 1px)"></div></div></li>`;
+      }).join('') + '</ul>';
+      h += `<h3 class="sub-h">시장 지표(참고용, 매매 비중은 바꾸지 않음)</h3><div class="sig">${c.signals.map((g) => `<div><span>${esc(g.k)}</span><b class="${/VIX|스프레드/.test(g.k) ? '' : g.c || ''}">${esc(g.v)}</b><small>${esc(g.sub)}</small></div>`).join('')}</div>`;
+      h += `<details class="teamlog"><summary>운용 규칙</summary>${c.rules.map((r) => `<div class="logitem"><p>${esc(r)}</p></div>`).join('')}</details>`;
+      return h;
+    }
     let h = `<h2>AI 운용 방향</h2><div class="mac"><p class="mac-head">${esc(c.headline)}</p><span class="mac-sub">${md(c.date)} 종가 기준 · 매일 장 마감 뒤 다시 정합니다</span></div>`;
     h += '<ol class="prio">' + c.items.map((it) => `<li class="${it.on ? '' : 'off'}"><span class="rk">${it.on ? it.rank + '순위' : '쉼'}</span><div class="bd"><b>${esc(it.name)}${it.on ? `<span class="tag">${esc(it.k === 'base' ? '기반' : it.lean)}${it.k === 'rp' || it.k === 'stake' || it.k === 'base' ? '' : ' ' + Math.round(it.w * 100) + '%'}</span>` : ''}${matTag(it.k === 'hedge' ? 'optHedge' : it.k)}</b><p>${esc(it.why)}</p></div></li>`).join('') + '</ol>';
     const t = totalNow() || 1, now = { core: stockNow() / t, deriv: derivNow() / t, h24: coinTotal() / t };
@@ -934,14 +1004,11 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     if (a.risk && a.risk.blocked && a.risk.blocked.length) notes.push(a.risk.blocked.join(' '));
     else if (a.risk && a.risk.mult < 1) notes.push(`손실 관리: ${a.risk.why.join(' ')}`);
     h += notes.map((n) => `<p class="note"><i aria-hidden="true"></i><span>${esc(n)}</span></p>`).join('');
-    const groups = holdGroups(), nHold = groups.reduce((t, g) => t + g[1].length, 0);
-    let hold = `<div class="band"></div><h2>보유 자산 <span class="count num">${nHold}</span></h2>`;
-    if (!nHold) hold += '<p class="empty-row">보유 자산이 없습니다. 전부 현금(RP)입니다.</p>';
-    for (const [title, rows, src] of groups) hold += `<h3 class="grp">${esc(title)}${src ? `<span>${esc(src)}</span>` : ''}</h3><ul class="list">${rows.join('')}</ul>`;
+    const hold = holdHTML();
     const recent = allFills().slice(0, 4);
     const fills = `<div class="band"></div><h2>최근 체결</h2>` + (recent.length ? '<ul class="list">' + recent.map((x) => x.html).join('') + '</ul><p class="sumline"><a href="#fills" style="color:inherit">체결내역 전체 보기</a></p>' : '<p class="empty-row">아직 체결된 매매가 없습니다.</p>');
     h = `<div class="col-a"><div class="sec-hero">${h}</div><div class="sec-hold">${hold}</div><div class="sec-fills">${fills}</div></div>`
-      + `<div class="col-b"><div class="sec-ai">${aiSummaryHTML()}</div><div class="sec-ring"><div class="band"></div><h2>포트폴리오 구성</h2>${allocHTML()}</div><div class="sec-risk">${riskHTML()}</div></div>`;
+      + `<div class="col-b"><div class="sec-ai">${aiSummaryHTML()}</div><div class="sec-risk">${riskHTML()}</div></div>`;
     put($('v-account'), h);
     const rg = $('v-account').querySelector('.range');
     $('v-account').querySelectorAll('.periods button[data-ht]').forEach((b) => b.addEventListener('click', () => {
@@ -966,7 +1033,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     $('rgFrom').addEventListener('change', onRange);
     $('rgTo').addEventListener('change', onRange);
     wireCmp();
-    wireAlloc();
+    wireHold();
   }
 
   const byVal = (p, q) => q.value - p.value;
@@ -1228,7 +1295,9 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   function coinA(x) {
     const px = coinPx(x.c), v = x.qty * px, avg = COINB[x.c] || null, pnl = avg ? (px - avg) * x.qty : null;
     const ps = ['trend', 'scalp'].map((k) => (CV.pos && CV.pos[k] && CV.pos[k][x.c] ? [k, CV.pos[k][x.c]] : null)).filter(Boolean);
-    const why = ps.length ? ps.map(([k, p]) => `${SNAME[k]}: ${p.why || ''}`).join(' / ') : '거래소 간 가격 차이가 수수료보다 커지면 바로 사고팔 수 있게 5개 거래소에 나눠 둔 차익거래용 재고입니다.';
+    const bq = x.c === 'BTC' && CV.basis && CV.basis.qty > 0 ? CV.basis : null;
+    const why = bq ? `비트코인 현·선물 차익(베이시스): CME 마이크로 비트코인 선물을 판 만큼(${fmt(bq.qty, 4)} BTC) 현물을 들고 있습니다. 값이 오르내려도 선물과 현물의 손익이 서로 상쇄되고, 선물이 현물보다 비싼 만큼(프리미엄)이 만기까지 수익이 됩니다.${ps.length ? ' / ' + ps.map(([k, p]) => `${SNAME[k]}: ${p.why || ''}`).join(' / ') : ''}`
+      : ps.length ? ps.map(([k, p]) => `${SNAME[k]}: ${p.why || ''}`).join(' / ') : '거래소 간 가격 차이가 수수료보다 커지면 바로 사고팔 수 있게 5개 거래소에 나눠 둔 차익거래용 재고입니다.';
     const sk = CV.stake || {}, sr = sk.net && sk.net[x.c], earned = sk.earned && sk.earned[x.c];
     return { id: 'c:' + x.c, grp: '코인', val: v, title: assetName(x.c), sub: `${x.c} · ${fmt(x.qty, 6)}개${sr ? ` · 스테이킹 연 ${fmt(sr * 100, 1)}%` : ''}`,
       rb: usd(v), rs: pnl != null ? `${sgnUsd(pnl)} (${pct(px / avg - 1)})` : usd(px), rsC: pnl != null ? cls(pnl) : 'muted', why,
@@ -1280,6 +1349,75 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       if (xs.length) g.push([grp, xs.map(rowHTML), SRC[grp]]);
     }
     return g;
+  }
+
+  // ── the holdings ring (owner 2026-11-26: "보유자산도 원그래프, 도미노(앱)처럼 … 종목 이름만 써놓고 종목 누르면 매수,
+  //    혹은 공매도 이유 뜨게"): one slice per holding by what it holds (futures: their margin; shorts: what buying back
+  //    would cost), the seven largest in their own colours, the rest grey, the cash last; the list shows names only and
+  //    a tap opens why it was bought or sold short
+  const HCOL = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)', 'var(--s5)', 'var(--s6)', 'var(--s7)'];
+  const SHORTTAG = /공매도|매도|되사/;
+  function holdName(x) { return x.grp === '주식' && x.sub ? `${x.title} · ${String(x.sub).split(' · ')[0]}` : x.name || x.title; }
+  function holdSlices() {
+    const L = assetList().map((x) => ({ x, v: Math.abs(x.val || 0) })).filter((y) => y.v >= 0.5).sort((a, b) => b.v - a.v);
+    const { segs } = allocation(), cash = Math.max(0, ((segs.find((g) => g.key === 'cash') || {}).v) || 0);
+    const rows = L.map((y, i) => ({ key: y.x.id, a: y.x, name: holdName(y.x), v: y.v, col: i < HCOL.length ? HCOL[i] : 'var(--s-other)', slice: i < HCOL.length ? i : HCOL.length }));
+    const sl = rows.filter((r) => r.slice < HCOL.length).map((r) => ({ key: r.key, name: r.name, v: r.v, col: r.col }));
+    const rest = rows.filter((r) => r.slice >= HCOL.length);
+    if (rest.length) sl.push({ key: 'rest', name: `그 밖의 ${rest.length}종목`, v: rest.reduce((t, r) => t + r.v, 0), col: 'var(--s-other)' });
+    if (cash >= 0.5) sl.push({ key: 'cash', name: '현금·RP', v: cash, col: 'var(--s-cash)' });
+    const tot = sl.reduce((t, x) => t + x.v, 0) || 1;
+    sl.forEach((x) => { x.share = x.v / tot; });
+    rows.forEach((r) => { r.share = r.v / tot; });
+    return { sl, rows, tot, cash, segs };
+  }
+  const hCenter = (x, tot) => (x ? `<span>${esc(x.name)}</span><b>${usd(x.v, 0)}</b><span>${fmt(x.share * 100, 1)}%</span>` : `<span>총 자산</span><b>${usd(tot, 0)}</b><span>현금 포함</span>`);
+  let holdSel = null;                      // the holding the reader opened; kept when the screen refreshes
+  function holdHTML() {
+    const { sl, rows, tot, cash, segs } = holdSlices();
+    let h = `<div class="band"></div><h2>보유 자산 <span class="count num">${rows.length}</span></h2>`;
+    const C = 108, R1 = 106, R0 = 74, gap = 2 / ((R0 + R1) / 2), TAU = Math.PI * 2;
+    let a0 = 0;
+    const paths = sl.map((x, i) => {
+      const span = x.share * TAU, a1 = a0 + span;
+      const d = span >= TAU - 1e-6 ? arcPath(C, R0, R1, 0, Math.PI) + arcPath(C, R0, R1, Math.PI, TAU) : arcPath(C, R0, R1, a0 + Math.min(gap, span * 0.4) / 2, a1 - Math.min(gap, span * 0.4) / 2);
+      a0 = a1;
+      return `<path data-k="${esc(x.key)}" d="${d}" style="fill:${x.col}"><title>${esc(x.name)} ${fmt(x.share * 100, 1)}%</title></path>`;
+    }).join('');
+    h += `<div class="hring"><div class="donut"><svg viewBox="0 0 216 216" role="img" aria-label="보유 비중: ${esc(sl.map((x) => `${x.name} ${fmt(x.share * 100, 1)}%`).join(', '))}">${paths}</svg><div class="c">${hCenter(null, tot)}</div></div></div>`;
+    const cls2 = segs.filter((g) => g.key !== 'cash' && g.v >= 0.5).map((g) => `<span>${esc(g.name)} ${fmt((g.v / tot) * 100, 1)}%</span>`);
+    h += `<div class="hmix">${cls2.join('')}${cash >= 0.5 ? `<span>현금·RP ${fmt((cash / tot) * 100, 1)}%</span>` : ''}</div>`;
+    if (!rows.length) return h + '<p class="empty-row">보유 종목이 없습니다. 전부 현금(RP)입니다.</p>';
+    const chev = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+    h += '<ul class="hl">' + rows.map((r) => {
+      const short = r.a.tag && SHORTTAG.test(r.a.tag), lab = r.a.tag ? `${r.a.tag} 이유` : '매수 이유', pid = 'hw-' + r.key.replace(/[^a-zA-Z0-9]/g, '_');
+      return `<li><button type="button" class="hn" data-k="${esc(r.key)}" aria-expanded="false" aria-controls="${pid}"><i class="dot" style="background:${r.col}" aria-hidden="true"></i><span class="nm">${esc(r.name)}</span>${chev}</button>`
+        + `<div class="hwhy" id="${pid}" hidden><span class="lab${short ? ' sh' : ''}">${esc(lab)}</span><p>${esc(r.a.why || '기록된 이유가 없습니다(확인필요).')}</p>`
+        + `<div class="meta"><span>비중 ${fmt(r.share * 100, 1)}%</span><span>${esc(r.a.rb || '')}${r.a.rs ? ' · ' + esc(r.a.rs) : ''}</span><a href="#a/${encodeURIComponent(r.key)}">자세히 보기</a></div></div></li>`;
+    }).join('') + '</ul>';
+    return h;
+  }
+  function wireHold() {
+    const box = document.querySelector('#v-account .sec-hold');
+    if (!box) return;
+    const { sl, rows, tot } = holdSlices(), svg = box.querySelector('.hring svg'), c = box.querySelector('.hring .c');
+    const sliceOf = (k) => { const r = rows.find((x) => x.key === k); return r && r.slice >= HCOL.length ? 'rest' : k; };
+    const show = () => {
+      if (holdSel && !rows.some((r) => r.key === holdSel)) holdSel = null;
+      const sk = holdSel ? sliceOf(holdSel) : null, r = rows.find((x) => x.key === holdSel);
+      if (svg) { svg.classList.toggle('sel', !!sk); svg.querySelectorAll('path').forEach((p) => p.classList.toggle('on', p.dataset.k === sk)); }
+      if (c) c.innerHTML = hCenter(r ? { name: r.name, v: r.v, share: r.share } : null, tot);
+      box.querySelectorAll('button.hn').forEach((b) => { const on = b.dataset.k === holdSel; b.setAttribute('aria-expanded', String(on)); const pnl = document.getElementById(b.getAttribute('aria-controls')); if (pnl) pnl.hidden = !on; });
+    };
+    box.querySelectorAll('button.hn').forEach((b) => b.addEventListener('click', () => { holdSel = holdSel === b.dataset.k ? null : b.dataset.k; show(); }));
+    if (svg) svg.querySelectorAll('path').forEach((p) => p.addEventListener('click', () => {
+      const k = p.dataset.k;
+      if (k === 'cash') { holdSel = null; show(); return; }
+      const first = k === 'rest' ? rows.find((r) => r.slice >= HCOL.length) : rows.find((r) => r.key === k);
+      holdSel = first && holdSel !== first.key ? first.key : null; show();
+      const b = first && box.querySelector(`button.hn[data-k="${CSS.escape(first.key)}"]`); if (b && holdSel) b.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }));
+    show();
   }
 
   // ── one holding's own page: price chart with the average price (평단가) as a dashed line
@@ -1742,7 +1880,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     put($('v-team'), prioHTML() + learnHTML() + rdHTML() + `<div class="band"></div><h2 style="padding-top:8px">AI 팀</h2>` + h);
   }
 
-  const SNAME = { arb: '거래소 간 차익거래', trend: '추세(1시간)', scalp: '초단타(1분)', tok: '토큰화 주식', move: '거래소 간 코인 이동' };
+  const SNAME = { arb: '거래소 간 차익거래', trend: '추세(1시간)', scalp: '초단타(1분)', tok: '토큰화 주식', move: '거래소 간 코인 이동', basis: '현·선물 차익(베이시스)', mr: '평균회귀', mm: '시장 조성' };
   const VN = (k) => (CV && CV.venues && CV.venues[k] ? CV.venues[k].name : k);
   const etTime = (ms) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'America/New_York', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(ms));
   const COINN = { BTC: '비트코인', ETH: '이더리움', SOL: '솔라나' };

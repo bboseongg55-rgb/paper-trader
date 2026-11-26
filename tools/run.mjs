@@ -8,6 +8,7 @@
 // (data/alloc.json). Idle cash earns the RP rate.
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import * as Verify from './verify.mjs';
 const require = createRequire(import.meta.url);
 const E = require('../engine.js');
 const Lab = require('../evolve.js');
@@ -33,7 +34,7 @@ const L = Object.assign({}, live, { days });
 const capital = settings.capital || 100000, liveStart = settings.liveStart || '2026-11-17';
 // after the owner's reset the stock book holds only its own share (bookCapital); capital is the whole account's start.
 // quietDay: the book's first day is the last closed one, replayed without new trades so the account starts flat
-const bookCapital = settings.bookCapital || capital, QUIET = { bo: 0, pb: 0, dt: 0, sb: 0, bd: 0 };
+const bookCapital = settings.bookCapital || capital, QUIET = { bo: 0, pb: 0, dt: 0, sb: 0, bd: 0, ch: 0, cs: 0, mo: 0 };
 // leverage for the stock account: buying power up to 1.5 × its value (margin interest on what is borrowed); shorts need
 // 150% of their value set aside. Sizing still goes by the risk to each stop, so this is a ceiling, not a target
 // the owner's settings (2026-11-21): long entries in every market phase (regimeLevel 0: the S&P 500's trend no longer
@@ -68,13 +69,30 @@ const rpFor = (dates) => {
 };
 const D = E.prepare(seed, L, intra, { instruments: bondsHist ? (dates) => Bonds.build(bondsHist, L.days, dates) : null, rp: rpFor });
 const T = D.dates.length;
+// the strategy checks (tools/verify.mjs, owner 2026-11-26: only what a backtest has proved trades), once for each new
+// closed day: every method alone over all the history, the overlays, the futures, rates and coin strategies. The account
+// then runs only the verified methods with fixed rules (no retuning, no ranking of the methods against each other)
+const lastFinal = ((L.days || []).filter((x) => x.final !== false).slice(-1)[0] || {}).date || null;
+let ver = readJSON('data/verify.json', null), verChanged = false;
+if (lastFinal && (!ver || ver.day !== lastFinal || ver.v !== Verify.VERSION)) {
+  const t1 = Date.now();
+  try {
+    const toI = D.dates.lastIndexOf(lastFinal);
+    ver = Object.assign(Verify.run({ E, D, MS, Dv, C: require('../crypto.js'), to: toI >= 0 ? toI : T - 1 }), { day: lastFinal });
+    verChanged = true; console.log('verify', Math.round((Date.now() - t1) / 1000) + 's', JSON.stringify(ver.allow));
+  } catch (e) { console.log('verify failed', String((e && e.stack) || e).slice(0, 400)); }
+}
+const FIXED_MODE = !!(ver && ver.allow);
+if (FIXED_MODE) FORCE.lev = ver.cfg.lev;
 // days whose closing prices are final go into the book
-const adv = warm || book ? E.advanceBook(D, { book, warm, capital: bookCapital, liveStart, btStart: settings.btStart, tilt: (dt) => (dt === settings.quietDay ? QUIET : tiltAt(dt)), force: FORCE }) : { book: null, added: [] };
+const adv = warm || book ? E.advanceBook(D, Object.assign({ book, warm, capital: bookCapital, liveStart, btStart: settings.btStart, tilt: (dt) => (dt === settings.quietDay ? QUIET : tiltAt(dt)), force: FORCE },
+  FIXED_MODE ? { fixed: true, allow: ver.allow.stock, brakes: ver.cfg.brakes } : {})) : { book: null, added: [] };
 book = adv.book;
 let bookChanged = adv.added.length > 0;
 // the evolution lab, once for each evening (a failure is noted once for that day and does not stop the account)
 let evo = readJSON('data/evolution.json', null), evoChanged = false, labMs = null, promoted = null;
-if (book && (!evo || !evo.lastRun || evo.lastRun < book.date) && !(evo && evo.lastError && evo.lastError.date === book.date)) {
+// (stopped while the account runs fixed, verified rules: a rule found by searching the same data is not a verified one)
+if (!FIXED_MODE && book && (!evo || !evo.lastRun || evo.lastRun < book.date) && !(evo && evo.lastError && evo.lastError.date === book.date)) {
   const t1 = Date.now();
   try {
     const r = Lab.night(E, D, book, evo, { tilt: tiltAt });
@@ -89,7 +107,7 @@ if (book && (!evo || !evo.lastRun || evo.lastRun < book.date) && !(evo && evo.la
 }
 // every hour (New York clock, when the nightly lab did not just run): another search round for better rules
 const hourKey = `${new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())} ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }).format(new Date())}`;
-if (book && evo && labMs == null && Lab.hourly) {
+if (!FIXED_MODE && book && evo && labMs == null && Lab.hourly) {
   const t1 = Date.now();
   try { const r = Lab.hourly(E, D, book, evo, { tilt: tiltAt }, hourKey); if (r.changed) { evo = r.evo; evoChanged = true; labMs = Date.now() - t1; } } catch (e) { /* the next hour tries again */ }
 }
@@ -176,7 +194,7 @@ if (book && MS['.SPX'] && (!alloc.cio || alloc.cio.date < book.date || alloc.cio
   const acct0 = coreNow() + (dst ? Dv.equity(dst) : 0) + ((cv && cv.eq) || 0) + transit();
   const wheelHeld = dst ? Object.values(dst.stk || {}).reduce((a, x) => a + x.qty * x.px, 0) + dst.opt.filter((o) => o.side === 'csp').reduce((a, o) => a + o.n * 100 * o.k, 0) : 0;
   let learn = null; try { learn = learnByPhase(); } catch (e) { learn = null; }
-  const dec = CIO.decide(pic, { exposure: expo, elsCoupon, iwm, account: acct0, wheelHeld, learn });
+  const dec = CIO.decide(pic, { exposure: expo, elsCoupon, iwm, account: acct0, wheelHeld, learn, verify: ver });
   alloc.cio = dec; decided = true; allocChanged = true;
   alloc.history = (alloc.history || []).filter((h) => h.date !== book.date).concat([{ date: book.date, key: dec.regime.key, label: dec.regime.label, headline: dec.headline, target: dec.target }]).slice(-250);
   const lt = alloc.tilts[alloc.tilts.length - 1];
@@ -221,11 +239,16 @@ if (dst && book) {
     exposure: stocksLong + futLong + toksLong, spx: valAt('.SPX', d), ndx: valAt('.NDX', d), vix: valAt('.VIX', d), vxn: valAt('.VXN', d), y2: valAt('US2Y', d), rp: valAt('US1M', d), rho,
     spy: mk.chain && mk.chain.SPY ? mk.chain.SPY.spot : null, today: etToday,
     px: { SPY: (mk.ix && mk.ix.SPY && mk.ix.SPY.px) || null, IWM: (mk.ix && mk.ix.IWM && mk.ix.IWM.px) || null },
-    spxNow: (mk.ix && mk.ix['.SPX'] && mk.ix['.SPX'].px) || null, rf: mk.ix && mk.ix.US3M && mk.ix.US3M.px > 0 ? mk.ix.US3M.px / 100 : null, brake: brakeNow };
+    spxNow: (mk.ix && mk.ix['.SPX'] && mk.ix['.SPX'].px) || null, rf: mk.ix && mk.ix.US3M && mk.ix.US3M.px > 0 ? mk.ix.US3M.px / 100 : null, brake: brakeNow,
+    allow: FIXED_MODE ? ver.allow.deriv : null, btc: (cv && cv.last && cv.last.BTC) || valAt('BTC.CM=', d) };
   if (!dst.date || dst.date < d) { Dv.nightly(dst, ctx); const h = dst.hist[dst.hist.length - 1]; if (h) h.pre = r2(h.eq - (dst.transfers || []).filter((x) => x.date === d).reduce((a, x) => a + x.amount, 0)); }
   else Dv.session(dst, ctx);
   derivChanged = true;
+  // the bitcoin basis: the coin part holds what the futures here are short
+  const bq = dst.basis ? { qty: dst.basis.qty, date: dst.basis.date, why: dst.basis.why || null } : null;
+  if (JSON.stringify(alloc.basis || null) !== JSON.stringify(bq)) { alloc.basis = bq; allocChanged = true; }
 }
+if (verChanged && ver) fs.writeFileSync('data/verify.json', JSON.stringify(ver, null, 1) + '\n');
 if (derivChanged && dst) { fs.mkdirSync('data/deriv', { recursive: true }); fs.writeFileSync('data/deriv/state.json', JSON.stringify(dst)); }
 if (allocChanged) fs.writeFileSync('data/alloc.json', JSON.stringify(alloc, null, 1));
 if (bookChanged) fs.writeFileSync('data/book.json', JSON.stringify(book));
