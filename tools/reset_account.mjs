@@ -16,7 +16,7 @@ const alloc = J('data/alloc.json', {});
 if (alloc.reset && alloc.reset.id === id) { console.log('already reset', id); process.exit(1); }
 const arch = `data/archive/${id.slice(6)}`;
 fs.mkdirSync(arch, { recursive: true });
-for (const f of ['book.json', 'alloc.json', 'settings.json', 'state.json', 'evolution.json', 'deriv/state.json', 'crypto/state.json', 'crypto/view.json'])
+for (const f of ['book.json', 'alloc.json', 'settings.json', 'state.json', 'evolution.json', 'deriv/state.json', 'deriv/intra.json', 'crypto/state.json', 'crypto/view.json'])
   if (fs.existsSync(`data/${f}`) && !fs.existsSync(`${arch}/${f.replace('/', '_')}`)) fs.copyFileSync(`data/${f}`, `${arch}/${f.replace('/', '_')}`);
 const S = J('data/state.json', {}), book = J('data/book.json', null), now = Date.now();
 // 1. the stock book's live trades, and its open positions closed at their last price, go to the trade archive
@@ -24,6 +24,7 @@ const trades = J('data/trades_archive.json', []).concat((book && book.hist && bo
 for (const p of (S.account && S.account.open) || []) trades.push({ sym: p.sym, name: p.name, pb: p.pb, dir: p.dir, entryDate: p.entryDate, exitDate: day, entry: p.entry, exit: p.price, qty: p.qty, pnl: p.pnl, R: p.R, reason: '계좌 초기화 정리', reset: id });
 W('data/trades_archive.json', trades);
 if (fs.existsSync('data/book.json')) fs.unlinkSync('data/book.json');   // a copy is in the archive; the next run opens a fresh book
+if (fs.existsSync('data/deriv/intra.json')) W('data/deriv/intra.json', { date: day, pts: [] });   // the old derivatives' values of the day would bend the one-day chart
 // 2. settings: the new capital, the book opens on the last final day
 const st0 = J('data/settings.json', {});
 W('data/settings.json', Object.assign(st0, { capital, bookCapital: Math.round(capital * SH.core), liveStart: day, quietDay: day, resetAt: id, rebases: [] }));   // an old rebase would bend the new account's chart

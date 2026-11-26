@@ -515,7 +515,10 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const pick = (list) => { let v = null; for (const [t, e] of list || []) { if (t <= ms) v = e; else break; } return v; };
     const m = CV.eqMin || [];
     const v = m.length && ms >= m[0][0] ? pick(m) : pick(CV.eqHour);
-    return v == null ? 0 : v;
+    if (v != null) return v;
+    // before its first record: the account had just started again (the owner's reset), so its first value, not zero
+    const f = m[0] || (CV.eqHour || [])[0];
+    return f ? f[1] : 0;
   }
   function etMs(d, hm) {                  // a New York date and HH:MM as a moment
     const [H, M] = String(hm || '16:00').split(':').map(Number);
