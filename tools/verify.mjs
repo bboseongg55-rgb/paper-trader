@@ -40,17 +40,17 @@ function midDate(a, b) { return new Date((Date.parse(a) + Date.parse(b)) / 2).to
 const item = (k, book, name, family, data, j, extra) => Object.assign({ k, book, name, family, data }, j || {}, extra || {});
 const untested = (k, book, name, family, why) => ({ k, book, name, family, data: null, pass: false, why, untested: true });
 
-// ── 0. the long record (tools/fetch_long.mjs, owner 2026-11-26: "과거 데이터 확장"): Yahoo's adjusted daily closes from
+// ── 0. the long record (tools/fetch_long.mjs, owner 2026-11-26: "과거 데이터 확장"): CNBC's daily closes (split adjusted) from
 // mid-2009 spliced onto the book's own data at its first day (each stock scaled so both agree there), the S&P 500 index
 // the same way; before 2024 a stock may be bought only on days it was in the S&P 500 (the point-in-time list), so the
-// test does not pick today's winners in advance. Stocks that left the index and are no longer on Yahoo are missing, so
-// some survivor bias stays (확인필요). The bond part gets the US Treasury yields from FRED and the bond funds' adjusted
-// closes before 2024; the other countries' bonds start in 2024 as before.
+// test does not pick today's winners in advance. Stocks that left the market are not on CNBC and are missing, so
+// some survivor bias stays (확인필요). The bond part gets the US Treasury yields from FRED and the bond funds' closes (without
+// their payouts, so on the low side) before 2024; the other countries' bonds start in 2024 as before.
 // which long record the checks used: a new one (tools/fetch_long.mjs) means checking again
 export function longKey() { const m = readJSON('data/hist/meta_long.json', null), c = readJSON('data/hist/meta.json', null); return m || c ? `${(m && m.built) || ''}|${(c && c.built) || ''}` : null; }
 export function longParts() {
   const g = (f) => { try { return gz(f); } catch { return null; } };
-  const Y = g('data/hist/yf_stocks.json.gz'), M = g('data/hist/sp500_members.json.gz'), X = g('data/hist/yf_misc.json.gz'), F = g('data/hist/fred_rates.json.gz');
+  const Y = g('data/hist/long_stocks.json.gz'), M = g('data/hist/sp500_members.json.gz'), X = g('data/hist/long_misc.json.gz'), F = g('data/hist/fred_rates.json.gz');
   // the stocks only once the fetch got through its whole list (a part of it would be the list cut at some letter)
   const stocks = !!(Y && Y.s && M && M.rows && !(Y.pending > 0));
   return stocks || X ? { Y: stocks ? Y : null, M, X: X || {}, F, stocks } : null;
@@ -78,7 +78,7 @@ export function longSeed(seed, P) {
     const tail = seed.dates.map((d) => { const v = ix(y, d); return v > 0 ? v : null; });
     syms.push({ s: y, n: y, sec: '기타', c: c.map((v) => (v > 0 ? v : null)).concat(tail), e: e + '0'.repeat(seed.dates.length) });
   }
-  const gs = P.X['^GSPC'] || {}, fs = seed.spx[0] > 0 && gs[d0] > 0 ? seed.spx[0] / gs[d0] : 1;
+  const gs = P.X['.SPX'] || {}, fs = seed.spx[0] > 0 && gs[d0] > 0 ? seed.spx[0] / gs[d0] : 1;
   return Object.assign({}, seed, { dates: hd.concat(seed.dates), spx: hd.map((d) => (gs[d] > 0 ? +(gs[d] * fs).toFixed(2) : null)).concat(seed.spx), syms });
 }
 export function longBonds(bondsHist, P) {
@@ -95,13 +95,13 @@ export function longBonds(bondsHist, P) {
   }
   return B;
 }
-// the futures, the coins' spot and the rates for the futures and basis checks: Yahoo's continuous front month before
-// the book's own record (CNBC's, the same kind of series), FRED's rates before 2024
+// the futures, the coins' spot and the rates for the futures and basis checks: CNBC's continuous front month before
+// the book's own record (the same series), FRED's rates before 2024
 export function longMS(MS, P) {
   const out = Object.assign({}, MS);
   const put = (key, src) => { const h = Object.assign({}, src || {}), m = MS[key] || {}, f0 = Object.keys(m).sort()[0] || '9999'; for (const d of Object.keys(h)) if (d >= f0) delete h[d]; out[key] = Object.assign(h, m); };
-  const MAP = { '@SP.1': 'ES=F', '@ND.1': 'NQ=F', '@DJ.1': 'YM=F', '@TFS.1': 'RTY=F', '@TU.1': 'ZT=F', '@FV.1': 'ZF=F', '@TY.1': 'ZN=F', '@US.1': 'ZB=F', '@CL.1': 'CL=F', '@GC.1': 'GC=F', '@SI.1': 'SI=F', '@HG.1': 'HG=F', '@BTC.1': 'BTC=F', '@ETH.1': 'ETH=F', 'BTC.CM=': 'BTC-USD', 'ETH.CM=': 'ETH-USD', '.SPX': '^GSPC', '.VIX': '^VIX' };
-  for (const [k, y] of Object.entries(MAP)) if (P.X[y]) put(k, P.X[y]);
+  // the long file keeps CNBC's own symbols, the same as the book's record
+  for (const k of ['@SP.1', '@ND.1', '@DJ.1', '@TFS.1', '@TU.1', '@FV.1', '@TY.1', '@US.1', '@CL.1', '@GC.1', '@SI.1', '@HG.1', '@BTC.1', '@ETH.1', 'BTC.CM=', 'ETH.CM=', '.SPX', '.VIX']) if (P.X[k]) put(k, P.X[k]);
   for (const [k, id] of [['US1M', 'DGS1MO'], ['US3M', 'DGS3MO'], ['US2Y', 'DGS2'], ['US5Y', 'DGS5'], ['US10Y', 'DGS10'], ['US30Y', 'DGS30']]) if (P.F && P.F[id]) put(k, P.F[id]);
   return out;
 }
