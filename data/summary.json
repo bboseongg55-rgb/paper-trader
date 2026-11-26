@@ -1,5 +1,5 @@
 {
- "built": "2026-11-26T02:40:48.891Z",
+ "built": "2026-11-26T14:35:51.934Z",
  "asOf": {
   "date": "2026-11-25",
   "time": "15:50",
@@ -9,295 +9,33 @@
  "account": {
   "equity": {
    "date": "2026-11-25",
-   "eq": 352793.4,
-   "cash": 103378.3,
-   "hedge": 13313.05,
-   "n": 18,
-   "dd": 0.0048,
-   "bench": 363089.45,
+   "eq": 550058.51,
+   "cash": 550058.51,
+   "hedge": 0,
+   "n": 0,
+   "dd": 0,
+   "bench": 550000,
    "time": "15:50"
   },
-  "ret": 0.00798114285714302,
-  "bench": 0.03739842857142861,
-  "trades": 9,
-  "fees": 2.88,
-  "open": [
-   {
-    "sym": "LH",
-    "qty": 8,
-    "entry": 374.18,
-    "price": 371.63,
-    "stop": 360.94,
-    "pnl": -20.43
-   },
-   {
-    "sym": "TAK",
-    "qty": 253,
-    "entry": 22.12,
-    "price": 23.04,
-    "stop": 22.45,
-    "pnl": 232.23
-   },
-   {
-    "sym": "MPC",
-    "qty": 43,
-    "entry": 358.09,
-    "price": 347.06,
-    "stop": 328.15,
-    "pnl": -474.19
-   },
-   {
-    "sym": "HAL",
-    "qty": 203,
-    "entry": 30.46,
-    "price": 31.66,
-    "stop": 32.37,
-    "pnl": -244
-   },
-   {
-    "sym": "CVS",
-    "qty": 44,
-    "entry": 79.68,
-    "price": 81.28,
-    "stop": 88.45,
-    "pnl": -70.57
-   },
-   {
-    "sym": "KR10Y",
-    "qty": 501,
-    "entry": 102.81,
-    "price": 102.83,
-    "stop": 100.56,
-    "pnl": 9.92
-   },
-   {
-    "sym": "JP10Y",
-    "qty": 673,
-    "entry": 77.93,
-    "price": 78.98,
-    "stop": 77.67,
-    "pnl": 707.65
-   },
-   {
-    "sym": "US2Y",
-    "qty": 469,
-    "entry": 111.92,
-    "price": 111.92,
-    "stop": 111.46,
-    "pnl": 1.53
-   },
-   {
-    "sym": "SN",
-    "qty": 11,
-    "entry": 230.25,
-    "price": 234.91,
-    "stop": 221.69,
-    "pnl": 51.26
-   },
-   {
-    "sym": "A",
-    "qty": 17,
-    "entry": 183.92,
-    "price": 179.03,
-    "stop": 175.37,
-    "pnl": -83.19
-   },
-   {
-    "sym": "REGN",
-    "qty": 2,
-    "entry": 986.71,
-    "price": 985,
-    "stop": 917.5,
-    "pnl": -3.41
-   },
-   {
-    "sym": "CLS",
-    "qty": 9,
-    "entry": 197.47,
-    "price": 191.89,
-    "stop": 238.08,
-    "pnl": 50.18
-   },
-   {
-    "sym": "VALE",
-    "qty": 483,
-    "entry": 9.34,
-    "price": 9.8,
-    "stop": 10.14,
-    "pnl": -222.03
-   },
-   {
-    "sym": "AJG",
-    "qty": 12,
-    "entry": 294.91,
-    "price": 294.62,
-    "stop": 276.63,
-    "pnl": -3.54
-   },
-   {
-    "sym": "ADP",
-    "qty": 17,
-    "entry": 318.33,
-    "price": 318.01,
-    "stop": 305.31,
-    "pnl": -5.41
-   },
-   {
-    "sym": "VLTO",
-    "qty": 34,
-    "entry": 121.06,
-    "price": 120.94,
-    "stop": 114.62,
-    "pnl": -4.11
-   },
-   {
-    "sym": "LRCX",
-    "qty": 10,
-    "entry": 181.97,
-    "price": 182.15,
-    "stop": 221.13,
-    "pnl": -1.86
-   },
-   {
-    "sym": "BNDX",
-    "qty": 996,
-    "entry": 53.11,
-    "price": 53.06,
-    "stop": 52.77,
-    "pnl": -52.85
-   }
-  ],
-  "lastTrades": [
-   {
-    "sym": "ENB",
-    "exit": "2026-11-25",
-    "R": -1.07,
-    "pnl": -415.49,
-    "reason": "공매도 손절, 장중 10:05"
-   },
-   {
-    "sym": "ACN",
-    "exit": "2026-11-25",
-    "R": -1.16,
-    "pnl": -424.74,
-    "reason": "단타 손절, 장중 15:35"
-   },
-   {
-    "sym": "U",
-    "exit": "2026-11-25",
-    "R": -1.12,
-    "pnl": -412.48,
-    "reason": "단타 손절, 장중 15:35"
-   },
-   {
-    "sym": "CN10Y",
-    "exit": "2026-11-25",
-    "R": -1.37,
-    "pnl": -430.53,
-    "reason": "채권 손절"
-   },
-   {
-    "sym": "SNY",
-    "exit": "2026-11-25",
-    "R": 0.23,
-    "pnl": 85.94,
-    "reason": "단타 장 마감 청산"
-   }
-  ],
+  "ret": 0.00010638181818189985,
+  "bench": 0,
+  "trades": 0,
+  "fees": 0,
+  "open": [],
+  "lastTrades": [],
   "lastChanges": [
    {
     "date": "2026-11-25",
-    "kind": "loss",
-    "title": "ACN 손실 복기"
-   },
-   {
-    "date": "2026-11-25",
-    "kind": "loss",
-    "title": "U 손실 복기"
-   },
-   {
-    "date": "2026-11-25",
-    "kind": "loss",
-    "title": "CN10Y 손실 복기"
-   },
-   {
-    "date": "2026-11-25",
-    "kind": "hedge",
-    "title": "S&P 500 인버스 헷지 정리"
-   },
-   {
-    "date": "2026-11-25",
-    "kind": "hedge",
-    "title": "미국 10년 국채 헷지 시작"
+    "kind": "start",
+    "title": "연습 계좌 시작(검증된 규칙만)"
    }
   ]
  },
- "signals": [
-  {
-   "sym": "AJG",
-   "pb": "bo",
-   "taken": true,
-   "why": ""
-  },
-  {
-   "sym": "BDX",
-   "pb": "bo",
-   "taken": false,
-   "why": "같은 업종 3종목 한도"
-  },
-  {
-   "sym": "ADP",
-   "pb": "bo",
-   "taken": true,
-   "why": ""
-  },
-  {
-   "sym": "VLTO",
-   "pb": "bo",
-   "taken": true,
-   "why": ""
-  },
-  {
-   "sym": "CAH",
-   "pb": "bo",
-   "taken": false,
-   "why": "하루 신규 3종목 한도"
-  },
-  {
-   "sym": "IBN",
-   "pb": "bo",
-   "taken": false,
-   "why": "하루 신규 3종목 한도"
-  },
-  {
-   "sym": "WTW",
-   "pb": "bo",
-   "taken": false,
-   "why": "하루 신규 3종목 한도"
-  },
-  {
-   "sym": "BRO",
-   "pb": "bo",
-   "taken": false,
-   "why": "하루 신규 3종목 한도"
-  },
-  {
-   "sym": "USFD",
-   "pb": "bo",
-   "taken": false,
-   "why": "하루 신규 3종목 한도"
-  },
-  {
-   "sym": "DGX",
-   "pb": "bo",
-   "taken": false,
-   "why": "하루 신규 3종목 한도"
-  }
- ],
+ "signals": [],
  "book": "2026-11-25",
  "evolution": {
   "gen": 0,
-  "shadows": 4,
+  "shadows": 0,
   "lastRun": "2026-11-25",
   "error": null
  }
