@@ -18,7 +18,7 @@ const readJSON = (f, d) => { try { return JSON.parse(fs.readFileSync(ROOT + f, '
 const gz = (f) => JSON.parse(zlib.gunzipSync(fs.readFileSync(ROOT + f)));
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
-export const VERSION = 1;
+export const VERSION = 2;   // 2: the long record (2009 on) when data/hist has it
 export const RULE = '30건 이상(전반·후반 각 10건 이상), 수수료·슬리피지를 뺀 평균 R과 손익이 전체·전반·후반 모두 0보다 큼';
 function stat(xs) {
   const n = xs.length, m = n ? xs.reduce((a, x) => a + x.R, 0) / n : 0, sd = n > 1 ? Math.sqrt(xs.reduce((a, x) => a + (x.R - m) ** 2, 0) / (n - 1)) : 0;
@@ -40,6 +40,68 @@ function midDate(a, b) { return new Date((Date.parse(a) + Date.parse(b)) / 2).to
 const item = (k, book, name, family, data, j, extra) => Object.assign({ k, book, name, family, data }, j || {}, extra || {});
 const untested = (k, book, name, family, why) => ({ k, book, name, family, data: null, pass: false, why, untested: true });
 
+// ── 0. the long record (tools/fetch_long.mjs, owner 2026-11-26: "과거 데이터 확장"): Yahoo's adjusted daily closes from
+// mid-2009 spliced onto the book's own data at its first day (each stock scaled so both agree there), the S&P 500 index
+// the same way; before 2024 a stock may be bought only on days it was in the S&P 500 (the point-in-time list), so the
+// test does not pick today's winners in advance. Stocks that left the index and are no longer on Yahoo are missing, so
+// some survivor bias stays (확인필요). The bond part gets the US Treasury yields from FRED and the bond funds' adjusted
+// closes before 2024; the other countries' bonds start in 2024 as before.
+// which long record the checks used: a new one (tools/fetch_long.mjs) means checking again
+export function longKey() { const m = readJSON('data/hist/meta_long.json', null), c = readJSON('data/hist/meta.json', null); return m || c ? `${(m && m.built) || ''}|${(c && c.built) || ''}` : null; }
+export function longParts() {
+  try { return { Y: gz('data/hist/yf_stocks.json.gz'), M: gz('data/hist/sp500_members.json.gz'), X: gz('data/hist/yf_misc.json.gz'), F: gz('data/hist/fred_rates.json.gz') }; } catch { return null; }
+}
+const ynorm = (s) => String(s).toUpperCase().replace(/[./]/g, '-');
+export function longSeed(seed, P) {
+  const d0 = seed.dates[0], cal = P.Y.dates, at = new Map(cal.map((d, i) => [d, i]));
+  const hd = cal.filter((d) => d >= '2009-06-01' && d < d0);
+  const ix = (sym, d) => { const r = P.Y.s[sym]; if (!r) return NaN; const i = at.get(d); if (i == null || i < r[0]) return NaN; const v = r[1][i - r[0]]; return v > 0 ? v : NaN; };
+  // the S&P 500 list on each historical day
+  const rows = (P.M && P.M.rows) || [], sets = rows.map((r) => new Set(r[1].split(',')));
+  let k = -1; const memb = hd.map((d) => { while (k + 1 < rows.length && rows[k + 1][0] <= d) k++; return k >= 0 ? sets[k] : null; });
+  const scaleAt = (sym, c) => { for (let t = 0; t < seed.dates.length && t < 60; t++) { const a = c[t], b = ix(sym, seed.dates[t]); if (a > 0 && b > 0) return a / b; } return null; };
+  const syms = seed.syms.map((x) => {
+    const y = ynorm(x.s), f = scaleAt(y, x.c);
+    const c = hd.map((d) => (f ? ix(y, d) * f : NaN)), e = hd.map((d, i) => (memb[i] && memb[i].has(y) && c[i] > 0 ? '1' : '0')).join('');
+    return Object.assign({}, x, { c: c.map((v) => (v > 0 ? +v.toPrecision(7) : null)).concat(x.c), e: e + x.e });
+  });
+  // past members the book does not track: their own closes up to March 2024, never bought after September 2023
+  const own = new Set(seed.syms.map((x) => ynorm(x.s)));
+  for (const y of Object.keys(P.Y.s)) {
+    if (own.has(y)) continue;
+    const c = hd.map((d) => ix(y, d)), e = hd.map((d, i) => (d < '2023-10-01' && memb[i] && memb[i].has(y) && c[i] > 0 ? '1' : '0')).join('');
+    if (!e.includes('1')) continue;
+    const tail = seed.dates.map((d) => { const v = ix(y, d); return v > 0 ? v : null; });
+    syms.push({ s: y, n: y, sec: '기타', c: c.map((v) => (v > 0 ? v : null)).concat(tail), e: e + '0'.repeat(seed.dates.length) });
+  }
+  const gs = P.X['^GSPC'] || {}, fs = seed.spx[0] > 0 && gs[d0] > 0 ? seed.spx[0] / gs[d0] : 1;
+  return Object.assign({}, seed, { dates: hd.concat(seed.dates), spx: hd.map((d) => (gs[d] > 0 ? +(gs[d] * fs).toFixed(2) : null)).concat(seed.spx), syms });
+}
+export function longBonds(bondsHist, P) {
+  const B = JSON.parse(JSON.stringify(bondsHist || { y: {}, etf: {}, fx: {}, div: {} })), first = (o) => Object.keys(o || {}).sort()[0] || '9999';
+  for (const [k, id] of [['US2Y', 'DGS2'], ['US5Y', 'DGS5'], ['US10Y', 'DGS10'], ['US30Y', 'DGS30']]) {
+    const h = (B.y[k] = B.y[k] || {}), f0 = first(h);
+    for (const [d, v] of Object.entries((P.F && P.F[id]) || {})) if (d >= '2009-01-01' && d < f0) h[d] = v;
+  }
+  for (const k of Object.keys(B.etf || {})) {
+    const h = B.etf[k], f0 = first(h), y = P.X[k] || {};
+    if (!(h[f0] > 0) || !(y[f0] > 0)) continue;
+    const f = h[f0] / y[f0];
+    for (const [d, v] of Object.entries(y)) if (d >= '2009-01-01' && d < f0) h[d] = +(v * f).toPrecision(7);
+  }
+  return B;
+}
+// the futures, the coins' spot and the rates for the futures and basis checks: Yahoo's continuous front month before
+// the book's own record (CNBC's, the same kind of series), FRED's rates before 2024
+export function longMS(MS, P) {
+  const out = Object.assign({}, MS);
+  const put = (key, src) => { const h = Object.assign({}, src || {}), m = MS[key] || {}, f0 = Object.keys(m).sort()[0] || '9999'; for (const d of Object.keys(h)) if (d >= f0) delete h[d]; out[key] = Object.assign(h, m); };
+  const MAP = { '@SP.1': 'ES=F', '@ND.1': 'NQ=F', '@DJ.1': 'YM=F', '@TFS.1': 'RTY=F', '@TU.1': 'ZT=F', '@FV.1': 'ZF=F', '@TY.1': 'ZN=F', '@US.1': 'ZB=F', '@CL.1': 'CL=F', '@GC.1': 'GC=F', '@SI.1': 'SI=F', '@HG.1': 'HG=F', '@BTC.1': 'BTC=F', '@ETH.1': 'ETH=F', 'BTC.CM=': 'BTC-USD', 'ETH.CM=': 'ETH-USD', '.SPX': '^GSPC', '.VIX': '^VIX' };
+  for (const [k, y] of Object.entries(MAP)) if (P.X[y]) put(k, P.X[y]);
+  for (const [k, id] of [['US1M', 'DGS1MO'], ['US3M', 'DGS3MO'], ['US2Y', 'DGS2'], ['US5Y', 'DGS5'], ['US10Y', 'DGS10'], ['US30Y', 'DGS30']]) if (P.F && P.F[id]) put(k, P.F[id]);
+  return out;
+}
+
 // ── 1. the stock and bond book (engine.js): each method alone, fixed rules, no account brakes
 export function stockChecks(E, D, toI) {
   const from = 210, to = toI != null ? toI : D.dates.length - 1, a = D.dates[from], b = D.dates[to], out = [];
@@ -48,7 +110,7 @@ export function stockChecks(E, D, toI) {
   for (const k of Object.keys(NAMES)) {
     const r = E.simulate(D, Object.assign({}, base, { only: k, brakes: false }));
     const tr = (r.trades || []).filter((x) => x.pb === k && Number.isFinite(x.R)).map((x) => ({ at: x.exitDate, R: x.R, pnl: x.pnl }));
-    out.push(item(k, 'stock', NAMES[k][0], NAMES[k][1], `${a}~${b} 일봉, 783종목`, judge(tr, a, b)));
+    out.push(item(k, 'stock', NAMES[k][0], NAMES[k][1], `${a}~${b} 일봉, ${D.S.length}종목${a < '2024' ? '(2024년 전에는 그때 S&P 500에 들어 있던 종목만 매수)' : ''}`, judge(tr, a, b)));
   }
   return out;
 }
@@ -92,7 +154,7 @@ const DIV = { MES: 0.013, MNQ: 0.007, MYM: 0.018, M2K: 0.013 }, YLD = { ZT: 'US2
 function lastOnF(MS) { const cache = {}; return (k, d) => { const s = MS[k] || {}, ks = (cache[k] = cache[k] || Object.keys(s).sort()); let lo = 0, hi = ks.length - 1, r = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (ks[m] <= d) { r = m; lo = m + 1; } else hi = m - 1; } return r >= 0 ? +s[ks[r]] : null; }; }
 function lastFriday(y, m) { const x = new Date(Date.UTC(y, m + 1, 0)); while (x.getUTCDay() !== 5) x.setUTCDate(x.getUTCDate() - 1); return x.toISOString().slice(0, 10); }
 export function ctaCheck(Dv, MS) {
-  const lastOn = lastOnF(MS), dates = Object.keys(MS['@SP.1'] || {}).filter((d) => d >= '2024-06-24').sort();
+  const lastOn = lastOnF(MS), dates = Object.keys(MS['@SP.1'] || {}).sort().slice(130);   // 130 days to warm the trend measures
   if (dates.length < 200) return untested('cta', 'deriv', '선물 추세(14개 시장)', 'trend', '선물 이력 부족');
   const basis = (sk, fk, d) => { const F = lastOn(fk, d), S = lastOn(sk, d); if (!(F > 0 && S > 0)) return 0.08; const t = new Date(d + 'T00:00:00Z'); let e = lastFriday(t.getUTCFullYear(), t.getUTCMonth()); if (Date.parse(e) - t < 2 * 864e5) e = lastFriday(t.getUTCFullYear(), t.getUTCMonth() + 1); return Math.max(-0.3, Math.min(0.4, (F / S - 1) / (Math.max(3, (Date.parse(e) - t) / 864e5) / 365))); };
   const carry = (k, d) => { const r = (lastOn('US3M', d) || 4) / 100; if (DIV[k] != null) return r - DIV[k]; if (YLD[k]) return r - (lastOn(YLD[k], d) || 4) / 100; if (k === 'MBT') return basis('BTC.CM=', '@BTC.1', d); if (k === 'MET') return basis('ETH.CM=', '@ETH.1', d); return r; };
@@ -170,27 +232,31 @@ export function cryptoReplay(C, gran, only, rule) {
   C.CFG.arbShare = 0; C.CFG.brakes.day = 9; C.CFG.brakes.stop = 9; C.CFG.brakes.half = 9;
   try {
     const H = Object.fromEntries(C.COINS.map((c) => [c, new Map(gz(`data/hist/cb_${c}_1${gran}.json.gz`).map((r) => [r[0], r]))]));
-    const times = [...H[C.COINS[0]].keys()].filter((t) => C.COINS.every((c) => H[c].has(t))).sort((a, b) => a - b);
+    const times = [...new Set(C.COINS.flatMap((c) => [...H[c].keys()]))].sort((a, b) => a - b);   // each coin from its first candle
+    let FD = {}; try { FD = gz('data/hist/hl_funding.json.gz'); } catch { /* no funding record: the assumed rate */ }
+    const fk = Object.fromEntries(C.COINS.map((c) => [c, 0])), fund = {};
     const step = gran === 'h' ? 3600e3 : 60e3, NP = gran === 'h' ? 20 : 4, hs = 0.0001;
-    const book = (px) => { const b = {}; for (const v of Object.keys(C.VENUES)) { b[v] = {}; for (const c of C.COINS) b[v][c] = { bid: px[c] * (1 - hs), ask: px[c] * (1 + hs) }; } return b; };
-    const p0 = Object.fromEntries(C.COINS.map((c) => [c, H[c].get(times[0])[1]]));
+    const book = (px) => { const b = {}; for (const v of Object.keys(C.VENUES)) { b[v] = {}; for (const c of Object.keys(px)) b[v][c] = { bid: px[c] * (1 - hs), ask: px[c] * (1 + hs) }; } return b; };
+    const p0 = Object.fromEntries(C.COINS.filter((c) => H[c].has(times[0])).map((c) => [c, H[c].get(times[0])[1]]));
     const st = C.init(1000000, { at: times[0], books: book(p0), toks: {} }, times[0]), rows = [];
     st.only = only; st.onClose = (r) => rows.push(r);
     if (rule) st.sv = { pos: {}, done: [], live: rule, at: 9e15, seeded: true };
     let prev = Object.assign({}, p0), prevAt = times[0];
     for (const t of times) {
       const pathN = {};
-      for (const c of C.COINS) { const [, o, h, l, cl] = H[c].get(t), k4 = cl >= o ? [o, l, h, cl] : [o, h, l, cl], pts = []; for (let j = 0; j < NP; j++) { const x = (j / NP) * 3, sg = Math.min(2, Math.floor(x)); pts.push(k4[sg] + (k4[sg + 1] - k4[sg]) * (x - sg)); } pts.push(cl); pathN[c] = pts; }
+      for (const c of C.COINS) { const r = H[c].get(t); if (!r) continue; const [, o, h, l, cl] = r, k4 = cl >= o ? [o, l, h, cl] : [o, h, l, cl], pts = []; for (let j = 0; j < NP; j++) { const x = (j / NP) * 3, sg = Math.min(2, Math.floor(x)); pts.push(k4[sg] + (k4[sg + 1] - k4[sg]) * (x - sg)); } pts.push(cl); pathN[c] = pts; }
+      for (const c of C.COINS) { const L = FD[c] || []; while (fk[c] < L.length && L[fk[c]][0] <= t) fund[c] = L[fk[c]++][1]; }
+      C.setExt({ fund });
       for (let j = 0; j < NP; j++) {
         const at = t + (j * step) / NP, px = {}, tape = {};
-        for (const c of C.COINS) { px[c] = j === NP - 1 ? pathN[c][NP] : pathN[c][j]; tape[c] = { lo: Math.min(prev[c], px[c]), hi: Math.max(prev[c], px[c]), n: 1, from: prevAt }; }
+        for (const c of Object.keys(pathN)) { px[c] = j === NP - 1 ? pathN[c][NP] : pathN[c][j]; const pv = prev[c] > 0 ? prev[c] : px[c]; tape[c] = { lo: Math.min(pv, px[c]), hi: Math.max(pv, px[c]), n: 1, from: prevAt }; }
         C.step(st, { at, books: book(px), toks: {}, tape }, at);
-        prev = px; prevAt = at;
+        Object.assign(prev, px); prevAt = at;
       }
     }
     const tr = rows.filter((r) => r.s === only).map((r) => ({ at: r.t, R: r.R, pnl: r.pnl }));
     return { j: judge(tr, times[0], times[times.length - 1]), from: new Date(times[0]).toISOString().slice(0, 10), to: new Date(times[times.length - 1]).toISOString().slice(0, 10) };
-  } finally { C.CFG.arbShare = keep.arb; Object.assign(C.CFG.brakes, keep.b); }
+  } finally { C.CFG.arbShare = keep.arb; Object.assign(C.CFG.brakes, keep.b); C.setExt({}); }
 }
 export function cryptoChecks(C, prev) {
   const meta = readJSON('data/hist/meta.json', null);
@@ -199,7 +265,7 @@ export function cryptoChecks(C, prev) {
   const old = prev && prev.cryptoKey === key ? (prev.items || []).filter((x) => x.book === 'crypto') : null;
   if (old && old.length) return old;
   const out = [];
-  const add = (k, name, family, gran, only, rule) => { const r = cryptoReplay(C, gran, only, rule); out.push(item(k, 'crypto', name, family, `${r.from}~${r.to} Coinbase ${gran === 'h' ? '1시간봉' : '1분봉'}`, r.j)); };
+  const add = (k, name, family, gran, only, rule) => { const r = cryptoReplay(C, gran, only, rule); out.push(item(k, 'crypto', name, family, `${r.from}~${r.to} Coinbase ${gran === 'h' ? '1시간봉' : '1분봉'}, 무기한 선물은 하이퍼리퀴드 실제 펀딩비(2023년 5월부터, 그 전은 연 8% 가정)`, r.j)); };
   add('c_trend', '코인 추세(20시간 신고가·신저가 돌파, 무기한 선물 양방향)', 'trend', 'h', 'trend');
   add('c_mr', '코인 평균회귀(20시간 평균에서 2 표준편차)', 'meanrev', 'h', 'mr');
   for (const [k, v] of Object.entries(C.CFG.scalpV)) add('c_scalp:' + k, `코인 초단타: ${v.name}`, k === 'fade' ? 'meanrev' : 'breakout', 'm', 'scalp', k);
@@ -209,12 +275,25 @@ export function cryptoChecks(C, prev) {
   out.forEach((x) => { x.cryptoKey = key; });
   return out;
 }
+export function rpOf(MS) {
+  return (dates) => { const y = MS.US1M || {}, ks = Object.keys(y).sort(); let j = 0, last = null; return dates.map((d) => { while (j < ks.length && ks[j] <= d) last = y[ks[j++]]; return last == null ? null : Math.max(0, last - 0.25) / 100; }); };
+}
 export function run(o) {
-  const E = o.E, D = o.D, MS = o.MS, Dv = o.Dv, C = o.C, prev = readJSON('data/verify.json', null), t0 = Date.now();
+  const E = o.E, Dv = o.Dv, C = o.C, prev = readJSON('data/verify.json', null), t0 = Date.now();
+  // the long record when it is there (else the book's own two years)
+  const P = o.seed && o.Bonds ? longParts() : null;
+  let D = o.D, MS = o.MS, to = o.to, span = 'book';
+  if (P) {
+    MS = longMS(o.MS, P);
+    const LB = longBonds(o.bondsHist, P);
+    D = E.prepare(longSeed(o.seed, P), o.L, {}, { instruments: (dates) => o.Bonds.build(LB, o.L.days, dates), rp: rpOf(MS) });
+    to = o.lastFinal ? D.dates.lastIndexOf(o.lastFinal) : D.dates.length - 1; if (to < 0) to = D.dates.length - 1;
+    span = 'long';
+  }
   const items = [];
-  items.push(...stockChecks(E, D, o.to));
+  items.push(...stockChecks(E, D, to));
   const passStock = items.filter((x) => x.book === 'stock' && x.pass).map((x) => x.k);
-  const ov = stockOverlays(E, D, passStock, o.to), allowStock = ov.keep || [];
+  const ov = stockOverlays(E, D, passStock, to), allowStock = ov.keep || [];
   for (const d of ov.drops || []) { const x = items.find((y) => y.k === d.k); if (x) { x.pass = false; x.soloPass = true; x.why = `혼자서는 통과했지만 다른 검증된 방법과 함께 돌리면 빼는 편이 전반·후반 모두 나음(샤프 지수 ${d.with.h1.sharpe}→${d.without.h1.sharpe}, ${d.with.h2.sharpe}→${d.without.h2.sharpe})`; } }
   items.push({ k: 'hedge', book: 'stock', name: '하락 대비 헷지(국채·경기방어주·인버스)', family: 'hedge', data: ov.window, pass: ov.cfg.hedge, why: ov.cfg.hedge ? '검증된 방법과 함께 전반·후반 모두 샤프 지수 개선' : '검증된 방법과 함께 돌리면 전반·후반 중 한쪽 이상에서 샤프 지수가 나빠짐', overlay: true });
   items.push(ctaCheck(Dv, MS));
@@ -231,7 +310,7 @@ export function run(o) {
   };
   // the basis trade has its spot leg in the coin part
   if (allow.deriv.includes('basis')) allow.crypto.push('basis');
-  const out = { v: VERSION, built: new Date().toISOString(), rule: RULE, ms: Date.now() - t0, cfg: ov.cfg, overlays: ov, allow, items, cryptoKey: (items.find((x) => x.cryptoKey) || {}).cryptoKey || null };
+  const out = { v: VERSION, built: new Date().toISOString(), rule: RULE, span, longKey: longKey(), ms: Date.now() - t0, cfg: ov.cfg, overlays: ov, allow, items, cryptoKey: (items.find((x) => x.cryptoKey) || {}).cryptoKey || null };
   return out;
 }
 // by hand: node tools/verify.mjs
@@ -242,7 +321,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(proces
   const rpFor = (dates) => { const y = MS.US1M || {}, ks = Object.keys(y).sort(); let j = 0, last = null; return dates.map((d) => { while (j < ks.length && ks[j] <= d) last = y[ks[j++]]; return last == null ? null : Math.max(0, last - 0.25) / 100; }); };
   const L = Object.assign({}, live, { days: (live.days || []).filter((d) => d.final !== false) });
   const D = E.prepare(seed, L, {}, { instruments: bondsHist ? (dates) => Bonds.build(bondsHist, L.days, dates) : null, rp: rpFor });
-  const out = run({ E, D, MS, Dv, C });
+  const out = run({ E, D, MS, Dv, C, seed, L, Bonds, bondsHist });
   fs.writeFileSync(ROOT + 'data/verify.json', JSON.stringify(out, null, 1) + '\n');
   for (const x of out.items) console.log(x.pass ? 'PASS' : 'fail', x.k.padEnd(14), x.all ? `n ${x.all.n} R ${x.all.avgR} $${x.all.pnl} | ${x.why}` : x.why);
   console.log('allow', JSON.stringify(out.allow), 'cfg', JSON.stringify(out.cfg), 'sec', Math.round(out.ms / 1000));

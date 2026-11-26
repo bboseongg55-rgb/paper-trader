@@ -74,11 +74,11 @@ const T = D.dates.length;
 // then runs only the verified methods with fixed rules (no retuning, no ranking of the methods against each other)
 const lastFinal = ((L.days || []).filter((x) => x.final !== false).slice(-1)[0] || {}).date || null;
 let ver = readJSON('data/verify.json', null), verChanged = false;
-if (lastFinal && (!ver || ver.day !== lastFinal || ver.v !== Verify.VERSION)) {
+if (lastFinal && (!ver || ver.day !== lastFinal || ver.v !== Verify.VERSION || (ver.longKey || null) !== Verify.longKey())) {
   const t1 = Date.now();
   try {
     const toI = D.dates.lastIndexOf(lastFinal);
-    ver = Object.assign(Verify.run({ E, D, MS, Dv, C: require('../crypto.js'), to: toI >= 0 ? toI : T - 1 }), { day: lastFinal });
+    ver = Object.assign(Verify.run({ E, D, MS, Dv, C: require('../crypto.js'), to: toI >= 0 ? toI : T - 1, seed, L, Bonds, bondsHist, lastFinal }), { day: lastFinal });
     verChanged = true; console.log('verify', Math.round((Date.now() - t1) / 1000) + 's', JSON.stringify(ver.allow));
   } catch (e) { console.log('verify failed', String((e && e.stack) || e).slice(0, 400)); }
 }
@@ -349,7 +349,8 @@ const state = {
     marginPaid: lv.marginPaid || 0, rpGot: lv.rpGot || 0, lev: lv.lev || 1, flows: (book && book.flows) || [],
     // money moved out after the last row (the row is before the move): the stock account's value now
     flowsAfter: Math.round(((book && book.flows) || []).filter((f) => lv.equity.length && f.date >= lv.equity[lv.equity.length - 1].date).reduce((a, f) => a + f.amount, 0) * 100) / 100 } : null,
-  alloc: { cio: alloc.cio ? Object.assign({}, alloc.cio, { pic: undefined }) : null, transfers: alloc.transfers.slice(-40), history: (alloc.history || []).slice(-60), first: alloc.first || null },
+  alloc: { cio: alloc.cio ? Object.assign({}, alloc.cio, { pic: undefined }) : null, transfers: alloc.transfers.slice(-40), history: (alloc.history || []).slice(-60), first: alloc.first || null,
+    reset: alloc.reset ? { id: alloc.reset.id, at: alloc.reset.at, capital: alloc.reset.capital } : null },
   deriv: dst ? Dv.view(dst) : null,
   rates: { rp: (() => { const r = rpFor([res.D.last])[0]; return r == null ? null : Math.round(r * 1e5) / 1e5; })(), y1m: valAt('US1M', res.D.last) },
   macro: lv ? E.macroView(D, lv) : null,

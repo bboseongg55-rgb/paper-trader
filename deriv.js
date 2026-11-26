@@ -798,7 +798,9 @@
     const els = st.els.map((e) => ({ id: e.id, amount: e.amount, coupon: e.coupon, date: e.date, s0: e.s0, ki: e.ki, kiHit: e.kiHit || null, obs: e.obs, next: (e.obs.find(([od]) => !(e.seen || []).includes(od)) || [])[0] || null,
       w: e.w || null, val: e.val, value: r2(e.amount * (e.val != null ? e.val : 1)), pCall: e.pCall, pKi: e.pKi, why: e.why }));
     const by = {};
-    for (const c of st.closed) { const b = (by[c.s] = by[c.s] || { n: 0, wins: 0, pnl: 0 }); b.n++; if (c.pnl > 0) b.wins++; b.pnl = r2(b.pnl + c.pnl); }
+    // totals since the account last started: rows closed after its first day (a reset's own closing rows have no side)
+    // (a pair's legs are counted once, by the pair's own row)
+    for (const c of st.closed) { if (!c.s || !(c.to > (st.start || '')) || (c.kind === 'fut' && (c.s === 'curve' || c.s === 'basis'))) continue; const b = (by[c.s] = by[c.s] || { n: 0, wins: 0, pnl: 0 }); b.n++; if (c.pnl > 0) b.wins++; b.pnl = r2(b.pnl + c.pnl); }
     return { curve: st.curve || null, curveSig: st.curveSig || null, basis: st.basis || null, basisSig: st.basisSig || null, v: 1, at: st.at, date: st.date, funded: st.funded, cash: st.cash, eq: equity(st), margin: marginUsed(st), optRisk: r2(optRisk(st)), rp: st.rp, fees: st.fees,
       fut, opt, els, stk, by, base: st.base || null, risk: RISK ? Object.assign(riskOf(st) || {}, { varMax: CFG.risk.varMax, vegaMax: CFG.risk.vegaMax, deltaMax: CFG.risk.deltaMax, acct: r2(RISK.acct), note: st.riskNote || null }) : null, stress: { move: CFG.stress.move, max: CFG.stress.max, loss: r2(stressLoss(st.opt, (RISK && RISK.spots) || {})), note: st.stressNote || null }, signals: st.signals || {}, fills: st.fills.slice(-120).reverse(), hist: st.hist.slice(-400), log: st.log.slice(-40).reverse(), transfers: st.transfers };
   }

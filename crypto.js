@@ -111,6 +111,8 @@
     return v;
   }
   const tokState = (st) => (st.tok = st.tok || { hold: {}, pos: {}, bars: {}, q: {} });
+  // each strategy's totals since the account last started (a reset starts them again; the trades stay in the records)
+  function STATS0() { return { arb: { n: 0, pnl: 0, fees: 0 }, trend: { n: 0, pnl: 0, fees: 0 }, scalp: { n: 0, pnl: 0, fees: 0 }, tok: { n: 0, pnl: 0, fees: 0 }, mr: { n: 0, pnl: 0, fees: 0 }, mm: { n: 0, pnl: 0, fees: 0 }, basis: { n: 0, pnl: 0, fees: 0 }, moves: { n: 0, fees: 0 } }; }
   function fill(st, f) { st.fills.push(f); if (st.fills.length > CFG.keepFills) st.fills.splice(0, st.fills.length - CFG.keepFills); }
   function closeRow(st, row) {
     (st.closed = st.closed || []).push(row);
@@ -130,7 +132,7 @@
     const m = mids(q), venues = {};
     for (const k in VENUES) venues[k] = { usd: 0, coin: Object.fromEntries(COINS.map((c) => [c, 0])) };
     const st = { v: 1, start: now, funded: 0, venues, trade: { usd: 0, coin: Object.fromEntries(COINS.map((c) => [c, 0])) }, pos: { trend: {}, scalp: {} }, bars: { h: {}, m: {} }, fills: [], eqMin: [], eqHour: [], closes: {},
-      w: { trend: CFG.trialW, scalp: CFG.trialW, mr: CFG.trialW, mm: CFG.trialW }, lastReweight: now, peak: 0, day: { date: utcDay(now), eq: 0 }, last: {}, spreads: {}, transfers: [], stats: { arb: { n: 0, pnl: 0, fees: 0 }, trend: { n: 0, pnl: 0, fees: 0 }, scalp: { n: 0, pnl: 0, fees: 0 }, tok: { n: 0, pnl: 0, fees: 0 }, moves: { n: 0, fees: 0 } }, log: [],
+      w: { trend: CFG.trialW, scalp: CFG.trialW, mr: CFG.trialW, mm: CFG.trialW }, lastReweight: now, peak: 0, day: { date: utcDay(now), eq: 0 }, last: {}, spreads: {}, transfers: [], stats: STATS0(), log: [],
       tok: { hold: {}, pos: {}, bars: {}, q: {} } };
     for (const c of COINS) st.last[c] = m[c];
     if (capital > 0) fund(st, capital, q, now, 'start');
@@ -148,7 +150,8 @@
     if (st.tok) for (const k of Object.keys(st.tok.pos || {})) { const x = st.tok.q[k]; if (x && x.bid > 0) tokSell(st, k, st.tok.pos[k].side < 0 ? x.ask : x.bid, now, '계좌 초기화 정리'); }
     const fresh = init(0, q, now);
     fresh.w = { trend: 1, scalp: 1, mr: 1, mm: 1 };
-    for (const k of ['fills', 'closed', 'stats', 'bars', 'transfers', 'stake', 'sv']) if (st[k] != null) fresh[k] = st[k];
+    for (const k of ['fills', 'closed', 'bars', 'transfers', 'stake', 'sv']) if (st[k] != null) fresh[k] = st[k];
+    fresh.statsFor = id;
     if (st.tok) { fresh.tok.bars = st.tok.bars || {}; fresh.tok.q = st.tok.q || {}; }
     fresh.resetId = id;
     (fresh.resets = st.resets || []).push({ id, t: now, eqBefore: r2(eq0) });
@@ -482,7 +485,9 @@
     s.half = half; s.mid = mid; s.qMax = qMax;
   }
   function step(st, q, now) {
-    for (const k of ['mr', 'mm']) st.stats[k] = st.stats[k] || { n: 0, pnl: 0, fees: 0 };
+    // an account reset before the totals were kept per reset (2026-11-26): its totals start from zero once
+    if (st.resetId && st.statsFor !== st.resetId) { st.stats = STATS0(); st.statsFor = st.resetId; }
+    for (const [k, v] of Object.entries(STATS0())) st.stats[k] = st.stats[k] || v;
     const m = mids(q);
     for (const c of COINS) if (isNum(m[c])) st.last[c] = m[c];
     stake(st, now, m);
@@ -511,13 +516,20 @@
         else if (g <= -sl) exitPos(st, 'scalp', c, B, now, '손절');
         else if (now - sp.t0 >= mx * 60e3) exitPos(st, 'scalp', c, B, now, '시간 청산');
       }
-      // trend: funding, the margin guard and the stop on every poll
-      const tp = st.pos.trend[c];
-      if (tp && tp.perp) {
-        const yrs = Math.max(0, now - (tp.fAt || tp.t0)) / (365 * 864e5);
-        if (yrs > 0 && yrs < 2 / 365) { const cost = tp.qty * m[c] * CFG.perp.fund * yrs; st.trade.usd -= cost; tp.fund = (tp.fund || 0) + cost; st.stats.trend.fees += cost; }
-        tp.fAt = now;
+      // funding on every perpetual (trend, scalp, mean reversion), every poll: the real hourly rate when known
+      // (EXT.fund, Hyperliquid's: longs pay it and shorts receive it when it is positive), else CFG.perp.fund a year as a
+      // cost either way
+      for (const s of ['trend', 'scalp', 'mr']) {
+        const pp = st.pos[s] && st.pos[s][c];
+        if (!pp || !pp.perp) continue;
+        const yrs = Math.max(0, now - (pp.fAt || pp.t0)) / (365 * 864e5);
+        if (yrs > 0 && yrs < 2 / 365) {
+          const yr = EXT.fund && isNum(EXT.fund[c]) ? pp.side * EXT.fund[c] * 24 * 365 : CFG.perp.fund;
+          const cost = pp.qty * m[c] * yr * yrs; st.trade.usd -= cost; pp.fund = (pp.fund || 0) + cost; (st.stats[s] = st.stats[s] || { n: 0, pnl: 0, fees: 0 }).fees += cost;
+        }
+        pp.fAt = now;
       }
+      const tp = st.pos.trend[c];
       if (tp && tp.perp && -tp.side * tp.qty * ((tp.side > 0 ? B.bid : B.ask) - tp.entry) >= CFG.perp.guard * tp.margin) exitPos(st, 'trend', c, B, now, '증거금 80% 손실: 강제 청산 전 정리');
       else if (tp && (tp.side < 0 ? B.ask >= tp.stop : B.bid <= tp.stop)) exitPos(st, 'trend', c, B, now, (tp.side < 0 ? tp.stop < tp.stop0 : tp.stop > tp.stop0) ? '추적 손절' : '손절');
       else if (tp && tp.side < 0 && Math.abs(tp.stop0 - tp.entry) > 0 && tp.entry - B.ask >= CFG.asymC.shortTakeR * Math.abs(tp.stop0 - tp.entry)) exitPos(st, 'trend', c, B, now, `공매도 익절(+${CFG.asymC.shortTakeR}R)`);

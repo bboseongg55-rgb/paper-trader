@@ -230,8 +230,17 @@ section.view.on { display: block; }
 .vits .vhd .tag { margin-left: 0; }
 .vits .vw { margin: 6px 0 0; font-size: 15px; line-height: 1.55; color: var(--sub); word-break: keep-all; overflow-wrap: anywhere; }
 .vits .vw b { color: var(--ink); font-weight: 700; margin-right: 4px; }
+.vt { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+.vt th, .vt td { padding: 6px 0; text-align: right; border-top: 1px solid var(--line); white-space: nowrap; }
+.vt thead th { border-top: 0; font-size: 13px; font-weight: 600; color: var(--muted); padding-top: 0; }
+.vt th:first-child { text-align: left; font-weight: 600; color: var(--sub); }
+.vt tbody th small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+.vt td { color: var(--ink); font-weight: 600; padding-left: 10px; }
+.vt td.up { color: var(--up); }
+.vt td.down { color: var(--down); }
 .vits .vd { display: block; margin-top: 4px; font-size: 14px; color: var(--muted); }
 .vits li.off .vhd b { color: var(--sub); }
+.resetline { margin: 18px 20px 4px; padding: 12px 14px; border-radius: 12px; background: var(--band); font-size: 15px; line-height: 1.5; color: var(--sub); word-break: keep-all; }
 .vrule { margin: 10px 20px 0; padding: 12px 14px; border-radius: 12px; background: var(--band); font-size: 15px; line-height: 1.55; color: var(--sub); word-break: keep-all; }
 .donut { position: relative; width: 168px; height: 168px; }
 .donut svg { display: block; width: 100%; height: 100%; }
@@ -714,6 +723,10 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     if (pts.length < 2) { el.innerHTML = '<div class="empty">매매가 시작되면 그래프가 그려집니다</div>'; return; }
     const vals = pts.map((p) => p.v).concat([sr.base]);
     let lo = Math.min(...vals), hi = Math.max(...vals);
+    // a quiet stretch stays flat: the scale never spans less than 1% of the account, so a $600 move on $1,000,000 is a
+    // small step rather than a cliff from the top to the bottom of the chart
+    const minSpan = Math.abs((hi + lo) / 2) * 0.01;
+    if (hi - lo < minSpan) { const mid = (hi + lo) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; }
     const padV = (hi - lo) * 0.12 || Math.max(1, hi * 0.0005); lo -= padV; hi += padV;
     const L = 20, R = 20, T = 26, B = 30;
     const x = (i) => L + (i / (pts.length - 1)) * (W - L - R);
@@ -851,9 +864,11 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   function verifyItemHTML(x) {
     const st = x.stat, R = (v) => (v >= 0 ? '+' : '−') + fmt(Math.abs(v), 2) + 'R', $ = (v) => (v >= 0 ? '+' : '−') + usd(Math.abs(v), 0);
-    const line = st ? `${st.n}건 · 평균 ${R(st.avgR)} · 손익 ${$(st.pnl)} · 승률 ${st.win}%<br>전반 ${st.h1.n}건 ${R(st.h1.avgR)} ${$(st.h1.pnl)} / 후반 ${st.h2.n}건 ${R(st.h2.avgR)} ${$(st.h2.pnl)}${st.split ? ` (${st.split} 기준)` : ''}` : '';
+    // the record as a small table: the whole period, then its first and second half (both must be above zero)
+    const row = (nm, o) => `<tr><th scope="row">${nm}</th><td>${o.n.toLocaleString()}건</td><td class="${cls(o.avgR * 100)}">${R(o.avgR)}</td><td class="${cls(o.pnl)}">${$(o.pnl)}</td></tr>`;
+    const line = st ? `<table class="vt"><thead><tr><th scope="col">구간</th><th scope="col">거래</th><th scope="col">평균</th><th scope="col">손익</th></tr></thead><tbody>${row('전체', st)}${row('전반', st.h1)}${row(`후반${st.split ? `<small>${esc(st.split)}~</small>` : ''}`, st.h2)}</tbody></table><p class="vw">승률 ${st.win}%</p>` : '';
     return `<li class="${x.on ? 'on' : 'off'}"><div class="vhd"><b>${esc(x.name)}</b><span class="tag">${esc(x.part || '')}</span></div>`
-      + `${x.on ? (line ? '' : `<p class="vw">${esc(x.why || '')}</p>`) : `<p class="vw"><b>쉬는 이유</b> ${esc(x.reason || x.why || '')}</p>`}${line ? `<p class="vw">${line}</p>` : ''}${x.data ? `<span class="vd">자료: ${esc(x.data)}</span>` : ''}</li>`;
+      + `${x.on ? (line ? '' : `<p class="vw">${esc(x.why || '')}</p>`) : `<p class="vw"><b>쉬는 이유</b> ${esc(x.reason || x.why || '')}</p>`}${line}${x.data ? `<span class="vd">자료: ${esc(x.data)}</span>` : ''}</li>`;
   }
   function prioHTML() {
     const c = S.alloc && S.alloc.cio;
@@ -861,7 +876,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     if (c.mode === 'verified') {
       const on = c.items.filter((x) => x.on), off = c.items.filter((x) => !x.on);
       let h = `<h2>검증 결과</h2><div class="mac"><p class="mac-head">${esc(c.headline)}</p><span class="mac-sub">${md(c.verifyDay || c.date)} 종가까지의 전체 자료 · 매일 밤 다시 검증합니다</span></div>`;
-      h += `<p class="vrule">통과 기준: ${esc(c.rule || '')}</p>`;
+      h += `<p class="vrule">통과 기준: ${esc(c.rule || '')}. R은 손절까지 걸었던 금액 대비 손익입니다(+1R = 건 위험만큼 이익).</p>`;
       h += `<h3 class="vgrp">매매 중 ${on.length}가지</h3><ul class="vits">${on.map(verifyItemHTML).join('')}</ul>`;
       h += `<h3 class="vgrp">쉼 ${off.length}가지(증명될 때까지 매매 안 함)</h3><ul class="vits">${off.map(verifyItemHTML).join('')}</ul>`;
       const t = totalNow() || 1, now = { core: stockNow() / t, deriv: derivNow() / t, h24: coinTotal() / t };
@@ -1171,9 +1186,11 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   async function livePoll() {
     if (polling || document.visibilityState !== 'visible' || !S || !S.account) return;
     const now = Date.now(), jobs = [];
-    if (now - lqAt >= (marketOpen() ? 5e3 : 60e3)) { lqAt = now; jobs.push(pollQuotes()); }
-    if (now - lfAt >= (futOpen() ? 15e3 : 120e3)) { lfAt = now; jobs.push(pollFut()); }
-    if (now - ltAt >= 10e3) { ltAt = now; jobs.push(pollToks()); }
+    // owner 2026-11-26: prices within seconds. Stocks every second while the market is open (each answer replaces
+    // the last; a slow answer only skips a beat), futures and tokens every 3 seconds
+    if (now - lqAt >= (marketOpen() ? 1e3 : 30e3)) { lqAt = now; jobs.push(pollQuotes()); }
+    if (now - lfAt >= (futOpen() ? 3e3 : 60e3)) { lfAt = now; jobs.push(pollFut()); }
+    if (now - ltAt >= 3e3) { ltAt = now; jobs.push(pollToks()); }
     if (!jobs.length) return;
     polling = true;
     try { await Promise.allSettled(jobs); } finally { polling = false; }
@@ -1670,9 +1687,17 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       <p class="sumline num" style="padding-top:12px">매수 ${buys}건 · 매도 ${sells}건${other ? ` · 차익·이동·교체 ${other}건` : ''} · 수수료 합계 ${usd(fees)}</p>`
       + (S.account && S.account.lockedThrough ? `<p class="sumline">주식·채권, 선물·옵션·ELS, 코인·토큰 체결을 한곳에 모았습니다. 장 마감으로 확정된 주식 체결은 이후 규칙이 바뀌어도 그대로 남습니다.</p>` : '');
     if (!list.length) h += '<p class="empty-row">아직 체결된 매매가 없습니다.</p>';
-    let day = '';
+    let day = '', passed = false;
+    // the account's restart (the owner's reset): trades below it belong to the earlier account and stay as a record
+    const rs = S.alloc && S.alloc.reset, rms = rs && rs.at ? Date.parse(rs.at) : NaN;
     for (const o of list) {
       const d = etDate(o.ms);
+      if (!passed && isFinite(rms) && o.ms < rms) {
+        passed = true;
+        if (day) h += '</ul>';
+        h += `<p class="resetline">${esc(etTime(rms))} 계좌를 ${usd(rs.capital || 1e6, 0)}로 새로 시작했습니다. 아래는 이전 계좌의 기록입니다.</p>`;
+        day = '';
+      }
       if (d !== day) { if (day) h += '</ul>'; day = d; h += `<h3 class="day">${dLabel(day)}</h3><ul class="list">`; }
       h += o.html;
     }
@@ -1777,19 +1802,45 @@ details.teamlog[open] > summary::after { content: " 접기"; }
       <span class="r"><b class="${cls(d.pnl)}">${sgnUsd(d.pnl)}</b><span class="${cls(d.pnl)}">${pct(d.pct)}</span></span></div></li>`).join('') + '</ul>';
     // by method, with the share of risk the strategy tournament gives each
     const bp = S.byPb || {}, mm = a.mults || {};
-    h += `<div class="band"></div><h2>방법별 수익</h2><ul class="mix">` + ['dt', 'bo', 'pb', 'ch', 'cs', 'bd'].filter((k) => !['ch', 'cs'].includes(k) || ((S.byPb || {})[k] || {}).n > 0 || (S.account.open || []).some((p) => p.pb === k)).map((k) => {
-      const b = bp[k] || { n: 0, wins: 0, pnl: 0 };
-      return `<li><span class="name">${PB_LONG[k]} ${matTag(k)}</span><span class="pnl ${cls(b.pnl)}">${sgnUsd(b.pnl)}</span>
-        <span class="stat">매도 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''} · AI 위험 배분 ${Math.round((mm[k] == null ? 0 : mm[k]) * 100)}%${k === 'dt' && a.dtPaused ? ' · 쉬는 중' : ''}</span></li>`;
-    }).join('') + (bp.hedge ? `<li><span class="name">S&amp;P 500 인버스 헷지 ${matTag('hedge')}</span><span class="pnl ${cls(bp.hedge.pnl + (bp.hedge.open || 0))}">${sgnUsd(bp.hedge.pnl + (bp.hedge.open || 0))}</span>
-        <span class="stat">헷지 ${bp.hedge.n}번 정리${bp.hedge.open ? ' · 지금 보유 중' : ''} · 리스크·헷지팀 담당</span></li>` : '')
-      + (dv ? [['cta', '선물 추세추종'], ['base', 'S&P 500 기반층(풋 스프레드)'], ['lcall', '콜 매수'], ['lput', '풋 매수'], ['ncall', '콜 매도(무담보)'], ['credit', '옵션 풋 스프레드 매도'], ['ccall', '옵션 콜 스프레드 매도'], ['hedge', '보호 풋 스프레드'], ['csp', '현금 담보 풋(IWM 휠)'], ['cc', '커버드콜(IWM 휠)'], ['wheel', '휠 주식(IWM)'], ['els', 'ELS']]
-          .filter(([k]) => ['cta', 'credit', 'hedge', 'els'].includes(k) || (dv.by || {})[k] || dv.opt.some((o) => o.side === k) || (k === 'wheel' && (dv.stk || []).length)).map(([k, nm]) => { const b = (dv.by || {})[k] || { n: 0, wins: 0, pnl: 0 };
-          const open = k === 'cta' ? dv.fut.reduce((t, p) => t + p.pnl, 0) : k === 'els' ? dv.els.reduce((t, e) => t + e.value - e.amount, 0) : k === 'wheel' ? (dv.stk || []).reduce((t, x) => t + x.pnl, 0) : dv.opt.filter((o) => o.side === k).reduce((t, o) => t + o.pnl, 0);
-          const nOpen = k === 'cta' ? dv.fut.length : k === 'els' ? dv.els.length : k === 'wheel' ? (dv.stk || []).length : dv.opt.filter((o) => o.side === k).length;
-          return `<li><span class="name">${nm} ${matTag(k === 'hedge' ? 'optHedge' : k)}</span><span class="pnl ${cls(b.pnl + open)}">${sgnUsd(b.pnl + open)}</span><span class="stat">정리 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''}${nOpen ? ` · 보유 ${nOpen}건(평가 ${sgnUsd(open)})` : ''}</span></li>`; }).join('') : '')
-      + (funded() ? [['arb', '코인 거래소 간 차익거래'], ['trend', '코인 추세'], ['scalp', '코인 초단타'], ['tok', '토큰화 주식'], ['stake', '코인 스테이킹·달러 보상']].filter(([k]) => k !== 'stake' || (CV.stats || {}).stake).map(([k, nm]) => { const x = (CV.stats || {})[k] || { n: 0, pnl: 0, fees: 0 };
-          return `<li><span class="name">${nm} ${matTag(k)}</span><span class="pnl ${cls(x.pnl)}">${sgnUsd(x.pnl)}</span><span class="stat">${k === 'stake' ? '받은 보상(받은 때 값) · 가격 위험 없음' : `${x.n}건 · 수수료 ${usd(x.fees)}`}</span></li>`; }).join('') : '') + '</ul>';
+    // 방법별 수익 since the account last started: the verified methods and anything else that traded since, each tagged
+    // by the strategy checks (owner 2026-11-26: only what a backtest proved trades)
+    const VI = S.alloc && S.alloc.cio && S.alloc.cio.mode === 'verified' ? S.alloc.cio.items : null;
+    const vOn = (k) => !!(VI && VI.some((x) => x.on && (x.k === k || (k === 'c_scalp' && /^c_scalp:/.test(x.k)))));
+    const vTag = (k) => (!VI ? matTag(k) : vOn(k) ? '<span class="tag ok">검증 통과</span>' : '<span class="tag">쉼</span>');
+    const li = (nm, k, pnl, stat) => `<li><span class="name">${nm} ${vTag(k)}</span><span class="pnl ${cls(pnl)}">${sgnUsd(pnl)}</span><span class="stat">${stat}</span></li>`;
+    const rowsM = [];
+    for (const k of ['mo', 'bd', 'bo', 'pb', 'dt', 'ch', 'cs']) {
+      const b = bp[k] || { n: 0, wins: 0, pnl: 0 }, held = (S.account.open || []).filter((p) => p.pb === k), open = held.reduce((t, p) => t + (p.pnl || 0), 0);
+      if (!(VI ? vOn(k) : true) && !b.n && !held.length) continue;
+      rowsM.push(li(PB_LONG[k] || k, k, b.pnl + open, `매도 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''}${held.length ? ` · 보유 ${held.length}종목(평가 ${sgnUsd(open)})` : ''}`));
+    }
+    if (bp.hedge && (bp.hedge.n || bp.hedge.open)) rowsM.push(li('S&amp;P 500 인버스 헷지', 'hedge', bp.hedge.pnl + (bp.hedge.open || 0), `헷지 ${bp.hedge.n}번 정리${bp.hedge.open ? ' · 지금 보유 중' : ''}`));
+    if (dv) {
+      const by = dv.by || {}, legs = (bk) => dv.fut.filter((p) => (p.book || 'cta') === bk);
+      for (const [k, nm] of [['curve', '장단기 금리차(2년·10년)'], ['cta', '선물 추세']]) {
+        const b = by[k] || { n: 0, wins: 0, pnl: 0 }, L = legs(k), open = L.reduce((t, p) => t + p.pnl, 0);
+        if (!vOn(k) && !b.n && !L.length) continue;
+        rowsM.push(li(nm, k, b.pnl + open, `정리 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''}${L.length ? ` · 보유 ${L.map((p) => `${p.key} ${p.qty > 0 ? '+' : ''}${p.qty}`).join(', ')}(평가 ${sgnUsd(open)})` : ''}`));
+      }
+      { // the basis: its futures here and its bitcoin in the coin part, as one trade
+        const b = by.basis || { n: 0, wins: 0, pnl: 0 }, L = legs('basis'), fo = L.reduce((t, p) => t + p.pnl, 0);
+        const cb = funded() && CV.basis && CV.basis.qty > 0 ? CV.basis : null, so = cb ? cb.qty * (coinPx('BTC') - cb.cost) : 0, sr = funded() ? ((CV.stats || {}).basis || {}).pnl || 0 : 0;
+        if (vOn('basis') || b.n || L.length || cb) rowsM.push(li('비트코인 현·선물 차익', 'basis', b.pnl + fo + so + sr, `선물 ${sgnUsd(b.pnl + fo)} + 현물 ${sgnUsd(so + sr)}${L.length ? ` · 선물 ${Math.abs(L[0].qty)}계약 매도, 현물 ${cb ? fmt(cb.qty, 4) : 0} BTC` : ''}`));
+      }
+      const OPTN = [['base', 'S&P 500 기반층(풋 스프레드)'], ['lcall', '콜 매수'], ['lput', '풋 매수'], ['ncall', '콜 매도(무담보)'], ['credit', '옵션 풋 스프레드 매도'], ['ccall', '옵션 콜 스프레드 매도'], ['hedge', '보호 풋 스프레드'], ['csp', '현금 담보 풋'], ['cc', '커버드콜']];
+      for (const [k, nm] of OPTN) {
+        const b = by[k] || { n: 0, wins: 0, pnl: 0 }, O = dv.opt.filter((o) => o.side === k), open = O.reduce((t, o) => t + o.pnl, 0);
+        if (!b.n && !O.length) continue;
+        rowsM.push(li(nm, 'opt', b.pnl + open, `정리 ${b.n}건${O.length ? ` · 보유 ${O.length}건(평가 ${sgnUsd(open)})` : ''}`));
+      }
+      { const b = by.els || { n: 0, wins: 0, pnl: 0 }, open = dv.els.reduce((t, e) => t + e.value - e.amount, 0); if (b.n || dv.els.length) rowsM.push(li('ELS', 'els', b.pnl + open, `상환 ${b.n}건${dv.els.length ? ` · 보유 ${dv.els.length}건` : ''}`)); }
+    }
+    if (funded()) for (const [k, nm, vk] of [['trend', '코인 추세', 'c_trend'], ['scalp', '코인 초단타', 'c_scalp'], ['mr', '코인 평균회귀', 'c_mr'], ['mm', '코인 시장 조성', 'c_mm'], ['arb', '코인 거래소 간 차익거래', 'c_arb'], ['tok', '토큰화 주식', 'c_tok']]) {
+      const x = (CV.stats || {})[k] || { n: 0, pnl: 0, fees: 0 };
+      if (!vOn(vk) && !x.n) continue;
+      rowsM.push(li(nm, vk, x.pnl, `${x.n}건 · 수수료 ${usd(x.fees)}`));
+    }
+    h += `<div class="band"></div><h2>방법별 수익</h2><p class="sumline" style="padding-top:2px">계좌를 새로 시작한 뒤의 손익입니다. 검증을 통과한 방법만 매매합니다.</p><ul class="mix">` + rowsM.join('') + '</ul>';
     h += metricsHTML(rowsC);
     h += `<div class="band"></div><h2>주식·채권 매매 성적</h2>`;
     h += kv([
@@ -2107,7 +2158,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   async function main() {
     showView();
-    try { const [st, cv, rd] = await Promise.all([load(), loadCrypto(), loadRD()]); CV = cv; RD = rd; S = rebaseView(st); lastV = viewKey(); render(); startWS(); coinBasis(); livePoll(); setInterval(livePoll, 2500); }
+    try { const [st, cv, rd] = await Promise.all([load(), loadCrypto(), loadRD()]); CV = cv; RD = rd; S = rebaseView(st); lastV = viewKey(); render(); startWS(); coinBasis(); livePoll(); setInterval(livePoll, 1000); }
     catch (err) { $('loading').textContent = '불러오지 못했습니다: ' + (err.message || err) + ' 잠시 뒤 새로 고침해 주세요.'; }
     setInterval(() => { if (document.visibilityState === 'visible') refreshRD(); }, 600000);
     setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 60000);
