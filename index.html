@@ -199,11 +199,15 @@ section.view.on { display: block; }
 .hl { list-style: none; margin: 8px 0 0; padding: 0; }
 .hl > li { border-top: 1px solid var(--line); }
 .hl > li:first-child { border-top: 0; }
-.hl button.hn { width: 100%; min-height: 56px; display: grid; grid-template-columns: 14px minmax(0, 1fr) 20px; align-items: center; gap: 12px; padding: 10px 20px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.hl button.hn { width: 100%; min-height: 64px; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto 20px; align-items: center; gap: 12px; padding: 10px 16px 10px 20px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .hl button.hn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .hl button.hn[aria-expanded="true"] { background: var(--band); }
 .hl .dot { width: 14px; height: 14px; border-radius: 50%; }
 .hl .nm { font-size: 18px; font-weight: 600; line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere; }
+.hl .pl { display: grid; justify-items: end; gap: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hl .pl b { font-size: 17px; font-weight: 700; }
+.hl .pl span { font-size: 15px; font-weight: 600; }
+.hl .pl .na { color: var(--muted); font-weight: 500; }
 .hl .chev { width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 2; transition: transform 200ms var(--ease-out); }
 .hl button.hn[aria-expanded="true"] .chev { transform: rotate(180deg); }
 .hwhy { padding: 2px 20px 16px 46px; background: var(--band); }
@@ -266,7 +270,7 @@ a.row:focus-visible, a.ain-r:focus-visible, .back:focus-visible { outline: 2px s
 .periods .ct { flex: none; width: 42px; display: grid; place-items: center; padding: 0; }
 .periods .ct svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .achart .ref { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 7 5; }
-.achart .ref2 { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 4; }
+.achart .ref2 { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 3 4; }   /* stops, levels, targets: the same colour as the average price, a shorter dash */
 .achart .rl { font-size: 16px; font-weight: 800; fill: #fff; }
 .achart .rlb rect { fill: var(--tag); stroke: none; }   /* Toss-style tag: white on near-black (a dark grey on the dark theme, so the tag stands off the page) */
 .achart .rl2 { font-size: 15px; font-weight: 500; fill: var(--sub); paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
@@ -1216,14 +1220,14 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   function coreA(p) {
     const bond = p.kind === 'bond', syn = bond, P = (v) => (syn ? fmt(v, 2) : usd(v)), q = !bond && LQ[cnSym(p.sym)];
     const sh = p.dir === -1;
-    if (sh) return { id: 's:' + p.sym, grp: '주식', val: p.value, tag: '공매도', title: p.sym, sub: `${p.name} · ${p.qty.toLocaleString()}주 공매도`,
+    if (sh) return { pl: p.pnl, plr: p.pct, id: 's:' + p.sym, grp: '주식', val: p.value, tag: '공매도', title: p.sym, sub: `${p.name} · ${p.qty.toLocaleString()}주 공매도`,
       rb: usd(-p.value), rs: `${sgnUsd(p.pnl)} (${pct(p.pct)})`, rsC: cls(p.pnl), why: p.why,
       name: `${p.sym} · ${p.name} (공매도)`, px: p.price, liveAt: q ? q.t : null, unit: '$', dp: 2, pnl: p.pnl,
       entry: p.entry, entryL: '공매도 평단', lines: [{ v: p.stop, l: '손절(되사기)' }].concat(p.lvl != null ? [{ v: p.lvl, l: '이탈한 지지선' }] : [], p.tgt != null ? [{ v: p.tgt, l: '목표' }] : []), src: { k: 'cnbc', sym: cnSym(p.sym), reg: true }, periods: null, note: '가격이 내리면 이익, 오르면 손실',
       rows: [['공매도 평단(판 값)', usd(p.entry)], ['현재가', usd(p.price)], ['공매도', `${p.qty.toLocaleString()}주 · 되사는 데 ${usd(-p.value)}`],
         ['손익', `<span class="${cls(p.pnl)}">${sgnUsd(p.pnl)} (${pct(p.pct)})</span>`], ['손절가(이 값 위로 오르면 되삼)', usd(p.stop)], ['주식 대여료', `${usd(p.borrow || 0)} (연 0.5%, 확인필요)`],
         ['증거금', `판 금액의 150%를 묶어 둡니다(판 돈 + 50%)`], ['진입일', p.entryDate]] };
-    return { id: (bond ? 'b:' : 's:') + p.sym, grp: bond ? '채권' : '주식', val: p.value, title: p.sym, sub: `${p.name}${bond ? (p.yld != null ? ` · 금리 ${p.yld}%` : '') : ` · ${p.qty.toLocaleString()}주`}`,
+    return { pl: p.pnl, plr: p.pct, id: (bond ? 'b:' : 's:') + p.sym, grp: bond ? '채권' : '주식', val: p.value, title: p.sym, sub: `${p.name}${bond ? (p.yld != null ? ` · 금리 ${p.yld}%` : '') : ` · ${p.qty.toLocaleString()}주`}`,
       rb: usd(p.value), rs: `${sgnUsd(p.pnl)} (${pct(p.pct)})`, rsC: cls(p.pnl), why: p.why,
       name: `${p.sym} · ${p.name}`, px: p.price, liveAt: q ? q.t : null, unit: syn ? '' : '$', dp: 2, pnl: p.pnl,
       entry: p.entry, entryL: syn ? '매수 때 지수' : '평단', lines: [{ v: p.stop, l: '손절' }].concat(p.lvl != null ? [{ v: p.lvl, l: '돌파한 저항선' }] : [], p.tgt != null ? [{ v: p.tgt, l: '목표' }] : []),
@@ -1234,14 +1238,15 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   function hedgeA(h) {
     const hp = h.value + h.got - h.paid, ratio = Math.round((h.ratio || 0) * 100), H = hedgeOf(h);
-    if (h.kind === 'bond') return { id: 'h:SH', grp: '헷지', val: h.value, title: 'IEF', tag: '헷지', sub: '미국 10년 국채(총수익)', rb: usd(h.value), rs: sgnUsd(hp), rsC: cls(hp),
+    const hb = (h.paid || 0) - (h.got || 0), hr = hb > 0 ? hp / hb : null;
+    if (h.kind === 'bond') return { pl: hp, plr: hr, id: 'h:SH', grp: '헷지', val: h.value, title: 'IEF', tag: '헷지', sub: '미국 10년 국채(총수익)', rb: usd(h.value), rs: sgnUsd(hp), rsC: cls(hp),
       why: `${h.why || 'S&P 500이 하락 추세이고 국채가 주식과 반대로 움직이는 중'}. 들고 있는 주식의 위험을 줄이려고 미국 10년 국채를 샀습니다.`,
       name: '미국 10년 국채 헷지', chartName: 'IEF(미국 7~10년 국채 ETF)', px: LQ.IEF ? LQ.IEF.px : null, liveAt: LQ.IEF ? LQ.IEF.t : null, unit: '$', dp: 2, pnl: hp,
       entry: null, entryL: '', lines: [], src: { k: 'cnbc', sym: 'IEF', reg: true }, note: 'CNBC · 그래프는 비슷한 ETF(IEF)이고, 평가액은 10년 국채 금리로 매일 장 마감 뒤 계산',
       rows: [['하는 일', H.does], ['평가액', usd(h.value)], ['손익', `<span class="${cls(hp)}">${sgnUsd(hp)}</span>`], ['시작', dLabel(h.since)],
         ['헷지 크기', `보유 주식의 ${ratio}%까지`], ['고른 이유', esc(h.why || '')], ['담당', '리스크·헷지팀']] };
     const q = LQ['.SPX'];
-    return { id: 'h:SH', grp: '헷지', val: h.value, title: 'SH', tag: '헷지', sub: 'S&P 500 인버스(−1배)', rb: usd(h.value), rs: sgnUsd(hp), rsC: cls(hp),
+    return { pl: hp, plr: hr, id: 'h:SH', grp: '헷지', val: h.value, title: 'SH', tag: '헷지', sub: 'S&P 500 인버스(−1배)', rb: usd(h.value), rs: sgnUsd(hp), rsC: cls(hp),
       why: `S&P 500이 하락 추세라, 들고 있는 주식의 위험을 줄이려고 보유 주식의 ${ratio}% 안쪽만큼 샀습니다.${h.why ? ` (${h.why})` : ''}`,
       name: 'S&P 500 인버스 헷지', chartName: 'S&P 500 지수', px: q ? q.px : spxBook(), liveAt: q ? q.t : null, unit: '', dp: 2, pnl: hp,
       entry: h.spx0, entryL: '헷지 시작', lines: [], src: { k: 'cnbc', sym: '.SPX', reg: true }, note: 'CNBC 실시간 · 지수가 점선보다 낮으면 헷지가 이익',
@@ -1251,7 +1256,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
 
   function futA(f) {
     const dp = FUTDP[f.key] != null ? FUTDP[f.key] : 2, q = LQ['f:' + f.key];
-    return { id: 'f:' + f.key, grp: '선물', val: f.margin, short: f.name.replace(/\(.*\)| ?마이크로 선물| 선물$/g, '').trim(), title: f.name.replace(/ 선물$/, ''), tag: sideTag(f.qty), sub: `${f.key} · ${f.contract || ''} · ${Math.abs(f.qty)}계약`,
+    return { pl: f.pnl, plr: f.entry > 0 && f.px > 0 ? Math.sign(f.qty) * (f.px / f.entry - 1) : null, id: 'f:' + f.key, grp: '선물', val: f.margin, short: f.name.replace(/\(.*\)| ?마이크로 선물| 선물$/g, '').trim(), title: f.name.replace(/ 선물$/, ''), tag: sideTag(f.qty), sub: `${f.key} · ${f.contract || ''} · ${Math.abs(f.qty)}계약`,
       rb: sgnUsd(f.pnl), rbC: cls(f.pnl), rs: `증거금 ${usd(f.margin, 0)}`, rsC: 'muted', why: f.why,
       name: f.name, px: f.px, liveAt: q ? q.t : null, unit: '', dp, pnl: f.pnl, entry: f.entry, entryL: '평단', lines: f.stop ? [{ v: f.stop, l: '추적 손절' }] : [],
       src: { k: 'cnbc', sym: futSym(f) }, note: 'CNBC 1분봉 · 약 1분 지연',
@@ -1263,7 +1268,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const u = o.und || 'SPY', q = LQ[u], prem = Math.abs(o.cost), K = optKind(o), short = o.side !== 'hedge' && o.side !== 'lcall' && o.side !== 'lput';
     const stk = ((S.deriv && S.deriv.stk) || []).find((x) => x.sym === u);
     const entry = o.side === 'cc' ? (stk ? stk.cost : null) : K.be;
-    return { id: 'o:' + o.id, grp: '옵션', short: `${u} 옵션`, val: Math.abs(optTied(o)), title: K.title, tag: K.tag,
+    return { pl: o.pnl, plr: prem > 0 && isFinite(o.pnl) ? o.pnl / prem : null, id: 'o:' + o.id, grp: '옵션', short: `${u} 옵션`, val: Math.abs(optTied(o)), title: K.title, tag: K.tag,
       sub: `${o.n}계약 · ${o.maxLoss != null ? `최대 손실 ${usd(o.maxLoss, 0)}` : o.side === 'ncall' ? '손실 한도 없음 · 3배 손절' : '주식으로 덮인 콜'}`, rb: sgnUsd(o.pnl), rbC: cls(o.pnl),
       rs: `${short ? '되사는 값' : '평가액'} ${usd(Math.abs(o.value), 0)}`, rsC: 'muted', why: o.why,
       name: `${K.title} ${K.tag}`, chartName: u === 'SPY' ? 'SPY(S&P 500 ETF)' : u === 'IWM' ? 'IWM(러셀 2000 ETF)' : u, px: q ? q.px : null, liveAt: q ? q.t : null, unit: '$', dp: 2, pnl: o.pnl,
@@ -1275,7 +1280,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   function stkA(x) {
     const q = LQ[x.sym], cc = ((S.deriv && S.deriv.opt) || []).find((o) => o.side === 'cc' && (o.und || 'SPY') === x.sym);
-    return { id: 'k:' + x.sym, grp: '주식', val: x.value, title: x.sym, tag: '휠', sub: `${ETFN[x.sym] || x.sym} · ${x.qty}주`,
+    return { pl: x.pnl, plr: x.cost > 0 && x.px > 0 ? x.px / x.cost - 1 : null, id: 'k:' + x.sym, grp: '주식', val: x.value, title: x.sym, tag: '휠', sub: `${ETFN[x.sym] || x.sym} · ${x.qty}주`,
       rb: usd(x.value), rs: `${sgnUsd(x.pnl)} (${pct(x.px / x.cost - 1)})`, rsC: cls(x.pnl),
       why: '현금 담보 풋이 행사돼 받은 주식입니다. 이 위에 커버드콜을 팔아 프리미엄을 받고, 콜 행사가 위로 오르면 그 값에 팔립니다.',
       name: `${x.sym} · ${ETFN[x.sym] || ''}`, px: x.px, liveAt: q ? q.t : null, unit: '$', dp: 2, pnl: x.pnl,
@@ -1286,7 +1291,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   function elsA(e) {
     const nb = (e.obs || []).find(([d]) => d === e.next), a = LQ['.SPX'], b = LQ['.NDX'];
     const w = a && b ? Math.min(a.px / e.s0[0], b.px / e.s0[1]) * 100 : e.w != null ? e.w * 100 : null;
-    return { id: 'e:' + e.id, grp: 'ELS', short: 'ELS', val: e.value, title: `ELS 연 ${fmt(e.coupon * 100, 1)}%`, tag: e.kiHit ? '낙인 발생' : '스텝다운', sub: `S&P 500·나스닥 100 · 가입 ${usd(e.amount, 0)}`,
+    return { pl: e.value - e.amount, plr: e.amount > 0 ? e.value / e.amount - 1 : null, id: 'e:' + e.id, grp: 'ELS', short: 'ELS', val: e.value, title: `ELS 연 ${fmt(e.coupon * 100, 1)}%`, tag: e.kiHit ? '낙인 발생' : '스텝다운', sub: `S&P 500·나스닥 100 · 가입 ${usd(e.amount, 0)}`,
       rb: usd(e.value), rs: sgnUsd(e.value - e.amount), rsC: cls(e.value - e.amount), why: e.why,
       name: `ELS 연 ${fmt(e.coupon * 100, 1)}% (S&P 500·나스닥 100)`, chartName: '두 지수 중 낮은 쪽, 가입 때 = 100', px: w, liveAt: a && b ? Math.min(a.t, b.t) : null, unit: '%', dp: 1, pnl: e.value - e.amount,
       entry: 100, entryL: '가입 시점', lines: [nb ? { v: nb[1] * 100, l: '다음 조기상환 기준', keep: true } : null, { v: e.ki * 100, l: '낙인', keep: true }].filter(Boolean),
@@ -1296,13 +1301,14 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         ['낙인', `시작의 ${Math.round(e.ki * 100)}%${e.kiHit ? ` (발생 ${esc(e.kiHit)})` : ''}`], ['모형 확률', `조기상환 ${Math.round((e.pCall || 0) * 100)}% · 낙인 ${Math.round((e.pKi || 0) * 100)}%`]] };
   }
   function coinA(x) {
-    const px = coinPx(x.c), v = x.qty * px, avg = COINB[x.c] || null, pnl = avg ? (px - avg) * x.qty : null;
+    const px = coinPx(x.c), v = x.qty * px, bc = x.c === 'BTC' && CV.basis && CV.basis.qty > 0 && Math.abs(CV.basis.qty - x.qty) < 1e-6 ? CV.basis.cost : null;
+    const avg = bc || COINB[x.c] || null, pnl = avg ? (px - avg) * x.qty : null;
     const ps = ['trend', 'scalp'].map((k) => (CV.pos && CV.pos[k] && CV.pos[k][x.c] ? [k, CV.pos[k][x.c]] : null)).filter(Boolean);
     const bq = x.c === 'BTC' && CV.basis && CV.basis.qty > 0 ? CV.basis : null;
     const why = bq ? `비트코인 현·선물 차익(베이시스): CME 마이크로 비트코인 선물을 판 만큼(${fmt(bq.qty, 4)} BTC) 현물을 들고 있습니다. 값이 오르내려도 선물과 현물의 손익이 서로 상쇄되고, 선물이 현물보다 비싼 만큼(프리미엄)이 만기까지 수익이 됩니다.${ps.length ? ' / ' + ps.map(([k, p]) => `${SNAME[k]}: ${p.why || ''}`).join(' / ') : ''}`
       : ps.length ? ps.map(([k, p]) => `${SNAME[k]}: ${p.why || ''}`).join(' / ') : '거래소 간 가격 차이가 수수료보다 커지면 바로 사고팔 수 있게 5개 거래소에 나눠 둔 차익거래용 재고입니다.';
     const sk = CV.stake || {}, sr = sk.net && sk.net[x.c], earned = sk.earned && sk.earned[x.c];
-    return { id: 'c:' + x.c, grp: '코인', val: v, title: assetName(x.c), sub: `${x.c} · ${fmt(x.qty, 6)}개${sr ? ` · 스테이킹 연 ${fmt(sr * 100, 1)}%` : ''}`,
+    return { pl: pnl, plr: avg ? px / avg - 1 : null, id: 'c:' + x.c, grp: '코인', val: v, title: assetName(x.c), sub: `${x.c} · ${fmt(x.qty, 6)}개${sr ? ` · 스테이킹 연 ${fmt(sr * 100, 1)}%` : ''}`,
       rb: usd(v), rs: pnl != null ? `${sgnUsd(pnl)} (${pct(px / avg - 1)})` : usd(px), rsC: pnl != null ? cls(pnl) : 'muted', why,
       name: `${assetName(x.c)} (${x.c})`, px, liveAt: Date.now(), unit: '$', dp: px >= 1000 ? 0 : 2, pnl,
       entry: avg, entryL: '평단', lines: ps.filter(([, p]) => p.stop).map(([k, p]) => ({ v: p.stop, l: `${SNAME[k]} 손절` })),
@@ -1315,7 +1321,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   function perpA(x) {
     const lq = x.tok ? LQ['t:' + x.c] : null, px = (x.tok ? lq && lq.px : coinPx(x.c)) || x.px, pnl = x.side * x.qty * (px - x.entry), notional = x.qty * px;
-    return { id: 'p:' + x.c + (x.s === 'scalp' ? ':s' : ''), grp: '코인 선물', val: x.margin + pnl, tag: x.s === 'scalp' ? '초단타 공매도' : x.side > 0 ? '선물 매수' : '선물 공매도', title: assetName(x.c), sub: `${x.c} · ${fmt(x.qty, 6)}개 · 명목 ${usd(notional, 0)}`,
+    return { pl: pnl, plr: x.entry > 0 ? x.side * (px / x.entry - 1) : null, id: 'p:' + x.c + (x.s === 'scalp' ? ':s' : ''), grp: '코인 선물', val: x.margin + pnl, tag: x.s === 'scalp' ? '초단타 공매도' : x.side > 0 ? '선물 매수' : '선물 공매도', title: assetName(x.c), sub: `${x.c} · ${fmt(x.qty, 6)}개 · 명목 ${usd(notional, 0)}`,
       rb: usd(x.margin + pnl), rs: `${sgnUsd(pnl)} (${pct(x.side * (px / x.entry - 1))})`, rsC: cls(pnl), why: x.why,
       name: `${assetName(x.c)} 무기한 선물 ${x.side > 0 ? '매수' : '공매도'}`, px, liveAt: Date.now(), unit: '$', dp: px >= 1000 ? 0 : 2, pnl,
       entry: x.entry, entryL: x.side > 0 ? '평단' : '공매도 평단', lines: [{ v: x.stop, l: '손절' }], src: x.tok ? { k: 'kraken', pair: x.c + 'USD', tok: true } : { k: 'kraken', pair: KPAIR[x.c] || x.c + 'USD' }, note: x.side > 0 ? '가격이 오르면 이익' : '가격이 내리면 이익',
@@ -1324,7 +1330,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   }
   function tokA(t) {
     const q = LQ['t:' + t.s], px = q ? q.px : t.qty > 0 ? t.value / t.qty : (t.bid + t.ask) / 2;
-    return { id: 't:' + t.s, grp: '토큰화 주식', val: t.value, title: `${t.name} 토큰`, sub: `${t.s} · ${fmt(t.qty, 4)}주`,
+    return { pl: t.pnl != null ? t.pnl : null, plr: t.entry && px ? px / t.entry - 1 : null, id: 't:' + t.s, grp: '토큰화 주식', val: t.value, title: `${t.name} 토큰`, sub: `${t.s} · ${fmt(t.qty, 4)}주`,
       rb: usd(t.value), rs: t.pnl != null ? `${sgnUsd(t.pnl)}${t.entry ? ` (${pct(px / t.entry - 1)})` : ''}` : '', rsC: t.pnl != null ? cls(t.pnl) : '', why: t.why,
       name: `${t.name} 토큰 (${t.s})`, px, liveAt: q ? q.t : null, unit: '$', dp: 2, pnl: t.pnl, entry: t.entry, entryL: '평단', lines: t.stop ? [{ v: t.stop, l: '손절' }] : [],
       src: { k: 'kraken', pair: t.s + 'USD', tok: true }, note: 'Kraken 실시간 호가 · 24시간',
@@ -1394,7 +1400,9 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const chev = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
     h += '<ul class="hl">' + rows.map((r) => {
       const short = r.a.tag && SHORTTAG.test(r.a.tag), lab = r.a.tag ? `${r.a.tag} 이유` : '매수 이유', pid = 'hw-' + r.key.replace(/[^a-zA-Z0-9]/g, '_');
-      return `<li><button type="button" class="hn" data-k="${esc(r.key)}" aria-expanded="false" aria-controls="${pid}"><i class="dot" style="background:${r.col}" aria-hidden="true"></i><span class="nm">${esc(r.name)}</span>${chev}</button>`
+      const pl = r.a.pl, plr = r.a.plr, has = pl != null && isFinite(pl);
+      const plH = has ? `<span class="pl"><b class="${cls(pl)}">${sgnUsd(pl)}</b>${plr != null && isFinite(plr) ? `<span class="${cls(pl)}">${pct(plr)}</span>` : ''}</span>` : '<span class="pl"><b class="na">—</b></span>';
+      return `<li><button type="button" class="hn" data-k="${esc(r.key)}" aria-expanded="false" aria-controls="${pid}" aria-label="${esc(r.name)}${has ? `, 손익 ${sgnUsd(pl)}${plr != null && isFinite(plr) ? ` ${pct(plr)}` : ''}` : ''}"><i class="dot" style="background:${r.col}" aria-hidden="true"></i><span class="nm">${esc(r.name)}</span>${plH}${chev}</button>`
         + `<div class="hwhy" id="${pid}" hidden><span class="lab${short ? ' sh' : ''}">${esc(lab)}</span><p>${esc(r.a.why || '기록된 이유가 없습니다(확인필요).')}</p>`
         + `<div class="meta"><span>비중 ${fmt(r.share * 100, 1)}%</span><span>${esc(r.a.rb || '')}${r.a.rs ? ' · ' + esc(r.a.rs) : ''}</span><a href="#a/${encodeURIComponent(r.key)}">자세히 보기</a></div></div></li>`;
     }).join('') + '</ul>';
@@ -1562,8 +1570,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     for (let i = rs.length - 1; i >= 0; i--) rs[i].ty = Math.min(rs[i].ty, i < rs.length - 1 ? rs[i + 1].ty - GAP : BOT);
     for (const { r, y, ty } of rs) refsSvg += `<line x1="${L}" x2="${W - R}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="${r.main ? 'ref' : 'ref2'}"/>`;
     let tagsSvg = '';                     // labels go over the prices, the lines under them
-    for (const { r, ty } of rs) tagsSvg += r.main ? `<g class="rlb"><rect rx="6" ry="6"/><text x="${L + 8}" y="${ty.toFixed(1)}" class="rl">${esc(r.l)} ${esc(pxText(x, r.v))}</text></g>`
-      : `<text x="${L + 2}" y="${ty.toFixed(1)}" class="rl2">${esc(r.l)} ${esc(pxText(x, r.v))}</text>`;
+    for (const { r, ty } of rs) tagsSvg += `<g class="rlb"><rect rx="6" ry="6"/><text x="${L + 8}" y="${ty.toFixed(1)}" class="rl">${esc(r.l)} ${esc(pxText(x, r.v))}</text></g>`;
     const end = pts.length - 1;
     let body = '';
     if (asCandle) {                       // red when it closed above its open, blue below (Korean convention)
