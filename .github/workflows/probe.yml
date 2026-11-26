@@ -2,6 +2,11 @@
 name: probe
 on:
   workflow_dispatch:
+    inputs:
+      script:
+        description: 'tools/<script>.mjs to run'
+        required: false
+        default: 'probe_cors'
 permissions:
   contents: read
 jobs:
@@ -13,4 +18,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: node tools/probe_cors.mjs
+      - run: node tools/${{ github.event.inputs.script || 'probe_cors' }}.mjs
