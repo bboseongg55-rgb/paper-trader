@@ -177,7 +177,9 @@ const cryptoSeen = new Set(((cv && cv.transfers) || []).map((x) => x.id));
 const transit = () => alloc.transfers.reduce((a, t) => a + (t.to === 'crypto' && t.stockDone && !cryptoSeen.has(t.id) ? t.amount : t.from === 'crypto' && !t.stockDone && cryptoSeen.has(t.id) ? t.amount : 0), 0);
 const valAt = (sym, d) => { const m = MS[sym] || {}; if (m[d] != null) return m[d]; const q = (mk.ix || {})[sym]; if (q && q.time && q.time.slice(0, 10) === d) return q.px; const ks = Object.keys(m).filter((k) => k <= d).sort(); return ks.length ? m[ks[ks.length - 1]] : null; };
 let decided = false;
-if (book && MS['.SPX'] && (!alloc.cio || alloc.cio.date < book.date || alloc.cio.v !== CIO.V)) {
+// (and again the same day when the checks came out differently, so the page lists what now trades)
+const verSig = ver && ver.allow ? JSON.stringify(ver.allow) + '|' + JSON.stringify(ver.cfg || {}) : null;
+if (book && MS['.SPX'] && (!alloc.cio || alloc.cio.date < book.date || alloc.cio.v !== CIO.V || (verSig && alloc.cio.verSig !== verSig))) {
   const pic = CIO.picture(MS, book.date);
   // what the allocator needs to know about the account: the stocks it would protect, and today's ELS coupon
   const expo = book.state.positions.filter((p) => p.pb !== 'bd').reduce((a, p) => a + p.qty * (p.lastPx || p.fill || 0), 0)
@@ -195,7 +197,7 @@ if (book && MS['.SPX'] && (!alloc.cio || alloc.cio.date < book.date || alloc.cio
   const wheelHeld = dst ? Object.values(dst.stk || {}).reduce((a, x) => a + x.qty * x.px, 0) + dst.opt.filter((o) => o.side === 'csp').reduce((a, o) => a + o.n * 100 * o.k, 0) : 0;
   let learn = null; try { learn = learnByPhase(); } catch (e) { learn = null; }
   const dec = CIO.decide(pic, { exposure: expo, elsCoupon, iwm, account: acct0, wheelHeld, learn, verify: ver });
-  alloc.cio = dec; decided = true; allocChanged = true;
+  alloc.cio = Object.assign(dec, { verSig }); decided = true; allocChanged = true;
   alloc.history = (alloc.history || []).filter((h) => h.date !== book.date).concat([{ date: book.date, key: dec.regime.key, label: dec.regime.label, headline: dec.headline, target: dec.target }]).slice(-250);
   const lt = alloc.tilts[alloc.tilts.length - 1];
   if (!lt || JSON.stringify(lt.core) !== JSON.stringify(dec.tilt.core)) alloc.tilts.push({ from: book.date, core: dec.tilt.core });
