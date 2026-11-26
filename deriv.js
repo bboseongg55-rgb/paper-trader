@@ -34,11 +34,15 @@
     optFee: 0.04,
     rpSpread: 0.0025,           // RP rate = US 1-month T-bill yield − 0.25%p (확인필요)
     cta: { fast: 20, slow: 100, l1: 60, l2: 120, vol: 60, stopK: 4, maxPos: 5, marginCap: 0.5, rho: 0.3 },
+    // the owner (2026-11-25): shorts take their profit quickly, longs ride it. In the contract's daily moves: a short is
+    // bought back once its open profit is shortTake moves (1.5 × the 4-move stop) and trails shortTrailK moves from its
+    // low once it has made shortTrailFrom; a long that has made longHoldFrom trails longTrailK moves from its high
+    asymF: { shortTake: 6, shortTrailFrom: 4, shortTrailK: 2, longHoldFrom: 8, longTrailK: 5 },
     credit: { delta: 0.2, width: 15, dteMin: 28, dteMax: 50, dteAim: 40, minCreditPct: 0.2, riskPer: 0.015, maxRisk: 0.04, take: 0.5, stopX: 3, exitDte: 14 },
     hedge: { longDelta: 0.3, shortDelta: 0.08, dteMin: 40, dteMax: 80, dteAim: 60, ratio: 0.5, exitDte: 15 },
     // bear call spreads on SPY: the mirror of the put spreads, for falling or sideways markets (with both: an iron condor)
     // (calls are priced lower than puts on index options, so the spread is narrower and needs 15% of its width)
-    ccall: { delta: 0.2, width: 10, dteMin: 28, dteMax: 50, dteAim: 40, minCreditPct: 0.15, riskPer: 0.015, maxRisk: 0.04, take: 0.5, stopX: 3, exitDte: 14 },
+    ccall: { delta: 0.2, width: 10, dteMin: 28, dteMax: 50, dteAim: 40, minCreditPct: 0.15, riskPer: 0.015, maxRisk: 0.04, take: 0.4, stopX: 3, exitDte: 14 },   // bearish: profit taken at 40% (was 50%)
     // the wheel on IWM: sell a cash-secured put; if it ends in the money the shares are bought at the strike, then covered
     // calls are sold on them (strike at or above what the shares cost) until they are called away; premium of at least
     // 0.4% of the price per month-ish expiry, at most 30% of the account tied up
@@ -66,11 +70,21 @@
     // per vol point, is not opened
     risk: { days: 500, volBeta: 4, varMax: 0.04, vegaMax: 0.01, deltaMax: 1, iwmBeta: 1.15 },   // deltaMax: |net equity delta| ≤ 1 × account
     // bear: in a long-term downtrend (allocator's opt.bear) puts may cost up to bearIv × the realised-vol forecast, at bearSize × the size
-    longOpt: { und: 'SPY', dteMin: 30, dteMax: 60, dteAim: 45, delta: 0.4, riskPer: 0.01, maxRisk: 0.04, take: 1, stop: 0.5, exitDte: 10, bearIv: 1.5, bearSize: 1.5, oneMax: 0.03 },
-    nakedCall: { und: 'SPY', dteMin: 21, dteMax: 45, dteAim: 30, delta: 0.15, maxNotional: 0.8, take: 0.5, stopX: 3, exitDte: 7 },
+    // take profit: a bought put (a bet on a fall) at +50%, a bought call (a bet on a rise) at +200% (the owner, 2026-11-25)
+    longOpt: { und: 'SPY', dteMin: 30, dteMax: 60, dteAim: 45, delta: 0.4, riskPer: 0.01, maxRisk: 0.04, take: 1, takePut: 0.5, takeCall: 2, stop: 0.5, exitDte: 10, bearIv: 1.5, bearSize: 1.5, oneMax: 0.03 },
+    nakedCall: { und: 'SPY', dteMin: 21, dteMax: 45, dteAim: 30, delta: 0.15, maxNotional: 0.8, take: 0.4, stopX: 3, exitDte: 7 },   // bearish: profit taken at 40% (was 50%)
     base: { und: 'SPY', dteMin: 21, dteMax: 45, dteAim: 30, wing: 0.9, budget: 0.12, startBudget: 0.06, startCycles: 3, cap: 1.5, lam: 0.94 },
     els: { tenor: 3, obs: [0.9, 0.9, 0.85, 0.85, 0.8, 0.75], ki: 0.45, fvTarget: 0.98, lot: 5000, qSpx: 0.012, qNdx: 0.007, earlySale: 0.95, paths: 6000, markPaths: 1500 },
   };
+  // a futures position's open profit as a share of its notional (the daily marks since entry, through rolls), and its
+  // trailing-stop width in daily moves: tight for a short in profit, wide for a long well in profit
+  const futGain = (p) => (p.real || 0) / Math.max(1e-9, Math.abs(p.qty) * (p.mult || 1) * (p.px || p.entry));
+  const futStopK = (p, sd) => {
+    const A = CFG.asymF, g = futGain(p);
+    if (!(sd > 0)) return CFG.cta.stopK;
+    return p.qty < 0 ? (g >= A.shortTrailFrom * sd ? A.shortTrailK : CFG.cta.stopK) : g >= A.longHoldFrom * sd ? A.longTrailK : CFG.cta.stopK;
+  };
+
   const DAY = 864e5, ROLL_DAYS = 12;          // roll this many calendar days before the front contract expires
   const r2 = (v) => Math.round(v * 100) / 100;
   const r4 = (v) => Math.round(v * 1e4) / 1e4;
@@ -244,13 +258,16 @@
     st.signals = Object.fromEntries(Object.entries(sig).map(([k, t]) => [k, { s: r4(t.s), r60: r4(t.r1), r120: r4(t.r2), vol: r4(t.sd), px: t.px }]));
     const daily$ = acct * (fb.budget || 0) / Math.sqrt(252), per = daily$ / 2;
     const tilt = (f, dir) => { const g = (fb.tilt || {})[f.g]; return g ? (dir > 0 ? g[0] : g[1]) : 1; };
-    // exits: the trend turned, or the trailing stop (4 daily moves from the best close)
+    // exits: a short's quick profit, the trend turned, or the trailing stop (4 daily moves from the best close; 2 for a
+    // short in profit, 5 for a long well in profit)
     for (const k of Object.keys(st.fut)) {
       const p = st.fut[k], f = FUT_BY[k], t = sig[k], q = (ctx.fut || {})[k];
       const dir = Math.sign(p.qty), live = q && q.c1 && q.c1.contract === p.contract ? q.c1.px : q && q.c2 && q.c2.contract === p.contract ? q.c2.px : p.px;
+      const kS = t ? futStopK(p, t.sd) : CFG.cta.stopK, gain = futGain(p);
       let why = null;
-      if (t && (dir > 0 ? t.s <= -1 / 3 : t.s >= 1 / 3)) why = `추세 반전(60일 ${pc(t.r1)}, 120일 ${pc(t.r2)})`;
-      else if (t && (dir > 0 ? p.px <= p.best * (1 - CFG.cta.stopK * t.sd) : p.px >= p.best * (1 + CFG.cta.stopK * t.sd))) why = `추적 손절(최고점 대비 ${(CFG.cta.stopK * t.sd * 100).toFixed(1)}%)`;
+      if (t && dir < 0 && gain >= CFG.asymF.shortTake * t.sd) why = `공매도 익절(열린 이익 ${pc(gain)}, 하루 변동폭의 ${CFG.asymF.shortTake}배)`;
+      else if (t && (dir > 0 ? t.s <= -1 / 3 : t.s >= 1 / 3)) why = `추세 반전(60일 ${pc(t.r1)}, 120일 ${pc(t.r2)})`;
+      else if (t && (dir > 0 ? p.px <= p.best * (1 - kS * t.sd) : p.px >= p.best * (1 + kS * t.sd))) why = `추적 손절(${dir > 0 ? '최고점' : '최저점'} 대비 ${(kS * t.sd * 100).toFixed(1)}%)`;
       else if (tilt(f, dir) === 0) why = `AI 배분: ${GROUP_NAME[f.g]} ${dir > 0 ? '매수' : '매도'} 쉼`;
       if (why && live > 0) closeFut(st, k, live, now, d, why);
     }
@@ -419,8 +436,8 @@
         else if (left <= c.exitDte) why = `만기 ${left}일 전 정리`;
         else if (off) why = 'AI 배분: 시장 국면이 바뀌어 프리미엄 매도를 쉼';
       } else if (o.side === 'lcall' || o.side === 'lput') {
-        const c = CFG.longOpt, v = o.val != null ? o.val : o.cost;
-        if (v >= o.cost * (1 + c.take)) why = `이익 실현(산 값의 ${Math.round((1 + c.take) * 100)}%)`;
+        const c = CFG.longOpt, v = o.val != null ? o.val : o.cost, take = o.side === 'lput' ? c.takePut : c.takeCall;
+        if (v >= o.cost * (1 + take)) why = `이익 실현(산 값의 ${Math.round((1 + take) * 100)}%${o.side === 'lput' ? ', 하락 베팅은 빨리 익절' : ', 상승 베팅은 길게'})`;
         else if (v <= o.cost * (1 - c.stop)) why = `손절(산 값의 ${Math.round(c.stop * 100)}% 손실)`;
         else if (left <= c.exitDte) why = `만기 ${left}일 전 정리(시간 가치 소멸 전)`;
       } else if (o.side === 'ncall') {
@@ -677,7 +694,7 @@
   function view(st) {
     const sdOf = (k) => (st.signals && st.signals[k] && st.signals[k].vol) || null;
     const fut = Object.values(st.fut).map((p) => ({ key: p.key, name: p.name, g: p.g, qty: p.qty, contract: p.contract, exp: p.exp, entry: p.entry, px: p.px,
-      stop: p.best && sdOf(p.key) ? r4(p.qty > 0 ? p.best * (1 - CFG.cta.stopK * sdOf(p.key)) : p.best * (1 + CFG.cta.stopK * sdOf(p.key))) : null,
+      stop: p.best && sdOf(p.key) ? r4(p.qty > 0 ? p.best * (1 - futStopK(p, sdOf(p.key)) * sdOf(p.key)) : p.best * (1 + futStopK(p, sdOf(p.key)) * sdOf(p.key))) : null,
       notional: r2(Math.abs(p.qty) * p.px * p.mult), margin: r2(Math.abs(p.qty) * p.px * p.mult * FUT_BY[p.key].mr), pnl: r2((p.real || 0) + p.qty * p.mult * (p.px - p.mark) - (p.feesPaid || 0)), date: p.date, why: p.why }));
     const maxLossOf = (o) => (o.side === 'credit' || o.side === 'base' ? o.n * 100 * (o.kShort - o.kLong + o.cost) : o.side === 'ccall' ? o.n * 100 * (o.kLong - o.kShort + o.cost)
       : o.side === 'csp' ? o.n * 100 * (o.k + o.cost) : o.side === 'cc' || o.side === 'ncall' ? null : o.n * 100 * o.cost);

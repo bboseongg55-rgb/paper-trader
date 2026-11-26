@@ -12,7 +12,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const pct = (v, d = 1) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%' : '-');
   const pp = (v) => (isNum(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%p' : '-');
-  const V = 9;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30; 6: buying calls and puts, naked calls; 7: the long-term downtrend stance; 8: learning from the account's trades by phase; 9: the coin account's trades learn too, one hedge in one place)
+  const V = 10;                     // the rules' version: a new version decides again at the next run (2: call spreads, the wheel, staking; 3: the S&P 500 base layer; 4: shorts and leverage; 5: everything allowed, stocks 70 : coins 30; 6: buying calls and puts, naked calls; 7: the long-term downtrend stance; 8: learning from the account's trades by phase; 9: the coin account's trades learn too, one hedge in one place; 10: shorts take profit quickly, longs ride it)
   // the owner's settings (2026-11-21): every strategy may trade in every market phase (the regime only scales risk), and
   // the 24-hour part (coins) holds 30% of the account against 70% for stocks, futures and options
   const OPEN = true, COIN_SHARE = 0.3;
@@ -195,9 +195,9 @@
         why: bear ? 'S&P 500이 200일 평균 아래라 장기 하락 추세로 판단합니다: 지수 선물은 매수하지 않고 매도 위험을 2배로, 선물 위험 예산 7%, 풋은 옵션값이 실제 흔들림 예측의 1.5배까지 비싸도 1.5배 크기로 삽니다.'
           : 'S&P 500이 200일 평균 위라 장기 하락 추세가 아닙니다. 200일 평균 아래로 내려가면 지수 선물 매도와 풋 매수를 크게 합니다.' },
       { k: 'longOpt', name: '콜·풋 매수(SPY)', w: 1, on: OPEN,
-        why: `옵션값(내재 변동성)이 실제 흔들림 예측보다 쌀 때만, S&P 500 추세 방향으로 삽니다(오르면 콜, 내리면 풋, 델타 0.4, 약 45일). 한 번에 계좌의 1%, 합계 4% 안, +100% 이익 실현, −50% 손절.` },
+        why: `옵션값(내재 변동성)이 실제 흔들림 예측보다 쌀 때만, S&P 500 추세 방향으로 삽니다(오르면 콜, 내리면 풋, 델타 0.4, 약 45일). 한 번에 계좌의 1%, 합계 4% 안, 이익 실현은 풋 +50%(하락 베팅은 빨리)·콜 +200%(상승 베팅은 길게), −50% 손절.` },
       { k: 'nakedCall', name: '콜 매도(무담보, SPY)', w: 1, on: OPEN,
-        why: `옵션값이 실제 흔들림 예측보다 비싸고 S&P 500이 오르는 추세가 아닐 때만, 델타 0.15 콜을 1계약 팝니다(증거금 별도). 되사는 값이 받은 값의 3배면 손절, 50%면 이익 실현.` },
+        why: `옵션값이 실제 흔들림 예측보다 비싸고 S&P 500이 오르는 추세가 아닐 때만, 델타 0.15 콜을 1계약 팝니다(증거금 별도). 되사는 값이 받은 값의 3배면 손절, 받은 값의 40%를 벌면 이익 실현(하락 쪽 매매는 빨리 익절).` },
       { k: 'sb', name: '하락 돌파 공매도(주식)', w: 1 / 6, on: true,
         why: `시장 국면과 상관없이, 50일 최저가를 깬 하락 추세·상대강도 하위 30% 종목을 공매도합니다(손절은 위쪽, 대여료 연 0.5%, 판 금액의 150% 증거금). 2년 시험이 손실이라 보통의 1/6 위험으로 시작합니다. 주식 쪽 레버리지는 계좌의 1.5배까지 허용합니다.` },
       { k: 'perp', name: '코인 무기한 선물(매수·공매도)', w: h24.trend, on: true,

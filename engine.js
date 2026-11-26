@@ -82,6 +82,14 @@
     // the risk and the method tournament and the phase learning decide from there. exit 1 cut the return to −0.0%
     // (2025-01~) and buying only the retest of a broken level did no better, so both stay off
     chart: { on: 1, k: 3, look: 120, tolK: 1.0, minTouch: 2, recent: 60, extK: 1.0, rsiL: [50, 75], rsiS: [25, 50], stopPad: 0.5, stopMin: 1, stopMax: 3, tgtR: 3, minRoom: 1.5, timeStop: 15, exit: 0 },
+    // the owner (2026-11-25): shorts take their profit quickly, longs ride it. Shorts: bought back at +shortTakeR R
+    // (also within the day), and once +1R the stop trails shortTrailWin swings above the low (it never widens). Longs:
+    // a breakout already +1R keeps its full trailing width in a falling market and widens from +longHoldFromR R, a
+    // pullback buy that has made +pbRunR R trails instead of being sold on the first bounce, and the chart buy no longer
+    // sells at the next level. Backtest at the live settings to 2026-11-25 over six start dates (2025-01 … 2026-03):
+    // average return +4.1% → +7.0%, average worst drawdown 12.3% → 11.6%; better in 3 windows, worse in 2 (by about
+    // 2 points), even in 1. Loosening every breakout's stop in a falling market instead averaged +4.4%
+    asym: { on: 1, shortTakeR: 1.5, shortTrailWin: 1.5, longHoldFromR: 2, pbRunR: 1 },
     hedgeFlex: 1, hedgeBond: 'US10Y', hedgeBondCorr: -0.1, defSecs: ['Consumer Staples', 'Utilities', 'Health Care'], defUp: 1.5, defDown: 0.5, defHedge: 0.5,
     selectEvery: 20, selectWindow: 120, selectMinTrades: 5, selectTrialM: 0.25, selectTiers: [1, 0.5, 0.17], selectLoserM: 0.17,
     // bonds: at most 4 at a time, bought at the close while the bond's total-return index is above its 100-day average
@@ -505,6 +513,7 @@
     const hedgeFlex = opts.hedgeFlex != null ? opts.hedgeFlex : FIXED.hedgeFlex, DEFSEC = new Set(FIXED.defSecs);
     const chartOn = opts.chart != null ? opts.chart : FIXED.chart.on, chartExit = opts.chartExit != null ? opts.chartExit : FIXED.chart.exit;
     const CH = chartOn || chartExit ? chartAux(D) : null, CK = FIXED.chart, LONGS = ['bo', 'pb', 'ch'];
+    const asymOn = opts.asym != null ? opts.asym : FIXED.asym.on, AS = FIXED.asym;
     const hedgeFills = [], hedgeEpisodes = [];
     const cool = new Map();                         // symbol index → first day it may be bought again
     const scores = Object.assign({ bo: 0, pb: 0, dt: 0, sb: 0, ch: 0, cs: 0 }, (BS ? BS.scores : opts.scores) || {});
@@ -748,6 +757,7 @@
               learn(closeTrade(p, t, v, `${kind}, 장중 ${tm}`, tm, k), t);
               continue;
             }
+            if (asymOn && p.dir === -1 && (p.fill - v) / p.R1 >= AS.shortTakeR) { learn(closeTrade(p, t, v, `공매도 익절(+${AS.shortTakeR}R), 장중 ${tm}`, tm, k), t); continue; }
             if (p.pb === 'dt') {
               p.mfeR = Math.max(p.mfeR, (v - p.fill) / p.R1);
               if (v >= p.fill + FIXED.dtTargetR * p.R1) { learn(closeTrade(p, t, v, `단타 목표가(+${FIXED.dtTargetR}R), 장중 ${tm}`, tm, k), t); continue; }
@@ -835,13 +845,14 @@
           p.mfeR = Math.max(p.mfeR, (p.fill - px) / p.R1);
           let why = null;
           if (px >= p.stop) why = p.stop < p.stop0 - 1e-9 ? (px <= p.fill ? '공매도 추적 손절(이익 보호)' : '공매도 추적 손절') : '공매도 손절';
+          else if (asymOn && (p.fill - px) / p.R1 >= AS.shortTakeR) why = `공매도 익절(+${AS.shortTakeR}R)`;
           else if (p.tgt != null && px <= p.tgt) why = '공매도 목표가(다음 지지선) 도달';
           else if (t - p.t0 >= (p.pb === 'cs' ? CK.timeStop : P.timeStop_bo) && p.mfeR < 0.5) why = '공매도 시간 손절';
           else if (chartExit && t > p.t0 && CH.Y[p.i].has(t)) why = `차트 되사기: 저항선 $${round(CH.Y[p.i].get(t).lvl, 2)} 돌파`;
           else if (regimeOk(D, t, 1) && px > x.sma50[t]) why = '공매도 청산(시장 200일선 회복·50일선 위)';
           if (why) { closedToday.push(closeTrade(p, t, px, why)); continue; }
-          const k = p.mfeR >= FIXED.holdFromR ? P.trailK + P.holdK : P.trailK;
-          p.stop = Math.min(p.stop, p.minC + k * p.atr);        // trailing stop moves down only
+          const k = asymOn ? (p.mfeR >= 1 ? AS.shortTrailWin : P.trailK) : p.mfeR >= FIXED.holdFromR ? P.trailK + P.holdK : P.trailK;
+          p.stop = Math.min(p.stop, p.minC + k * p.atr);        // trailing stop moves down only (tight once +1R: profit kept)
           continue;
         }
         p.maxC = Math.max(p.maxC, px);
@@ -849,18 +860,19 @@
         let reason = null;
         if (px <= p.stop) reason = (p.pb === 'bd' ? '채권 ' : '') + (p.stop > p.stop0 + 1e-9 ? (px >= p.fill ? '추적 손절(이익 보호)' : '추적 손절') : '손절');
         else if (p.pb === 'bd' && isNum(x.sma100[t]) && px < x.sma100[t]) reason = '채권 추세 이탈(100일 평균 아래)';
-        else if (p.pb === 'pb' && px > x.sma5[t] && t > p.t0) reason = '반등 청산';
-        else if (p.pb === 'pb' && t - p.t0 >= P.timeStop_pb) reason = '시간 청산';
+        else if (p.pb === 'pb' && px > x.sma5[t] && t > p.t0 && !(asymOn && p.mfeR >= AS.pbRunR)) reason = '반등 청산';
+        else if (p.pb === 'pb' && t - p.t0 >= P.timeStop_pb && !(asymOn && p.mfeR >= AS.pbRunR)) reason = '시간 청산';
         else if (p.pb === 'bo' && t - p.t0 >= P.timeStop_bo && p.mfeR < 0.5) reason = '시간 손절';
-        else if (p.pb === 'ch' && p.tgt != null && px >= p.tgt) reason = '목표가(다음 저항선) 도달';
+        else if (p.pb === 'ch' && !asymOn && p.tgt != null && px >= p.tgt) reason = '목표가(다음 저항선) 도달';
         else if (p.pb === 'ch' && t - p.t0 >= CK.timeStop && p.mfeR < 0.5) reason = '시간 손절';
         else if (chartExit && p.pb !== 'bd' && t > p.t0 && CH.X[p.i].has(t)) reason = `차트 매도: 지지선 $${round(CH.X[p.i].get(t).lvl, 2)} 이탈`;
         if (reason) { closedToday.push(closeTrade(p, t, px, reason)); continue; }
         if (p.pb === 'bd') p.stop = Math.max(p.stop, p.maxC - P.stopK_bd * p.atr);
-        if (p.pb === 'ch' && p.mfeR >= 1) p.stop = Math.max(p.stop, p.maxC - P.trailK * p.atr);   // the chart buy trails once it is +1R
-        if (p.pb === 'bo') {   // trailing stop moves up only; wider once the trade has made +3R, to ride the trend
-          const base = regimeNow ? P.trailK : Math.min(P.trailK, 2.0);
-          const k = p.mfeR >= FIXED.holdFromR ? base + P.holdK : base;
+        if (p.pb === 'ch' && p.mfeR >= 1) p.stop = Math.max(p.stop, p.maxC - (asymOn && p.mfeR >= AS.longHoldFromR ? P.trailK + P.holdK : P.trailK) * p.atr);   // the chart buy trails once it is +1R
+        if (asymOn && p.pb === 'pb' && p.mfeR >= AS.pbRunR) p.stop = Math.max(p.stop, p.maxC - P.trailK * p.atr);   // a pullback buy that ran: trail, ride it
+        if (p.pb === 'bo') {   // trailing stop moves up only; wider once the trade has made +3R (+2R with asym), to ride the trend
+          const base = regimeNow || (asymOn && p.mfeR >= 1) ? P.trailK : Math.min(P.trailK, 2.0);   // a falling market tightens only trades not yet +1R
+          const k = p.mfeR >= (asymOn ? AS.longHoldFromR : FIXED.holdFromR) ? base + P.holdK : base;
           p.stop = Math.max(p.stop, p.maxC - k * p.atr);
         }
       }
@@ -932,7 +944,7 @@
           }
           const res = {};
           for (const k of (chartOn ? ['bo', 'pb', 'dt', 'bd', 'ch'] : ['bo', 'pb', 'dt', 'bd'])) {
-            const r = simulate(D, { from: Math.max(210, t - FIXED.selectWindow + 1), to: t, capital: 100000, params: P, adaptive: false, only: k, hedgeFlex, chart: chartOn, chartExit });
+            const r = simulate(D, { from: Math.max(210, t - FIXED.selectWindow + 1), to: t, capital: 100000, params: P, adaptive: false, only: k, hedgeFlex, chart: chartOn, chartExit, asym: asymOn });
             res[k] = { ret: r.stats.ret, mdd: r.stats.mdd, n: r.stats.n };
           }
           const next = pickMults(res);
@@ -947,8 +959,8 @@
         // guard against over-fitting: every 20 days compare the adapted rules with the starting rules
         if (t - lastValidate >= FIXED.validateEvery && t - base0 >= FIXED.validateWindow && differs(P, B)) {
           lastValidate = t;
-          const a = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: P, adaptive: false, mults: M, hedgeFlex, chart: chartOn, chartExit });
-          const b = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: B, adaptive: false, mults: M, hedgeFlex, chart: chartOn, chartExit });
+          const a = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: P, adaptive: false, mults: M, hedgeFlex, chart: chartOn, chartExit, asym: asymOn });
+          const b = simulate(D, { from: t - FIXED.validateWindow + 1, to: t, capital: 100000, params: B, adaptive: false, mults: M, hedgeFlex, chart: chartOn, chartExit, asym: asymOn });
           const ra = a.stats.ret, rb = b.stats.ret;
           if (ra < rb - FIXED.validateMargin) {
             const chg = [];
@@ -1025,7 +1037,7 @@
           cash -= qty * fill + feeIn;
           heat += qty * perShare;
           const why = cd.pb === 'bo' ? `${highTxt(x.dom[t])} 돌파(기준 ${P.boLookback}일) · 상대강도 상위 ${Math.max(1, 100 - x.rs[t])}% · 50일선이 200일선 위인 상승 추세`
-            : cd.pb === 'ch' ? `차트: ${cd.ch.n}번 막힌 저항선 $${round(cd.ch.lvl, 2)}(${cd.ch.at.map((d) => +d.slice(5, 7) + '/' + +d.slice(8, 10)).join('·')})을 종가로 돌파 · RSI(14) ${cd.ch.rsi.toFixed(0)} · MACD가 신호선 위 · 50일선 위 · 목표 ${cd.ch.tgt != null ? `다음 저항선 $${round(tgt, 2)}` : `$${round(tgt, 2)}(${CK.tgtR}R)`}`
+            : cd.pb === 'ch' ? `차트: ${cd.ch.n}번 막힌 저항선 $${round(cd.ch.lvl, 2)}(${cd.ch.at.map((d) => +d.slice(5, 7) + '/' + +d.slice(8, 10)).join('·')})을 종가로 돌파 · RSI(14) ${cd.ch.rsi.toFixed(0)} · MACD가 신호선 위 · 50일선 위 · ${asymOn ? (cd.ch.tgt != null ? `다음 저항선 $${round(tgt, 2)} · 이익은 추적 손절로 길게` : '이익은 추적 손절로 길게') : `목표 ${cd.ch.tgt != null ? `다음 저항선 $${round(tgt, 2)}` : `$${round(tgt, 2)}(${CK.tgtR}R)`}`}`
             : `상승 추세(200일선 위) 속 짧은 하락: 2일 RSI ${x.rsi2[t].toFixed(1)}(기준 ${P.pbRsi} 미만) · 상대강도 상위 ${Math.max(1, 100 - x.rs[t])}%`;
           positions.push(Object.assign({ id: ++idSeq, i: cd.i, pb: cd.pb, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn, why, ctx: ctxAt(t) }, cd.pb === 'ch' ? { tgt, lvl: cd.ch.lvl } : {}));
           sig.taken = true; sig.qty = qty; sig.stop = round(stop, 2);

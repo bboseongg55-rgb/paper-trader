@@ -36,6 +36,11 @@
   const CFG = {
     arbShare: 0.3, arbMinEdge: 0.0005, arbMaxUsd: 1500, slip: 0.0002, exec: 'binanceus',
     trend: { hi: 20, lo: 10, atr: 14, ema: 100, stopK: 3, risk: 0.01, maxW: 0.3, shortW: 1 },
+    // the owner (2026-11-25): shorts take their profit quickly, longs ride it (trend and tokens). A short is bought back at
+    // +shortTakeR R (R: entry to the first stop) on any poll; once +1R its stop trails shortTrailK ATR above the low and it
+    // leaves on a shortExitH-hour high. A long that has made +longFromR R leaves on a longExitH-hour low (not 10), and from
+    // +longHoldFromR R its stop trails longTrailK ATR below the high (not 3)
+    asymC: { shortTakeR: 1.5, shortTrailK: 1.5, shortExitH: 5, longFromR: 1, longExitH: 20, longHoldFromR: 2, longTrailK: 4 },
     // perpetual futures for the trend strategy: longs and shorts, up to `lev` times the margin. Each position keeps its
     // margin (notional ÷ lev) aside; funding and borrowing cost `fund` a year on the notional (확인필요: real funding swings
     // around this and is often paid to shorts); a position is closed before 80% of its margin could be lost. Shorts start
@@ -381,21 +386,24 @@
       }
       if (tp && tp.perp && -tp.side * tp.qty * ((tp.side > 0 ? B.bid : B.ask) - tp.entry) >= CFG.perp.guard * tp.margin) exitPos(st, 'trend', c, B, now, '증거금 80% 손실: 강제 청산 전 정리');
       else if (tp && (tp.side < 0 ? B.ask >= tp.stop : B.bid <= tp.stop)) exitPos(st, 'trend', c, B, now, (tp.side < 0 ? tp.stop < tp.stop0 : tp.stop > tp.stop0) ? '추적 손절' : '손절');
+      else if (tp && tp.side < 0 && Math.abs(tp.stop0 - tp.entry) > 0 && tp.entry - B.ask >= CFG.asymC.shortTakeR * Math.abs(tp.stop0 - tp.entry)) exitPos(st, 'trend', c, B, now, `공매도 익절(+${CFG.asymC.shortTakeR}R)`);
       // trend: signals on a closed hourly bar
       if (hClosed && hb.length > CFG.trend.ema) {
         const done = hb.slice(0, -1), last = done[done.length - 1], prev = done.slice(-CFG.trend.hi - 1, -1);
         const a = atr(done, CFG.trend.atr), e = ema(done.map((b) => b.c), CFG.trend.ema);
         const p = st.pos.trend[c];
-        if (p && p.side < 0) {                                   // a short: the stop trails down; out on a 10-hour high
+        if (p && p.side < 0) {                                   // a short: the stop trails down; out on a 10-hour high (5 once +1R)
           p.loC = Math.min(p.loC || Infinity, last.c);
-          p.stop = Math.min(p.stop, p.loC + CFG.trend.stopK * a);
-          const hi = Math.max(...done.slice(-CFG.trend.lo - 1, -1).map((b) => b.h));
-          if (last.c > hi) exitPos(st, 'trend', c, B, now, `${CFG.trend.lo}시간 최고가 돌파`);
-        } else if (p) {
+          const A = CFG.asymC, R0 = Math.abs(p.stop0 - p.entry), won = R0 > 0 && p.entry - p.loC >= R0;
+          p.stop = Math.min(p.stop, p.loC + (won ? A.shortTrailK : CFG.trend.stopK) * a);
+          const nH = won ? A.shortExitH : CFG.trend.lo, hi = Math.max(...done.slice(-nH - 1, -1).map((b) => b.h));
+          if (last.c > hi) exitPos(st, 'trend', c, B, now, `${nH}시간 최고가 돌파${won ? '(이익 난 공매도는 빨리 정리)' : ''}`);
+        } else if (p) {                                          // a long: out on a 10-hour low (20 once +1R), wider trail from +2R
           p.hiC = Math.max(p.hiC || 0, last.c);
-          p.stop = Math.max(p.stop, p.hiC - CFG.trend.stopK * a);
-          const lo = Math.min(...done.slice(-CFG.trend.lo - 1, -1).map((b) => b.l));
-          if (last.c < lo) exitPos(st, 'trend', c, B, now, `${CFG.trend.lo}시간 최저가 이탈`);
+          const A = CFG.asymC, R0 = Math.abs(p.entry - p.stop0), mR = R0 > 0 ? (p.hiC - p.entry) / R0 : 0;
+          p.stop = Math.max(p.stop, p.hiC - (mR >= A.longHoldFromR ? A.longTrailK : CFG.trend.stopK) * a);
+          const nL = mR >= A.longFromR ? A.longExitH : CFG.trend.lo, lo = Math.min(...done.slice(-nL - 1, -1).map((b) => b.l));
+          if (last.c < lo) exitPos(st, 'trend', c, B, now, `${nL}시간 최저가 이탈${mR >= A.longFromR ? '(이익 난 매수는 길게)' : ''}`);
         } else if (!stopNew && a > 0 && ((last.c > Math.max(...prev.map((b) => b.h)) && last.c > e) || (last.c < Math.min(...prev.map((b) => b.l)) && last.c < e))) {
           // a new 20-hour high above the 100-hour average → long; a new 20-hour low below it → short (perpetual, up to
           // perp.lev × margin); size by risk to the stop, at most maxW × lev of the account in notional
@@ -481,20 +489,23 @@
         if (-p.side * p.qty * ((p.side > 0 ? x.bid : x.ask) - p.entry) >= CFG.perp.guard * p.margin) { tokSell(st, k, p.side > 0 ? x.bid : x.ask, now, '증거금 80% 손실: 강제 청산 전 정리'); continue; }
       }
       if (p && (p.side < 0 ? x.ask >= p.stop : x.bid <= p.stop)) tokSell(st, k, p.side < 0 ? x.ask : x.bid, now, (p.side < 0 ? p.stop < p.stop0 : p.stop > p.stop0) ? '추적 손절' : '손절');
+      else if (p && p.side < 0 && Math.abs(p.stop0 - p.entry) > 0 && p.entry - x.ask >= CFG.asymC.shortTakeR * Math.abs(p.stop0 - p.entry)) tokSell(st, k, x.ask, now, `공매도 익절(+${CFG.asymC.shortTakeR}R)`);
       if (!closed || hb.length <= K.ema) continue;
       const done = hb.slice(0, -1), last = done[done.length - 1], prev = done.slice(-K.hi - 1, -1);
       const a = atr(done, K.atr), e = ema(done.map((b) => b.c), K.ema);
       const p2 = T.pos[k];
       if (p2 && p2.side < 0) {
         p2.loC = Math.min(p2.loC || Infinity, last.c);
-        p2.stop = Math.min(p2.stop, p2.loC + K.stopK * a);
-        const hi = Math.max(...done.slice(-K.lo - 1, -1).map((b) => b.h));
-        if (last.c > hi) tokSell(st, k, x.ask, now, `${K.lo}시간 최고가 돌파`);
+        const A = CFG.asymC, R0 = Math.abs(p2.stop0 - p2.entry), won = R0 > 0 && p2.entry - p2.loC >= R0;
+        p2.stop = Math.min(p2.stop, p2.loC + (won ? A.shortTrailK : K.stopK) * a);
+        const nH = won ? A.shortExitH : K.lo, hi = Math.max(...done.slice(-nH - 1, -1).map((b) => b.h));
+        if (last.c > hi) tokSell(st, k, x.ask, now, `${nH}시간 최고가 돌파${won ? '(이익 난 공매도는 빨리 정리)' : ''}`);
       } else if (p2) {
         p2.hiC = Math.max(p2.hiC || 0, last.c);
-        p2.stop = Math.max(p2.stop, p2.hiC - K.stopK * a);
-        const lo = Math.min(...done.slice(-K.lo - 1, -1).map((b) => b.l));
-        if (last.c < lo) tokSell(st, k, x.bid, now, `${K.lo}시간 최저가 이탈`);
+        const A = CFG.asymC, R0 = Math.abs(p2.entry - p2.stop0), mR = R0 > 0 ? (p2.hiC - p2.entry) / R0 : 0;
+        p2.stop = Math.max(p2.stop, p2.hiC - (mR >= A.longHoldFromR ? A.longTrailK : K.stopK) * a);
+        const nL = mR >= A.longFromR ? A.longExitH : K.lo, lo = Math.min(...done.slice(-nL - 1, -1).map((b) => b.l));
+        if (last.c < lo) tokSell(st, k, x.bid, now, `${nL}시간 최저가 이탈${mR >= A.longFromR ? '(이익 난 매수는 길게)' : ''}`);
       } else {
         const off = !usOpen(now), sprMax = off ? K.offSpread : K.maxSpread;
         const longSig = last.c > Math.max(...prev.map((b) => b.h)) && last.c > e, shortSig = last.c < Math.min(...prev.map((b) => b.l)) && last.c < e;
