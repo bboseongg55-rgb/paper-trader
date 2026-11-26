@@ -1,7 +1,12 @@
 # 검증용 과거 시세: 코인 1시간·1분봉과 토큰화 주식 1시간봉을 받아 data/hist/에 저장합니다(필요할 때만 수동 실행).
 name: hist
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      what:
+        description: 'all | fred'
+        required: false
+        default: 'all'
 permissions:
   contents: write
 concurrency:
@@ -18,6 +23,8 @@ jobs:
           node-version: 20
       - name: Fetch history
         run: node tools/fetch_hist.mjs
+        env:
+          WHAT: ${{ github.event.inputs.what || 'all' }}
       - name: Save
         run: |
           git config user.name "paper-trader-bot"
