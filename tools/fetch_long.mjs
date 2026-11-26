@@ -61,7 +61,14 @@ fs.mkdirSync('data/hist', { recursive: true });
   const list = ['.SPX', '.VIX', 'VCIT', 'VCSH', 'IGIB', 'EMB', 'BNDX', 'IGOV',
     '@SP.1', '@ND.1', '@DJ.1', '@TFS.1', '@TU.1', '@FV.1', '@TY.1', '@US.1', '@CL.1', '@GC.1', '@SI.1', '@HG.1', '@BTC.1', '@ETH.1', 'BTC.CM=', 'ETH.CM='];
   const out = old('long_misc') || {};
-  for (const s of list) { const r = await daily(s, '2007-01-01', ymd(Date.now() + 864e5)); if (r) out[s] = Object.fromEntries(r.dates.map((d, i) => [d, r.c[i]])); console.log('misc', s, r ? r.dates.length : 'none'); await sleep(400); }
+  // CNBC's answer for the same series sometimes leaves days out (the bitcoin futures came back with 2,103 days once and
+  // 1,850 the next time): each run adds to what earlier runs got, a newer value wins for the same day
+  for (const s of list) {
+    const r = await daily(s, '2007-01-01', ymd(Date.now() + 864e5));
+    if (r) out[s] = Object.assign({}, out[s] || {}, Object.fromEntries(r.dates.map((d, i) => [d, r.c[i]])));
+    console.log('misc', s, r ? r.dates.length : 'none', 'kept', Object.keys(out[s] || {}).length);
+    await sleep(400);
+  }
   // the bond funds' payouts (Nasdaq's dividend history, the same source tools/bonds_hist.mjs uses for 2024 on): without
   // them the funds' price drops on each monthly ex-date and a backtest reads it as a loss
   out.div = out.div || {};

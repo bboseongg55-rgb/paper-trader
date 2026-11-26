@@ -91,10 +91,14 @@ export function longBonds(bondsHist, P) {
   for (const k of Object.keys(B.etf || {})) {
     const h = B.etf[k], f0 = first(h), y = P.X[k] || {};
     if (!(h[f0] > 0) || !(y[f0] > 0)) continue;
-    const f = h[f0] / y[f0];
-    for (const [d, v] of Object.entries(y)) if (d >= '2009-01-01' && d < f0) h[d] = +(v * f).toPrecision(7);
-    // and their payouts before the book's own record (tools/fetch_long.mjs from Nasdaq), on the same scale
-    const pre = ((P.X.div && P.X.div[k]) || []).filter(([d]) => d >= '2009-01-01' && d < f0).map(([d, a]) => [d, +(a * f).toPrecision(6)]);
+    // with their payouts (tools/fetch_long.mjs from Nasdaq), on the same scale; Nasdaq's record of a fund's payouts
+    // starts in 2011-2013, and the fund's price is used only from its first recorded payout (without the payouts each
+    // monthly ex-date would read as a loss)
+    const f = h[f0] / y[f0], pays = (P.X.div && P.X.div[k]) || [];
+    if (!pays.length) continue;
+    const from = pays[0][0] > '2009-01-01' ? pays[0][0] : '2009-01-01';
+    for (const [d, v] of Object.entries(y)) if (d >= from && d < f0) h[d] = +(v * f).toPrecision(7);
+    const pre = pays.filter(([d]) => d >= from && d < f0).map(([d, a]) => [d, +(a * f).toPrecision(6)]);
     B.div[k] = pre.concat(B.div[k] || []);
   }
   return B;
