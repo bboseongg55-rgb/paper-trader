@@ -62,6 +62,21 @@ fs.mkdirSync('data/hist', { recursive: true });
     '@SP.1', '@ND.1', '@DJ.1', '@TFS.1', '@TU.1', '@FV.1', '@TY.1', '@US.1', '@CL.1', '@GC.1', '@SI.1', '@HG.1', '@BTC.1', '@ETH.1', 'BTC.CM=', 'ETH.CM='];
   const out = old('long_misc') || {};
   for (const s of list) { const r = await daily(s, '2007-01-01', ymd(Date.now() + 864e5)); if (r) out[s] = Object.fromEntries(r.dates.map((d, i) => [d, r.c[i]])); console.log('misc', s, r ? r.dates.length : 'none'); await sleep(400); }
+  // the bond funds' payouts (Nasdaq's dividend history, the same source tools/bonds_hist.mjs uses for 2024 on): without
+  // them the funds' price drops on each monthly ex-date and a backtest reads it as a loss
+  out.div = out.div || {};
+  for (const s of ['VCIT', 'VCSH', 'IGIB', 'EMB', 'BNDX', 'IGOV']) {
+    const j = await get(`https://api.nasdaq.com/api/quote/${s}/dividends?assetclass=etf`, { headers: { 'User-Agent': CNBC_UA, Accept: 'application/json', Origin: 'https://www.nasdaq.com', Referer: 'https://www.nasdaq.com/' } });
+    const rows = (j && j.data && j.data.dividends && j.data.dividends.rows) || [], list = [];
+    for (const r of rows) {
+      const m = /^(\d\d)\/(\d\d)\/(\d{4})$/.exec(r.exOrEffDate || ''), a = parseFloat(String(r.amount || '').replace(/[$,]/g, ''));
+      if (m && Number.isFinite(a) && a > 0) list.push([`${m[3]}-${m[1]}-${m[2]}`, a]);
+    }
+    list.sort((x, y) => (x[0] < y[0] ? -1 : 1));
+    if (list.length) out.div[s] = list;
+    console.log('payouts', s, list.length, list.length && list[0][0]);
+    await sleep(400);
+  }
   put('long_misc', Object.assign(out, { src: 'cnbc' }));
 }
 // 2. real funding on Hyperliquid's perpetuals (hourly rate per hour held)

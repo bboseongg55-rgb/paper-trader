@@ -87,11 +87,15 @@ export function longBonds(bondsHist, P) {
     const h = (B.y[k] = B.y[k] || {}), f0 = first(h);
     for (const [d, v] of Object.entries((P.F && P.F[id]) || {})) if (d >= '2009-01-01' && d < f0) h[d] = v;
   }
+  B.div = B.div || {};
   for (const k of Object.keys(B.etf || {})) {
     const h = B.etf[k], f0 = first(h), y = P.X[k] || {};
     if (!(h[f0] > 0) || !(y[f0] > 0)) continue;
     const f = h[f0] / y[f0];
     for (const [d, v] of Object.entries(y)) if (d >= '2009-01-01' && d < f0) h[d] = +(v * f).toPrecision(7);
+    // and their payouts before the book's own record (tools/fetch_long.mjs from Nasdaq), on the same scale
+    const pre = ((P.X.div && P.X.div[k]) || []).filter(([d]) => d >= '2009-01-01' && d < f0).map(([d, a]) => [d, +(a * f).toPrecision(6)]);
+    B.div[k] = pre.concat(B.div[k] || []);
   }
   return B;
 }
