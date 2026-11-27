@@ -115,8 +115,20 @@
     // short needs 150% of its value set aside (the sale's proceeds + 50% margin, Regulation T) and pays a stock-borrow
     // fee on its value per calendar day (large caps are easy to borrow: about 0.5% a year, 확인필요)
     shortMax: 5, shortMargin: 0.5, borrowRate: 0.005,
+    // earnings reports (earnAux, owner 2026-11-27: stock news as a basis for trades, tested like everything else). The
+    // reaction is measured from the close before the report day to the close after it, against the S&P 500 (Nasdaq's
+    // calendar does not say whether a report came before the open or after the close). Settings set once from the
+    // published earnings-drift studies, not fitted to this data:
+    // - ea (its own method): buy at the close of the day after a report that beat the consensus by surpMin % or more
+    //   (at least nMin analysts) and moved the stock earMin or more above the S&P 500; stop stopK daily swings below,
+    //   trailing like momentum from +1R; sold after hold trading days (about one quarter, the next report)
+    // - filter (tested as an overlay): no pullback buy from postDays trading days after a report to preDays before the
+    //   next one (a pullback lasts at most 8 days; a report inside it is a gap the stop cannot hold)
+    // - guard (tested as an overlay): a held stock is sold at the close of the day after a report that missed the
+    //   consensus by guardSurp % or more and fell guardEar or more below the S&P 500
+    earn: { surpMin: 5, nMin: 2, earMin: 0.03, stopK: 3, hold: 63, preDays: 8, postDays: 3, guardSurp: -5, guardEar: -0.03 },
   };
-  const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', sb: '하락 돌파 공매도', ch: '차트 저항 돌파', cs: '차트 지지 이탈 공매도', mo: '모멘텀(12-1개월)' };
+  const PB_NAME = { bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', sb: '하락 돌파 공매도', ch: '차트 저항 돌파', cs: '차트 지지 이탈 공매도', mo: '모멘텀(12-1개월)', ea: '실적 서프라이즈 추세' };
   // the four teams and the rules each one owns
   const TEAMS = { select: '종목선정팀', entry: '매수팀', exit: '매도팀', risk: '리스크·헷지팀' };
   const TEAM_OF = { rsMin: 'select', pbRsMin: 'select', dtRsMin: 'select', boLookback: 'select', pbRsi: 'entry', dtMinUp: 'entry',
@@ -259,6 +271,7 @@
     }
     const D = { dates, spx, S, notes, liveDays: days.length, snap, times, prov, bond0, splits: splitAdj.map((a) => ({ sym: a.sym, t: a.t, date: dates[a.t], factor: a.factor })) };
     if (extra && typeof extra.rp === 'function') D.rp = extra.rp(dates);    // RP rate on idle cash per trading day
+    if (extra && extra.earn && extra.earn.s) D.earn = extra.earn;           // earnings reports (tools/earnings.mjs), used by earnAux
     indicators(D);
     return D;
   }
@@ -538,6 +551,36 @@
     MO.rank.set(t, lst);
     return lst;
   }
+  // ── earnings reports on the trading calendar, once per data set: each stock's report days (a report on a day the
+  // market was shut counts on the next trading day), the surprise, and the reaction from the close before the report day
+  // to the close after it against the S&P 500, keyed by the day after (the first close it can be traded at)
+  function earnAux(D) {
+    if (D._ea !== undefined) return D._ea;
+    const E0 = D.earn;
+    if (!E0 || !E0.s) return (D._ea = null);
+    const T = D.dates.length, dates = D.dates, key = (s) => String(s).toUpperCase().replace(/[./]/g, '-');
+    const at = (d) => { let lo = 0, hi = T; while (lo < hi) { const m = (lo + hi) >> 1; if (dates[m] < d) lo = m + 1; else hi = m; } return lo; };
+    const out = { ev: [], sig: [] };
+    for (let i = 0; i < D.S.length; i++) {
+      const x = D.S[i], evs = [], sig = new Map();
+      out.ev.push(evs); out.sig.push(sig);
+      const rows = x.kind === 'bond' || x.syn ? null : E0.s[key(x.s)];
+      for (const r of rows || []) {
+        const t = at(r[0]);
+        if (evs.length && evs[evs.length - 1].d === r[0]) continue;
+        evs.push({ d: r[0], t: t < T ? t : null, surp: isNum(r[3]) ? r[3] : null, eps: r[1], fc: r[2], n: r[4] || 0 });
+        if (!(t >= 1 && t + 1 < T)) continue;
+        const c = x.c, a = c[t - 1], b = c[t + 1], sa = D.spx[t - 1], sb = D.spx[t + 1];
+        if (!(isNum(a) && isNum(b) && a > 0 && sa > 0 && sb > 0)) continue;
+        sig.set(t + 1, { d: r[0], surp: isNum(r[3]) ? r[3] : null, eps: r[1], fc: r[2], n: r[4] || 0, ear: b / a - 1 - (sb / sa - 1) });
+      }
+      const nx = E0.next && E0.next[key(x.s)];
+      if (nx && !evs.some((e) => e.d === nx[0])) { const t = at(nx[0]); evs.push({ d: nx[0], t: t < T ? t : null, surp: null, sched: true }); }
+    }
+    return (D._ea = out);
+  }
+  // weekdays from day a to day b (a report scheduled after the last trading day we have)
+  function weekdaysBetween(a, b) { let n = 0; for (let t = Date.parse(a) + 864e5; t <= Date.parse(b); t += 864e5) { const w = new Date(t).getUTCDay(); if (w > 0 && w < 6) n++; } return n; }
   function simulate(D, opts) {
     const T = D.dates.length;
     // opts.resume: a book ({date, from0, capital, state, hist}). The run starts the day after the book's last day with
@@ -562,8 +605,17 @@
     let hedgeTilt = false, hedgeNow = null;          // defensive mode (new buys lean to defensive sectors), the last decision
     const hedgeFlex = opts.hedgeFlex != null ? opts.hedgeFlex : FIXED.hedgeFlex, DEFSEC = new Set(FIXED.defSecs);
     const chartOn = opts.chart != null ? opts.chart : FIXED.chart.on, chartExit = opts.chartExit != null ? opts.chartExit : FIXED.chart.exit;
-    const CH = chartOn || chartExit ? chartAux(D) : null, CK = FIXED.chart, LONGS = ['bo', 'pb', 'ch', 'mo'];
+    const CH = chartOn || chartExit ? chartAux(D) : null, CK = FIXED.chart, LONGS = ['bo', 'pb', 'ch', 'mo', 'ea'];
     const momOn = opts.mom != null ? opts.mom : FIXED.mom.on, MK = FIXED.mom;
+    // earnings reports: the ea method, the pullback filter and the guard (each only where the checks kept it)
+    const EA = earnAux(D), EK = FIXED.earn, earnFilter = !!opts.earnFilter && !!EA, earnGuard = !!opts.earnGuard && !!EA;
+    const nearReport = (i, t) => {
+      for (const e of EA.ev[i]) {
+        if (e.t != null) { const dt = e.t - t; if (dt >= -EK.postDays && dt <= EK.preDays) return e; }
+        else if (t === D.dates.length - 1) { const n = weekdaysBetween(D.dates[t], e.d); if (n <= EK.preDays) return e; }
+      }
+      return null;
+    };
     const asymOn = opts.asym != null ? opts.asym : FIXED.asym.on, AS = FIXED.asym;
     const hedgeFills = [], hedgeEpisodes = [];
     const cool = new Map();                         // symbol index → first day it may be bought again
@@ -572,10 +624,10 @@
     // rest do not open new trades and the methods are not ranked against each other; each verified one keeps full risk
     const allow = Array.isArray(opts.allow) ? opts.allow : null;
     const can = (k) => (!only || only === k) && (!allow || allow.includes(k));
-    const scores = Object.assign({ bo: 0, pb: 0, dt: 0, sb: 0, ch: 0, cs: 0, mo: 0 }, (BS ? BS.scores : opts.scores) || {});
+    const scores = Object.assign({ bo: 0, pb: 0, dt: 0, sb: 0, ch: 0, cs: 0, mo: 0, ea: 0 }, (BS ? BS.scores : opts.scores) || {});
     // share of the normal 1-trade risk each playbook may use, set by the strategy tournament
-    let M = allow ? Object.fromEntries(['bo', 'pb', 'dt', 'bd', 'sb', 'ch', 'cs', 'mo'].map((k) => [k, allow.includes(k) ? 1 : 0]))
-      : Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM, bd: FIXED.selectTrialM, ch: FIXED.selectTrialM, mo: FIXED.selectTrialM }, (BS ? BS.M : opts.mults) || {});   // shorts (sb): a fixed quarter, outside the tournament
+    let M = allow ? Object.fromEntries(['bo', 'pb', 'dt', 'bd', 'sb', 'ch', 'cs', 'mo', 'ea'].map((k) => [k, allow.includes(k) ? 1 : 0]))
+      : Object.assign({ bo: 1, pb: 1, dt: FIXED.selectTrialM, bd: FIXED.selectTrialM, ch: FIXED.selectTrialM, mo: FIXED.selectTrialM, ea: FIXED.selectTrialM }, (BS ? BS.M : opts.mults) || {});   // shorts (sb): a fixed quarter, outside the tournament
     // the allocator's tilt for each method on each day (data/alloc.json), the same in every replay of that day
     let tiltNow = null;
     // shorts (sb) are outside the tournament: a sixth of the normal risk, as for a method that lost money (the 2-year
@@ -690,7 +742,7 @@
         const isGap = tr.R <= -1.5;
         const isMkt = tr.pb !== 'bd' && tr.R <= -0.8 && tr.idx <= -0.03;
         if (tr.pb === 'bo') push(ev.fake, isFake, 12); else if (tr.pb === 'pb') push(ev.pb, tr.R < 0, 12);
-        else if (tr.pb !== 'ch' && tr.pb !== 'cs' && tr.pb !== 'mo') { push(ev.dtq, dtQuick, 10); push(ev.dtf, dtFade, 10); }
+        else if (tr.pb !== 'ch' && tr.pb !== 'cs' && tr.pb !== 'mo' && tr.pb !== 'ea') { push(ev.dtq, dtQuick, 10); push(ev.dtf, dtFade, 10); }
         push(ev.gap, isGap, 20);
         if (isMkt) ev.mkt.push(t);
         const diag = [], chg = [], evid = [];
@@ -920,6 +972,8 @@
         p.mfeR = Math.max(p.mfeR, (px - p.fill) / p.R1);
         let reason = null;
         if (px <= p.stop) reason = (p.pb === 'bd' ? '채권 ' : '') + (p.stop > p.stop0 + 1e-9 ? (px >= p.fill ? '추적 손절(이익 보호)' : '추적 손절') : '손절');
+        else if (earnGuard && p.pb !== 'bd' && t - 1 > p.t0 && (() => { const g = EA.sig[p.i].get(t); return g && isNum(g.surp) && g.surp <= EK.guardSurp && g.ear <= EK.guardEar; })()) { const g = EA.sig[p.i].get(t); reason = `실적 악화로 정리(예상보다 ${g.surp.toFixed(1)}%, 발표 앞뒤 2일 S&P 500보다 ${(g.ear * 100).toFixed(1)}%)`; }
+        else if (p.pb === 'ea' && t - p.t0 >= EK.hold) reason = `실적 추세 보유 기간 끝(${EK.hold}거래일)`;
         else if (p.pb === 'bd' && isNum(x.sma100[t]) && px < x.sma100[t]) reason = '채권 추세 이탈(100일 평균 아래)';
         else if (p.pb === 'pb' && px > x.sma5[t] && t > p.t0 && !(asymOn && p.mfeR >= AS.pbRunR)) reason = '반등 청산';
         else if (p.pb === 'pb' && t - p.t0 >= P.timeStop_pb && !(asymOn && p.mfeR >= AS.pbRunR)) reason = '시간 청산';
@@ -931,7 +985,7 @@
         if (p.pb === 'bd') p.stop = Math.max(p.stop, p.maxC - P.stopK_bd * p.atr);
         if (p.pb === 'ch' && p.mfeR >= 1) p.stop = Math.max(p.stop, p.maxC - (asymOn && p.mfeR >= AS.longHoldFromR ? P.trailK + P.holdK : P.trailK) * p.atr);   // the chart buy trails once it is +1R
         if (asymOn && p.pb === 'pb' && p.mfeR >= AS.pbRunR) p.stop = Math.max(p.stop, p.maxC - P.trailK * p.atr);   // a pullback buy that ran: trail, ride it
-        if (p.pb === 'mo' && p.mfeR >= 1) p.stop = Math.max(p.stop, p.maxC - (p.mfeR >= AS.longHoldFromR ? P.trailK + P.holdK : P.trailK) * p.atr);   // momentum rides its winners
+        if ((p.pb === 'mo' || p.pb === 'ea') && p.mfeR >= 1) p.stop = Math.max(p.stop, p.maxC - (p.mfeR >= AS.longHoldFromR ? P.trailK + P.holdK : P.trailK) * p.atr);   // momentum and the earnings buys ride their winners
         if (p.pb === 'bo') {   // trailing stop moves up only; wider once the trade has made +3R (+2R with asym), to ride the trend
           const base = regimeNow || (asymOn && p.mfeR >= 1) ? P.trailK : Math.min(P.trailK, 2.0);   // a falling market tightens only trades not yet +1R
           const k = p.mfeR >= (asymOn ? AS.longHoldFromR : FIXED.holdFromR) ? base + P.holdK : base;
@@ -1069,8 +1123,10 @@
           if (!isNum(c) || !isNum(x.sma200[t]) || !isNum(x.vol[t]) || x.vol[t] <= 0) continue;
           const trend = c > x.sma50[t] && x.sma50[t] > x.sma200[t];
           const isBo = trend && x.dom[t] >= P.boLookback && x.rs[t] >= P.rsMin, isPb = !isBo && c > x.sma200[t] && x.sma50[t] > x.sma200[t] && x.rs[t] >= P.pbRsMin && x.rsi2[t] < P.pbRsi;
+          const eg = EA && can('ea') && !prov ? EA.sig[i].get(t) : null;
+          if (eg && isNum(eg.surp) && eg.surp >= EK.surpMin && eg.n >= EK.nMin && eg.ear >= EK.earMin) { cands.push({ i, pb: 'ea', score: 101 + eg.ear, ea: eg }); continue; }
           if (isBo) { if (can('bo')) cands.push({ i, pb: 'bo', score: x.rs[t] + 0.5 }); }
-          else if (isPb) { if (can('pb')) cands.push({ i, pb: 'pb', score: x.rs[t] }); }
+          else if (isPb) { if (can('pb') && !(earnFilter && nearReport(i, t))) cands.push({ i, pb: 'pb', score: x.rs[t] }); }
           else if (chartOn && can('ch')) { const g = CH.L[i].get(t); if (g && isNum(x.rs[t])) cands.push({ i, pb: 'ch', score: x.rs[t] + 0.25, ch: g }); }
         }
         cands.sort((a, b) => b.score - a.score);
@@ -1087,7 +1143,7 @@
           if (positions.filter((p) => D.S[p.i].sec === x.sec).length >= FIXED.sectorMax) { sig.why = `같은 업종 ${FIXED.sectorMax}종목 한도`; continue; }
           const atr = x.vol[t] * c;
           const fill = c * (1 + FIXED.slip);
-          const k = cd.pb === 'bo' ? P.stopK_bo : P.stopK_pb;
+          const k = cd.pb === 'bo' ? P.stopK_bo : cd.pb === 'ea' ? EK.stopK : P.stopK_pb;
           const stop = cd.pb === 'ch' ? Math.min(fill - CK.stopMin * atr, Math.max(fill - CK.stopMax * atr, cd.ch.bot - CK.stopPad * atr)) : fill - k * atr;
           const perShare = fill - stop;
           if (cd.pb === 'ch' && cd.ch.tgt != null && cd.ch.tgt - fill < CK.minRoom * perShare) { sig.why = `머리 위 다음 저항선(${round(cd.ch.tgt, 2)})이 ${CK.minRoom}R 안쪽이라 쉼`; continue; }
@@ -1102,6 +1158,7 @@
           heat += qty * perShare;
           const why = cd.pb === 'bo' ? `${highTxt(x.dom[t])} 돌파(기준 ${P.boLookback}일) · 상대강도 상위 ${Math.max(1, 100 - x.rs[t])}% · 50일선이 200일선 위인 상승 추세`
             : cd.pb === 'ch' ? `차트: ${cd.ch.n}번 막힌 저항선 $${round(cd.ch.lvl, 2)}(${cd.ch.at.map((d) => +d.slice(5, 7) + '/' + +d.slice(8, 10)).join('·')})을 종가로 돌파 · RSI(14) ${cd.ch.rsi.toFixed(0)} · MACD가 신호선 위 · 50일선 위 · ${asymOn ? (cd.ch.tgt != null ? `다음 저항선 $${round(tgt, 2)} · 이익은 추적 손절로 길게` : '이익은 추적 손절로 길게') : `목표 ${cd.ch.tgt != null ? `다음 저항선 $${round(tgt, 2)}` : `$${round(tgt, 2)}(${CK.tgtR}R)`}`}`
+            : cd.pb === 'ea' ? `실적 서프라이즈: ${cd.ea.d.slice(5, 7)}/${cd.ea.d.slice(8, 10)} 발표 EPS ${cd.ea.eps} vs 예상 ${cd.ea.fc}(${cd.ea.surp >= 0 ? '+' : ''}${cd.ea.surp.toFixed(1)}%, 애널리스트 ${cd.ea.n}명) · 발표 앞뒤 2일 S&P 500보다 +${(cd.ea.ear * 100).toFixed(1)}% · ${EK.hold}거래일 보유`
             : `상승 추세(200일선 위) 속 짧은 하락: 2일 RSI ${x.rsi2[t].toFixed(1)}(기준 ${P.pbRsi} 미만) · 상대강도 상위 ${Math.max(1, 100 - x.rs[t])}%`;
           positions.push(Object.assign({ id: ++idSeq, i: cd.i, pb: cd.pb, t0: t, et: (D.times && D.times[t]) || null, fill, qty, stop, stop0: stop, R1: perShare, atr, maxC: c, mfeR: 0, miss: 0, feeIn, why, ctx: ctxAt(t) }, cd.pb === 'ch' ? { tgt, lvl: cd.ch.lvl } : {}));
           sig.taken = true; sig.qty = qty; sig.stop = round(stop, 2);
@@ -1452,7 +1509,7 @@
   // o: {book, warm, capital, liveStart, btStart}. Returns the book through the last day with final prices and the days added.
   // the verified, fixed-rule account (owner 2026-11-26): the default rules never retuned, only the verified methods,
   // the brakes the checks kept
-  function fixedOpts(o) { return o.fixed ? { adaptive: false, allow: o.allow || [], brakes: o.brakes || 'emergency' } : {}; }
+  function fixedOpts(o) { return o.fixed ? { adaptive: false, allow: o.allow || [], brakes: o.brakes || 'emergency', earnFilter: !!o.earnFilter, earnGuard: !!o.earnGuard } : {}; }
   function advanceBook(D, o) {
     const lf = lastFinalIdx(D);
     const li = D.dates.findIndex((d) => d >= o.liveStart);

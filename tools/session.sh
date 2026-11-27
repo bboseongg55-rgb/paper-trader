@@ -18,6 +18,8 @@ while :; do
   if echo "$OUT" | grep -q '"changed":true'; then
     node tools/markets.mjs 2>&1 | tail -1 | cut -c1-200
     node tools/run.mjs 2>&1 | tail -1 | cut -c1-260
+    # the held stocks' news, about every 30 minutes (tools/news.mjs)
+    MM=$((10#${HM:3:2})); if [ $((MM % 30)) -lt 5 ]; then node tools/news.mjs 2>&1 | tail -1 | cut -c1-200; fi
     bash tools/save.sh session || true
   fi
   if echo "$OUT" | grep -q -e '오늘 종가 이미 확정' -e '휴장일'; then echo "done for today"; break; fi

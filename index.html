@@ -291,6 +291,15 @@ a.row:focus-visible, a.ain-r:focus-visible, .back:focus-visible { outline: 2px s
 .ainfo span { flex: none; font-size: 15px; color: var(--muted); }
 .ainfo b { font-size: 16px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; word-break: keep-all; overflow-wrap: anywhere; }
 .awhy { margin: 0; padding: 6px 20px 0; font-size: 16px; line-height: 1.6; color: var(--sub); word-break: keep-all; overflow-wrap: anywhere; }
+.lnote { margin: 10px 20px 0; font-size: 14px; line-height: 1.55; color: var(--muted); word-break: keep-all; }
+.news { list-style: none; margin: 0; padding: 0 20px; }
+.news li + li { border-top: 1px solid var(--line); }
+.news a { display: block; padding: 14px 0; color: var(--ink); text-decoration: none; }
+.news .nt { display: block; font-size: 17px; line-height: 1.45; font-weight: 600; }
+.news .nm { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 14px; color: var(--muted); }
+.news .tag.up { color: var(--up); background: var(--up-soft); }
+.news .tag.down { color: var(--down); background: var(--down-soft); }
+@media (hover: hover) and (pointer: fine) { .news a:hover .nt { text-decoration: underline; } }
 .ain li:last-child { border-bottom: 0; }
 .ain .l { display: grid; gap: 2px; min-width: 0; }
 .ain .l b { font-size: 16px; font-weight: 600; word-break: keep-all; }
@@ -462,8 +471,8 @@ details.teamlog[open] > summary::after { content: " 접기"; }
   const rcls = (v) => (v >= 0.00005 ? 'up' : v <= -0.00005 ? 'down' : '');      // for returns shown by pct()
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const dLabel = (d) => `${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일 (${WD[new Date(d + 'T12:00:00Z').getUTCDay()]})`;
-  const PB = { bo: '돌파', pb: '눌림목', dt: '단타', bd: '채권', hedge: '헷지', ch: '차트', cs: '차트 공매도', mo: '모멘텀' };
-  const PB_LONG = { mo: '모멘텀(12-1개월)', c_mr: '코인 평균회귀', c_mm: '코인 시장 조성', bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', sb: '하락 돌파 공매도', hedge: '하락 대비 헷지', ch: '차트 저항 돌파', cs: '차트 지지 이탈 공매도', c_scalp: '코인 초단타', c_trend: '코인 추세', c_tok: '토큰 주식' };
+  const PB = { bo: '돌파', pb: '눌림목', dt: '단타', bd: '채권', hedge: '헷지', ch: '차트', cs: '차트 공매도', mo: '모멘텀', ea: '실적' };
+  const PB_LONG = { ea: '실적 서프라이즈 추세', mo: '모멘텀(12-1개월)', c_mr: '코인 평균회귀', c_mm: '코인 시장 조성', bo: '신고가 돌파', pb: '추세 눌림목', dt: '당일 단타', bd: '채권 추세', sb: '하락 돌파 공매도', hedge: '하락 대비 헷지', ch: '차트 저항 돌파', cs: '차트 지지 이탈 공매도', c_scalp: '코인 초단타', c_trend: '코인 추세', c_tok: '토큰 주식' };
   // the stock book's hedge: the inverse S&P 500 or US Treasuries (kind), chosen each evening (engine.js hedge team)
   const HEDGE = { inv: { sym: 'SH', name: 'S&P 500 인버스(SH)', does: 'S&amp;P 500이 내리면 이익' }, bond: { sym: 'IEF', name: '미국 10년 국채', does: '국채값이 오르면 이익(주식과 반대로 움직일 때)' } };
   const hedgeOf = (h) => HEDGE[(h && h.kind) || 'inv'] || HEDGE.inv;
@@ -1535,6 +1544,23 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     catch (e) { if (!c) aCache[key] = { at: Date.now() - 50e3, pts: [], err: true }; }
     if (curAssetId() === id && viewKey() === 'asset') { const y = assetOf(id); if (y) drawAsset(y); }
   }
+  // a held stock's earnings reports and latest headlines (tools/earnings.mjs, tools/news.mjs → state.info)
+  function infoHTML(x) {
+    const I = S.info && S.info.s && x.id && x.id.startsWith('s:') ? S.info.s[x.id.slice(2)] : null;
+    if (!I) return '';
+    const L = I.last, N = I.next, rows = [], usd2 = (v) => (v == null ? '—' : (v < 0 ? '−$' : '$') + fmt(Math.abs(v), 2));
+    if (L) rows.push(['지난 실적 발표', `${dLabel(L.d)} · EPS ${usd2(L.eps)} (예상 ${usd2(L.fc)})`]);
+    if (L && L.surp != null) rows.push(['서프라이즈', `<span class="${cls(L.surp / 100)}">${L.surp >= 0 ? '+' : '−'}${fmt(Math.abs(L.surp), 1)}%</span>${L.n ? ` · 애널리스트 ${L.n}명` : ''}`]);
+    if (L && L.ear != null) rows.push(['발표 앞뒤 2일 주가(S&amp;P 500 대비)', `<span class="${cls(L.ear)}">${pct(L.ear, 1)}</span>`]);
+    if (N) rows.push(['다음 실적 발표', `${dLabel(N.d)}${N.time === 'pre' ? ' 장 시작 전' : N.time === 'post' ? ' 장 마감 후' : ''}${N.fc != null ? ` · 예상 EPS ${usd2(N.fc)}` : ''}`]);
+    let h = rows.length ? `<div class="band"></div><h2>실적</h2><div class="ainfo">${rows.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>` : '';
+    if ((I.news || []).length) {
+      const TONE = { '1': ['호재', 'up'], '-1': ['악재', 'down'], '0': ['중립', ''] };
+      h += `<div class="band"></div><h2>최근 뉴스</h2><ul class="news">${I.news.map((n) => { const t = TONE[String(n.tone)] || TONE['0']; return `<li><a href="${esc(n.url)}" target="_blank" rel="noopener"><span class="nt">${esc(n.title)}</span><span class="nm"><span class="tag ${t[1]}">${t[0]}</span>${esc(n.pub || '')}${n.d ? ` · ${dLabel(n.d)}` : ''}</span></a></li>`; }).join('')}</ul>
+        <p class="lnote">뉴스의 호재·악재는 제목의 단어로 매긴 참고용이며 매매에는 쓰지 않습니다. 과거 뉴스 기록이 없어 백테스트로 검증할 수 없기 때문입니다. 매일 모아 두고, 충분히 쌓이면 검증합니다.</p>`;
+    }
+    return h;
+  }
   function renderAsset() {
     const el = $('v-asset'), id = curAssetId();
     if (!S || !el) return;
@@ -1550,7 +1576,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
           <button type="button" class="ct" data-ct="candle" aria-pressed="${aType === 'candle'}" aria-label="캔들 차트"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 2v16M14 4v13"/><rect x="3.5" y="6" width="5" height="7" rx="1"/><rect x="11.5" y="8" width="5" height="5" rx="1"/></svg></button>` : ''}</div>
         <div class="chart achart" id="aChart"></div><p class="asrc" id="aSrc"></p>
         <div class="band"></div><h2>내 투자</h2><div class="ainfo" id="aInfo"></div>
-        ${x.why ? `<div class="band"></div><h2>편입 이유</h2><p class="awhy">${esc(x.why)}</p>` : ''}<div style="height:24px"></div>`;
+        ${x.why ? `<div class="band"></div><h2>편입 이유</h2><p class="awhy">${esc(x.why)}</p>` : ''}${infoHTML(x)}<div style="height:24px"></div>`;
       $('aBackBtn').addEventListener('click', (e) => { if (aBack) { e.preventDefault(); history.back(); } });
       $('aPer').querySelectorAll('button[data-p]').forEach((b) => b.addEventListener('click', () => {
         aPick = aPer = b.dataset.p;
@@ -1826,7 +1852,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const vTag = (k) => (!VI ? matTag(k) : vOn(k) ? '<span class="tag ok">검증 통과</span>' : '<span class="tag">쉼</span>');
     const li = (nm, k, pnl, stat) => `<li><span class="name">${nm} ${vTag(k)}</span><span class="pnl ${cls(pnl)}">${sgnUsd(pnl)}</span><span class="stat">${stat}</span></li>`;
     const rowsM = [];
-    for (const k of ['mo', 'bd', 'bo', 'pb', 'dt', 'ch', 'cs']) {
+    for (const k of ['mo', 'pb', 'ea', 'bd', 'bo', 'dt', 'ch', 'cs']) {
       const b = bp[k] || { n: 0, wins: 0, pnl: 0 }, held = (S.account.open || []).filter((p) => p.pb === k), open = held.reduce((t, p) => t + (p.pnl || 0), 0);
       if (!(VI ? vOn(k) : true) && !b.n && !held.length) continue;
       rowsM.push(li(PB_LONG[k] || k, k, b.pnl + open, `매도 ${b.n}건${b.n ? ` · 승률 ${Math.round((b.wins / b.n) * 100)}%` : ''}${held.length ? ` · 보유 ${held.length}종목(평가 ${sgnUsd(open)})` : ''}`));

@@ -67,6 +67,8 @@ if (MODE === 'hist') {
     }
   }));
   save();
+  // the checks read this to know the history changed (tools/verify.mjs longKey)
+  fs.writeFileSync('data/hist/meta_events.json', JSON.stringify({ built: H.built, to: H.to, days: Object.keys(H.seen).length }, null, 2) + '\n');
   console.log('earnings history: days', Object.keys(H.seen).length, 'symbols', Object.keys(H.s).length, 'to', H.to);
 } else {
   const now = Date.now(), past = weekdays(ymd(now - 21 * 864e5), ymd(now)).slice(-15), ahead = weekdays(ymd(now + 864e5), ymd(now + 30 * 864e5));

@@ -67,7 +67,9 @@ const rpFor = (dates) => {
   let j = 0, last = null;
   return dates.map((d) => { while (j < ks.length && ks[j] <= d) last = y[ks[j++]]; return last == null ? null : Math.max(0, last - Dv.CFG.rpSpread * 100) / 100; });
 };
-const D = E.prepare(seed, L, intra, { instruments: bondsHist ? (dates) => Bonds.build(bondsHist, L.days, dates) : null, rp: rpFor });
+// earnings reports (tools/earnings.mjs): the ea method, the pullback filter and the guard, where the checks kept them
+const EARN = Verify.earnData();
+const D = E.prepare(seed, L, intra, { instruments: bondsHist ? (dates) => Bonds.build(bondsHist, L.days, dates) : null, rp: rpFor, earn: EARN });
 const T = D.dates.length;
 // the strategy checks (tools/verify.mjs, owner 2026-11-26: only what a backtest has proved trades), once for each new
 // closed day: every method alone over all the history, the overlays, the futures, rates and coin strategies. The account
@@ -78,7 +80,7 @@ if (lastFinal && (!ver || ver.day !== lastFinal || ver.v !== Verify.VERSION || (
   const t1 = Date.now();
   try {
     const toI = D.dates.lastIndexOf(lastFinal);
-    ver = Object.assign(Verify.run({ E, D, MS, Dv, C: require('../crypto.js'), to: toI >= 0 ? toI : T - 1, seed, L, Bonds, bondsHist, lastFinal }), { day: lastFinal });
+    ver = Object.assign(Verify.run({ E, D, MS, Dv, C: require('../crypto.js'), to: toI >= 0 ? toI : T - 1, seed, L, Bonds, bondsHist, lastFinal, earn: EARN }), { day: lastFinal });
     verChanged = true; console.log('verify', Math.round((Date.now() - t1) / 1000) + 's', JSON.stringify(ver.allow));
   } catch (e) { console.log('verify failed', String((e && e.stack) || e).slice(0, 400)); }
 }
@@ -86,7 +88,7 @@ const FIXED_MODE = !!(ver && ver.allow);
 if (FIXED_MODE) FORCE.lev = ver.cfg.lev;
 // days whose closing prices are final go into the book
 const adv = warm || book ? E.advanceBook(D, Object.assign({ book, warm, capital: bookCapital, liveStart, btStart: settings.btStart, tilt: (dt) => (dt === settings.quietDay ? QUIET : tiltAt(dt)), force: FORCE },
-  FIXED_MODE ? { fixed: true, allow: ver.allow.stock, brakes: ver.cfg.brakes } : {})) : { book: null, added: [] };
+  FIXED_MODE ? { fixed: true, allow: ver.allow.stock, brakes: ver.cfg.brakes, earnFilter: !!ver.cfg.earnFilter, earnGuard: !!ver.cfg.earnGuard } : {})) : { book: null, added: [] };
 book = adv.book;
 let bookChanged = adv.added.length > 0;
 // the evolution lab, once for each evening (a failure is noted once for that day and does not stop the account)
@@ -361,7 +363,23 @@ const state = {
   compare: compareView(),
   orders, daily, byPb,
   data: { liveBuilt: live.built || null, sources: readJSON('data/source.json', null) },
+  // each held stock's earnings reports (tools/earnings.mjs) and its latest headlines (tools/news.mjs), for the page
+  info: infoView(),
 };
+function infoView() {
+  const held = [...new Set(((lv && lv.open) || []).filter((p) => p.kind !== 'bond').map((p) => p.sym))], key = (s) => String(s).toUpperCase().replace(/[./]/g, '-');
+  const N = readJSON('data/news.json', null), out = {};
+  for (const s of held) {
+    const rows = (EARN && EARN.s[key(s)]) || [], last = rows.filter((r) => r[1] != null && r[0] <= res.D.last).slice(-1)[0] || null, nx = EARN && EARN.next[key(s)];
+    const i = D.S.findIndex((x) => x.s === s), t = last && i >= 0 ? D.dates.findIndex((d) => d >= last[0]) : -1;
+    // the reaction: the close before the report day to the close after it, against the S&P 500 (as the checks measure it)
+    let ear = null;
+    if (t >= 1 && t + 1 < D.dates.length) { const c = D.S[i].c, a = c[t - 1], b = c[t + 1], sa = D.spx[t - 1], sb = D.spx[t + 1]; if (a > 0 && b > 0 && sa > 0 && sb > 0) ear = Math.round((b / a - 1 - (sb / sa - 1)) * 10000) / 10000; }
+    out[s] = { last: last ? { d: last[0], eps: last[1], fc: last[2], surp: last[3], n: last[4], ear } : null, next: nx ? { d: nx[0], time: nx[1] || '', fc: nx[2] } : null,
+      news: ((N && N.s && N.s[s]) || []).slice(0, 6) };
+  }
+  return { at: (N && N.built) || null, earnTo: EARN ? EARN.to : null, s: out };
+}
 // the account's direction in each underlying (+1 long, −1 short) outside the coin account: stocks held or sold short,
 // index and metal futures as their ETFs, SPY options by the sign of the contracts (puts bought and calls sold count as
 // short). The coin account reads it and never holds a token the other way (the owner: no long and short of one thing)

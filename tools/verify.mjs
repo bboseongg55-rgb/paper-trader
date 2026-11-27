@@ -18,7 +18,7 @@ const readJSON = (f, d) => { try { return JSON.parse(fs.readFileSync(ROOT + f, '
 const gz = (f) => JSON.parse(zlib.gunzipSync(fs.readFileSync(ROOT + f)));
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
-export const VERSION = 2;   // 2: the long record (2009 on) when data/hist has it
+export const VERSION = 3;   // 2: the long record (2009 on) when data/hist has it; 3: earnings reports (the ea method, the pullback filter, the guard)
 export const RULE = '30건 이상(전반·후반 각 10건 이상), 수수료·슬리피지를 뺀 평균 R과 손익이 전체·전반·후반 모두 0보다 큼';
 function stat(xs) {
   const n = xs.length, m = n ? xs.reduce((a, x) => a + x.R, 0) / n : 0, sd = n > 1 ? Math.sqrt(xs.reduce((a, x) => a + (x.R - m) ** 2, 0) / (n - 1)) : 0;
@@ -47,7 +47,22 @@ const untested = (k, book, name, family, why) => ({ k, book, name, family, data:
 // some survivor bias stays (확인필요). The bond part gets the US Treasury yields from FRED and the bond funds' closes (without
 // their payouts, so on the low side) before 2024; the other countries' bonds start in 2024 as before.
 // which long record the checks used: a new one (tools/fetch_long.mjs) means checking again
-export function longKey() { const m = readJSON('data/hist/meta_long.json', null), c = readJSON('data/hist/meta.json', null); return m || c ? `${(m && m.built) || ''}|${(c && c.built) || ''}` : null; }
+export function longKey() { const m = readJSON('data/hist/meta_long.json', null), c = readJSON('data/hist/meta.json', null), e = readJSON('data/hist/meta_events.json', null); return m || c ? `${(m && m.built) || ''}|${(c && c.built) || ''}${e ? '|' + e.built : ''}` : null; }
+// earnings reports (tools/earnings.mjs): the history since 2008 and the last weeks' and next month's from the evening
+// run, one list per stock, oldest first, a day once; `next` = the next scheduled report of each stock
+export function earnData() {
+  let H = null; try { H = gz('data/hist/earnings.json.gz'); } catch {}
+  const R = readJSON('data/earnings.json', null);
+  if (!H && !R) return null;
+  const s = {};
+  for (const src of [H && H.s, R && R.s]) for (const [k, rows] of Object.entries(src || {})) {
+    const a = (s[k] = s[k] || new Map());
+    for (const r of rows) if (r[1] != null || !a.has(r[0])) a.set(r[0], r.slice(0, 5));
+  }
+  const out = {};
+  for (const [k, m] of Object.entries(s)) out[k] = [...m.values()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return { s: out, next: (R && R.next) || {}, built: (H && H.built) || null, to: (H && H.to) || null, recent: (R && R.built) || null };
+}
 export function longParts() {
   const g = (f) => { try { return gz(f); } catch { return null; } };
   const Y = g('data/hist/long_stocks.json.gz'), M = g('data/hist/sp500_members.json.gz'), X = g('data/hist/long_misc.json.gz'), F = g('data/hist/fred_rates.json.gz');
@@ -118,7 +133,7 @@ export function longMS(MS, P) {
 export function stockChecks(E, D, toI) {
   const from = 210, to = toI != null ? toI : D.dates.length - 1, a = D.dates[from], b = D.dates[to], out = [];
   const base = { from, to, capital: 1000000, params: E.DEFAULTS, adaptive: false, log: false, force: { lev: 1, regimeLevel: 0, shortAny: 1 }, hedgeFlex: 1, chart: 1, chartExit: 0, asym: 1, mom: 1 };
-  const NAMES = { bo: ['신고가 돌파', 'breakout'], pb: ['추세 눌림목(RSI 2 과매도)', 'meanrev'], dt: ['당일 단타', 'breakout'], bd: ['채권 추세', 'trend'], sb: ['하락 돌파 공매도', 'breakout'], ch: ['차트 저항 돌파', 'breakout'], cs: ['차트 지지 이탈 공매도', 'breakout'], mo: ['모멘텀(12-1개월)', 'momentum'] };
+  const NAMES = { bo: ['신고가 돌파', 'breakout'], pb: ['추세 눌림목(RSI 2 과매도)', 'meanrev'], dt: ['당일 단타', 'breakout'], bd: ['채권 추세', 'trend'], sb: ['하락 돌파 공매도', 'breakout'], ch: ['차트 저항 돌파', 'breakout'], cs: ['차트 지지 이탈 공매도', 'breakout'], mo: ['모멘텀(12-1개월)', 'momentum'], ea: ['실적 서프라이즈 추세(발표 뒤 63거래일)', 'event'] };
   for (const k of Object.keys(NAMES)) {
     const r = E.simulate(D, Object.assign({}, base, { only: k, brakes: false }));
     const tr = (r.trades || []).filter((x) => x.pb === k && Number.isFinite(x.R)).map((x) => ({ at: x.exitDate, R: x.R, pnl: x.pnl }));
@@ -158,6 +173,17 @@ export function stockOverlays(E, D, allow, toI) {
   tests.push({ k: 'lev', name: '레버리지 1.5배', res: lev, keep: better(lev) }); if (better(lev)) cfg.lev = 1.5;
   const brakes = run({ allow, brakes: 'all', force: { lev: 1, regimeLevel: 0, shortAny: 1 } });
   tests.push({ k: 'brakes', name: '손실 브레이크 전부(−2.5%/일, −8% 절반, 연패 축소)', res: brakes, keep: better(brakes) }); if (better(brakes)) cfg.brakes = 'all';
+  // earnings reports (when the data has them): no pullback buy around a report; sell a held stock after a bad report
+  cfg.earnFilter = false; cfg.earnGuard = false;
+  if (D.earn) {
+    if (allow.includes('pb')) {
+      const ef = run({ allow, brakes: 'emergency', force: F1, earnFilter: true });
+      tests.push({ k: 'earnFilter', name: '실적 발표 앞뒤(3일 뒤~8일 전) 눌림목 매수 쉼', res: ef, keep: better(ef) }); cfg.earnFilter = better(ef);
+    }
+    const eg = run({ allow, brakes: 'emergency', force: F1, earnFilter: cfg.earnFilter, earnGuard: true });
+    const ref = cfg.earnFilter ? tests[tests.length - 1].res : baseRes, betterThan = (x, y) => x.h1.sharpe > y.h1.sharpe && x.h2.sharpe > y.h2.sharpe;
+    tests.push({ k: 'earnGuard', name: '실적 악화(예상보다 −5% 이하·발표 앞뒤 S&P보다 −3% 이하) 보유 종목 정리', res: eg, keep: betterThan(eg, ref) }); cfg.earnGuard = betterThan(eg, ref);
+  }
   return { cfg, tests, keep: S, drops, window: `${D.dates[from]}~${D.dates[to]}`, split: D.dates[midI] };
 }
 
@@ -300,7 +326,7 @@ export function run(o) {
     span = 'futures';   // the futures and coins on the long record, the stocks still on the book's two years
     if (P.stocks) {
       const LB = longBonds(o.bondsHist, P);
-      D = E.prepare(longSeed(o.seed, P), o.L, {}, { instruments: (dates) => o.Bonds.build(LB, o.L.days, dates), rp: rpOf(MS) });
+      D = E.prepare(longSeed(o.seed, P), o.L, {}, { instruments: (dates) => o.Bonds.build(LB, o.L.days, dates), rp: rpOf(MS), earn: o.earn || earnData() });
       to = o.lastFinal ? D.dates.lastIndexOf(o.lastFinal) : D.dates.length - 1; if (to < 0) to = D.dates.length - 1;
       span = 'long';
     }
@@ -335,8 +361,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(proces
   const bondsHist = readJSON('data/bonds_hist.json', null), MS = (readJSON('data/macro_hist.json', null) || {}).s || {};
   const rpFor = (dates) => { const y = MS.US1M || {}, ks = Object.keys(y).sort(); let j = 0, last = null; return dates.map((d) => { while (j < ks.length && ks[j] <= d) last = y[ks[j++]]; return last == null ? null : Math.max(0, last - 0.25) / 100; }); };
   const L = Object.assign({}, live, { days: (live.days || []).filter((d) => d.final !== false) });
-  const D = E.prepare(seed, L, {}, { instruments: bondsHist ? (dates) => Bonds.build(bondsHist, L.days, dates) : null, rp: rpFor });
-  const out = run({ E, D, MS, Dv, C, seed, L, Bonds, bondsHist });
+  const earn = earnData();
+  const D = E.prepare(seed, L, {}, { instruments: bondsHist ? (dates) => Bonds.build(bondsHist, L.days, dates) : null, rp: rpFor, earn });
+  const out = run({ E, D, MS, Dv, C, seed, L, Bonds, bondsHist, earn });
   fs.writeFileSync(ROOT + 'data/verify.json', JSON.stringify(out, null, 1) + '\n');
   for (const x of out.items) console.log(x.pass ? 'PASS' : 'fail', x.k.padEnd(14), x.all ? `n ${x.all.n} R ${x.all.avgR} $${x.all.pnl} | ${x.why}` : x.why);
   console.log('allow', JSON.stringify(out.allow), 'cfg', JSON.stringify(out.cfg), 'sec', Math.round(out.ms / 1000));
