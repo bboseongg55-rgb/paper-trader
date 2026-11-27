@@ -1,8 +1,8 @@
 {
- "built": "2026-11-27T15:50:38.251Z",
+ "built": "2026-11-27T15:55:25.288Z",
  "asOf": {
   "date": "2026-11-27",
-  "time": "10:50",
+  "time": "10:55",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
@@ -14,12 +14,12 @@
    "hedge": 0,
    "n": 0,
    "dd": 0,
-   "bench": 555847.94,
-   "time": "10:50",
+   "bench": 555869.35,
+   "time": "10:55",
    "prov": true
   },
   "ret": 0.0003219090909092337,
-  "bench": 0.010632618181818154,
+  "bench": 0.010671545454545406,
   "trades": 0,
   "fees": 0,
   "open": [],
@@ -70,25 +70,25 @@
    "why": "장 마감 무렵 다시 판단"
   },
   {
+   "sym": "MRSH",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
    "sym": "MSI",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "ALL",
+   "sym": "ZBH",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
   },
   {
-   "sym": "MDT",
-   "pb": "pb",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "IDXX",
+   "sym": "ALL",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
