@@ -1,8 +1,8 @@
 {
- "built": "2026-11-27T14:55:23.907Z",
+ "built": "2026-11-27T15:00:25.604Z",
  "asOf": {
   "date": "2026-11-27",
-  "time": "09:55",
+  "time": "10:00",
   "prov": true
  },
  "regime": "하락 추세 (200일선 아래)",
@@ -14,12 +14,12 @@
    "hedge": 0,
    "n": 0,
    "dd": 0,
-   "bench": 553434.88,
-   "time": "09:55",
+   "bench": 551925.86,
+   "time": "10:00",
    "prov": true
   },
   "ret": 0.00032174545454544123,
-  "bench": 0.006245236363636275,
+  "bench": 0.0035015636363635583,
   "trades": 0,
   "fees": 0,
   "open": [],
@@ -34,12 +34,6 @@
  },
  "signals": [
   {
-   "sym": "GMAB",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
    "sym": "ADP",
    "pb": "bo",
    "taken": false,
@@ -47,18 +41,6 @@
   },
   {
    "sym": "CDW",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "TAK",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "ROIV",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
@@ -89,6 +71,12 @@
   },
   {
    "sym": "WELL",
+   "pb": "bo",
+   "taken": false,
+   "why": "장 마감 무렵 다시 판단"
+  },
+  {
+   "sym": "SPG",
    "pb": "bo",
    "taken": false,
    "why": "장 마감 무렵 다시 판단"
