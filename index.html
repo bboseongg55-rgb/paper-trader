@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#121214" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f4f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0b0d" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="연습장">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -13,8 +13,9 @@
 <link rel="manifest" href="manifest.webmanifest">
 <title>자동매매 연습장</title>
 <style>
-/* design-five · 골격: 증권 앱(하단 탭 3개: 계좌·체결내역·수익) · 톤: 실용 · 기준색: 흰 바탕 + 잉크, 상승 빨강·하락 파랑 */
-/* layout: one screen per tab; a big number on top, a line chart you can scrub, then plain lists separated by grey bands */
+/* design-five · 골격: 증권 앱(하단 탭 4개: 계좌·체결내역·수익·AI) · 톤: 실용 · 기준색: 옅은 회색 바탕 위 흰 카드 + 잉크, 상승 빨강·하락 파랑 · 2026-11-27 모던 카드 리디자인 */
+/* layout: one screen per tab; a big number on top, a line chart you can scrub, then lists. Each section is a rounded card on a
+   tinted page (the code still writes grey bands between sections; cardify() turns each band into the start of a new card) */
 /* Pretendard (SIL OFL 1.1) subset: only used where the device has no Apple system font */
 @font-face {
   font-family: "Pretendard Sub";
@@ -432,6 +433,69 @@ details.teamlog[open] > summary::after { content: " 접기"; }
 @media (min-width: 700px) { .tabbar { max-width: 640px; margin: 0 auto; border-left: 1px solid var(--line); border-right: 1px solid var(--line); } }
 @media (max-width: 350px) { .hero-value { font-size: 34px; } .kv { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .periods button, .filters button, .cmp button, .donut path { transition: none; } .periods button:active, .filters button:active, .cmp button:active, .tabbar a:active { transform: none; } }
+
+/* ── modern layer (owner 2026-11-27 "ui도 좀 모던하게"): the same screens, lists and words. Sections sit on rounded cards
+   over a tinted page, the period buttons are one segmented control, the tab bar floats above the content. Text stays large;
+   --bg is the card surface, so everything drawn inside a card (chart dots, chips, tags) keeps its colours */
+:root { --page: #f2f4f6; --seg: #ffffff; --card-r: 22px; --gap: 12px; --muted: #66707c; --ok: #0f8045; --bar-shadow: 0 8px 28px rgba(25, 31, 40, 0.12); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --page: #0b0b0d; --bg: #19191d; --band: #25252b; --line: #303037; --seg: #3d3d45; --tag: #45454d; --muted: #8b95a1; --ok: #3ccf7c; --bar-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
+}
+:root[data-theme="dark"] { --page: #0b0b0d; --bg: #19191d; --band: #25252b; --line: #303037; --seg: #3d3d45; --tag: #45454d; --muted: #8b95a1; --ok: #3ccf7c; --bar-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
+html, body { background: var(--page); }
+body { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+.top { background: var(--page); padding-bottom: 8px; }
+.top h1 { font-size: 28px; }
+.card { background: var(--bg); border-radius: var(--card-r); margin: var(--gap) var(--gap) 0; padding: 14px 0 18px; overflow: hidden; overflow: clip; }
+section.view > .card:first-child, .sec-hero > .card:first-child, .ast-bar + .card { margin-top: 4px; }
+.card > h2:first-child { padding-top: 4px; }
+.band { background: transparent; }
+.hero-value { font-size: min(40px, 10.4vw); }
+/* the AI screen's teams: rows inside one card, a hairline between them instead of a thick band */
+.card details.fold { border-top: 1px solid var(--line); }
+.card details.fold > summary { padding: 16px 20px; min-height: 60px; }
+.card details.fold > summary b { font-size: 19px; }
+/* chart period: one segmented control (the chosen part is a raised pill) */
+.periods { margin: 14px 20px 0; padding: 4px; gap: 2px; border-radius: 14px; background: var(--band); }
+.periods button { min-height: 40px; border-radius: 10px; transition: transform 120ms var(--ease-out), background-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out); }
+.periods button[aria-pressed="true"] { background: var(--seg); color: var(--ink); box-shadow: 0 1px 2px rgba(25, 31, 40, 0.1), 0 2px 6px rgba(25, 31, 40, 0.06); }
+.periods .sep { margin: 9px 3px; }
+/* chips: a chosen index is filled with ink, like the buy/sell filters */
+.cmp button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+/* holdings: hairlines start at the name, not under the colour dot */
+.hl > li { border-top: 0; position: relative; }
+.hl > li + li::before { content: ""; position: absolute; top: 0; left: 46px; right: 20px; height: 1px; background: var(--line); pointer-events: none; }
+/* loading shape: a card too, so the grey blocks show on the tinted page */
+.loading.sk-wrap { margin: 4px var(--gap) 0; padding: 20px; background: var(--bg); border-radius: var(--card-r); }
+/* the tab bar floats: a rounded bar a little above the bottom edge, the current tab on a soft pill */
+.tabbar { left: var(--gap); right: var(--gap); bottom: calc(10px + env(safe-area-inset-bottom)); gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 30px; background: var(--bg); box-shadow: var(--bar-shadow); }
+.tabbar a { padding: 7px 0 5px; border-radius: 24px; transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out), transform 120ms var(--ease-out); }
+.tabbar a[aria-current="page"] { background: var(--band); }
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) and (background: color-mix(in srgb, red 50%, transparent)) {
+  .top { background: color-mix(in srgb, var(--page) 82%, transparent); -webkit-backdrop-filter: saturate(180%) blur(18px); backdrop-filter: saturate(180%) blur(18px); }
+  .tabbar { background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); }
+}
+@media (hover: hover) and (pointer: fine) {
+  .row:hover, .hl button.hn:hover, details.fold > summary:hover, a.ain-r:hover { background: var(--band); }
+  .periods button:not([aria-pressed="true"]):hover, .tabbar a:not([aria-current="page"]):hover { color: var(--ink); }
+}
+@media (min-width: 700px) { .tabbar { max-width: 480px; margin: 0 auto; border-left: 1px solid var(--line); border-right: 1px solid var(--line); } }
+@media (min-width: 1024px) { #v-account.on { gap: 0 4px; } #v-account .col-b > div:first-child > .card:first-child { margin-top: 4px; } }
+.top h1 { flex: none; }
+.periods button { padding: 0; white-space: nowrap; }
+/* the check tables (4 number columns) on phones narrower than 390px: a step smaller, so they fit inside a card */
+@media (max-width: 385px) {
+  .vt { font-size: 14px; }
+  .vt td { padding-left: 6px; }
+  .vits li { padding-left: 16px; padding-right: 16px; }
+}
+@media (max-width: 360px) {
+  :root { --gap: 8px; }
+  .periods .ct { width: 34px; }
+}
+@media (max-width: 340px) { .vt { display: block; overflow-x: auto; } }
+@media (max-width: 350px) { .hero-value { font-size: 34px; } }
+@media (prefers-reduced-motion: reduce) { .tabbar a, .periods button { transition: none; } }
 </style>
 </head>
 <body>
@@ -998,6 +1062,29 @@ details.teamlog[open] > summary::after { content: " 접기"; }
     const open = new Set([...el.querySelectorAll('details[open]')].map(sigOf));
     el.innerHTML = html;
     if (open.size) el.querySelectorAll('details').forEach((d) => { if (open.has(sigOf(d))) d.open = true; });
+    cardify(el);
+  }
+  // the modern layer (owner 2026-11-27): each grey band starts a new rounded card. Only wrappers are added and the bands
+  // dropped; every node keeps its order and id, and the screens add their listeners after this runs. The asset page's back
+  // link and a closing spacer stay on the page, outside the cards
+  function cardify(root) {
+    const boxes = root.id === 'v-account' ? [...root.querySelectorAll(':scope > .col-a > div, :scope > .col-b > div')] : [root];
+    const isEl = (n) => n.nodeType === 1, blank = (n) => !isEl(n) && !String(n.textContent).trim();
+    for (const box of boxes) {
+      const groups = [[]];
+      for (const n of [...box.childNodes]) {
+        if (isEl(n) && n.classList.contains('band')) { n.remove(); groups.push([]); } else groups[groups.length - 1].push(n);
+      }
+      for (const g of groups) {
+        while (g.length && (blank(g[0]) || (isEl(g[0]) && g[0].classList.contains('ast-bar')))) g.shift();
+        while (g.length && (blank(g[g.length - 1]) || (isEl(g[g.length - 1]) && !g[g.length - 1].className && !g[g.length - 1].childNodes.length))) g.pop();
+        if (!g.length || g.every((n) => isEl(n) && n.classList.contains('card'))) continue;
+        const c = document.createElement('div');
+        c.className = 'card';
+        g[0].before(c);
+        c.append(...g);
+      }
+    }
   }
   let acctPrev = 0;
   function chipHTML(x) {
@@ -1577,6 +1664,7 @@ details.teamlog[open] > summary::after { content: " 접기"; }
         <div class="chart achart" id="aChart"></div><p class="asrc" id="aSrc"></p>
         <div class="band"></div><h2>내 투자</h2><div class="ainfo" id="aInfo"></div>
         ${x.why ? `<div class="band"></div><h2>편입 이유</h2><p class="awhy">${esc(x.why)}</p>` : ''}${infoHTML(x)}<div style="height:24px"></div>`;
+      cardify(el);
       $('aBackBtn').addEventListener('click', (e) => { if (aBack) { e.preventDefault(); history.back(); } });
       $('aPer').querySelectorAll('button[data-p]').forEach((b) => b.addEventListener('click', () => {
         aPick = aPer = b.dataset.p;
