@@ -1,5 +1,5 @@
 // History for the strategy checks (tools/verify.mjs), run by .github/workflows/hist.yml on demand: Coinbase hourly
-// candles for BTC, ETH and SOL since 2024-01-01, their 1-minute candles for the last DAYS_1M days, and Kraken's hourly
+// candles for BTC, ETH and SOL since 2017 (FROM_1H), their 1-minute candles for the last DAYS_1M days, and Kraken's hourly
 // candles for the tokenized stocks (the last 720 hours, all Kraken gives). Public endpoints, no keys. Written as gzip
 // JSON rows [time ms, open, high, low, close, volume], oldest first, into data/hist/. Also the long daily record of US
 // Treasury yields and the fed funds rate from FRED (since 1990), for the rates checks. WHAT=fred fetches only that.
