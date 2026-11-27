@@ -1,28 +1,84 @@
 {
- "built": "2026-11-27T17:45:25.053Z",
+ "built": "2026-11-27T17:51:24.962Z",
  "asOf": {
   "date": "2026-11-27",
-  "time": "12:45",
-  "prov": true
+  "time": "12:50",
+  "prov": false
  },
  "regime": "하락 추세 (200일선 아래)",
  "account": {
   "equity": {
    "date": "2026-11-27",
-   "eq": 550177.05,
-   "cash": 550177.05,
+   "eq": 549791.97,
+   "cash": 164715.16,
    "hedge": 0,
-   "n": 0,
-   "dd": 0,
-   "bench": 556591.36,
-   "time": "12:45",
-   "prov": true
+   "n": 7,
+   "dd": 0.0007,
+   "bench": 556255.6,
+   "time": "12:50"
   },
-  "ret": 0.0003219090909092337,
-  "bench": 0.011984290909090811,
+  "ret": -0.00037823636363643054,
+  "bench": 0.011373818181818152,
   "trades": 0,
   "fees": 0,
-  "open": [],
+  "open": [
+   {
+    "sym": "MDT",
+    "qty": 835,
+    "entry": 95.58,
+    "price": 95.48,
+    "stop": 90.64,
+    "pnl": -79.73
+   },
+   {
+    "sym": "MPC",
+    "qty": 119,
+    "entry": 360.46,
+    "price": 360.1,
+    "stop": 326.04,
+    "pnl": -42.85
+   },
+   {
+    "sym": "PSX",
+    "qty": 230,
+    "entry": 242.87,
+    "price": 242.63,
+    "stop": 224.99,
+    "pnl": -55.8
+   },
+   {
+    "sym": "VLO",
+    "qty": 146,
+    "entry": 327.81,
+    "price": 327.48,
+    "stop": 299.57,
+    "pnl": -47.81
+   },
+   {
+    "sym": "RVMD",
+    "qty": 177,
+    "entry": 174.77,
+    "price": 174.6,
+    "stop": 151.52,
+    "pnl": -30.9
+   },
+   {
+    "sym": "SN",
+    "qty": 216,
+    "entry": 235.76,
+    "price": 235.52,
+    "stop": 216.73,
+    "pnl": -50.87
+   },
+   {
+    "sym": "VTRS",
+    "qty": 3819,
+    "entry": 20.21,
+    "price": 20.19,
+    "stop": 19.13,
+    "pnl": -77.12
+   }
+  ],
   "lastTrades": [],
   "lastChanges": [
    {
@@ -34,67 +90,49 @@
  },
  "signals": [
   {
-   "sym": "GMAB",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "sym": "MDT",
+   "pb": "pb",
+   "taken": true,
+   "why": ""
+  },
+  {
+   "sym": "MPC",
+   "pb": "mo",
+   "taken": true,
+   "why": ""
+  },
+  {
+   "sym": "PSX",
+   "pb": "mo",
+   "taken": true,
+   "why": ""
+  },
+  {
+   "sym": "VLO",
+   "pb": "mo",
+   "taken": true,
+   "why": ""
+  },
+  {
+   "sym": "RVMD",
+   "pb": "mo",
+   "taken": true,
+   "why": ""
   },
   {
    "sym": "SN",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "pb": "mo",
+   "taken": true,
+   "why": ""
   },
   {
-   "sym": "REGN",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "ADP",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "ROIV",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "WTW",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "CDW",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "PTC",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "MRSH",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
-  },
-  {
-   "sym": "USFD",
-   "pb": "bo",
-   "taken": false,
-   "why": "장 마감 무렵 다시 판단"
+   "sym": "VTRS",
+   "pb": "mo",
+   "taken": true,
+   "why": ""
   }
  ],
- "book": "2026-11-25",
+ "book": "2026-11-27",
  "evolution": {
   "gen": 0,
   "shadows": 0,
