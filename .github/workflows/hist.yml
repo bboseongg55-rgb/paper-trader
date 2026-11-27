@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: 'all | fred | long | both'
+        description: 'all | fred | long | both | events'
         required: false
         default: 'all'
 permissions:
@@ -28,7 +28,8 @@ jobs:
         continue-on-error: true
         run: |
           if [ "$WHAT" = "long" ] || [ "$WHAT" = "both" ]; then node tools/fetch_long.mjs; fi
-          if [ "$WHAT" != "long" ]; then node tools/fetch_hist.mjs; fi
+          if [ "$WHAT" = "events" ]; then node tools/earnings.mjs hist; fi
+          if [ "$WHAT" != "long" ] && [ "$WHAT" != "events" ]; then node tools/fetch_hist.mjs; fi
         env:
           WHAT: ${{ github.event.inputs.what || 'all' }}
           LONG_MIN: 42
